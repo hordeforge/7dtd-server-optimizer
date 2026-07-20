@@ -99,6 +99,14 @@ namespace EfficientServer
         // other filter mode falls through to vanilla. Provably equivalent (entityId
         // is unique, so vanilla also enqueues to exactly one client).
         public bool FastSingleTargetSend { get; set; } = false;
+
+        // Run the entity-replication pass (NetEntityDistribution.OnUpdateEntities)
+        // every N ticks. 1 = vanilla (20 Hz). 2 = 10 Hz replication (+50 ms staleness;
+        // clients interpolate) - halves one of the two O(N^2) player-axis walls.
+        // State-driven scan, so skipped ticks delay (not lose) replication. Higher
+        // strides trade visible rubber-banding for CPU; needs a human-eye fidelity
+        // pass before production use.
+        public int EntityDistributionEveryTicks { get; set; } = 1;
     }
 
     // Chunk/world transfer to joining clients (independent toggle).
@@ -186,6 +194,8 @@ namespace EfficientServer
             // spike). A fat-finger 0 or negative would deadlock the send loop, so the
             // floor of 1 is a correctness guard, not just a tuning bound.
             WorldTransfer.ChunkPackagesPerObserverPerTick = IntRange("WorldTransfer.ChunkPackagesPerObserverPerTick", WorldTransfer.ChunkPackagesPerObserverPerTick, 1, 32);
+            // 4 = 5 Hz replication, already aggressive; anything higher is unplayable.
+            Network.EntityDistributionEveryTicks = IntRange("Network.EntityDistributionEveryTicks", Network.EntityDistributionEveryTicks, 1, 4);
             // Gc knobs keep their 0-sentinels (SafetyCollectAboveMB 0 = AUTO ceiling;
             // IncrementalPauseTargetMs 0 = no pause limit), so the floor is 0, not a
             // forced positive. This centralizes the previously ad-hoc use-site clamps

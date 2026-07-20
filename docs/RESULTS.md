@@ -376,6 +376,36 @@ The remaining explosion-cost levers are ops knobs with gameplay tradeoffs
 (`BlockDamageAIBM` server config scales AI blood-moon block damage down, directly
 shrinking the ChangeBlocks batches) - not code.
 
+## 3g. Entity-replication stride (v1.11.0, A/B 2026-07-20)
+
+`EntityDistributionStridePatch` (config `Network.EntityDistributionEveryTicks`,
+default 1 = vanilla, clamp [1,4]) prefixes `NetEntityDistribution.OnUpdateEntities`
+to run the replication pass every Nth tick. Safety basis (IL): the pass is a
+**state-driven scan** - interest is recomputed from current positions each visit and
+change flags persist on entries until sent - so a skipped tick *delays* replication
+by 50 ms, it cannot *lose* state. Clients interpolate motion; 10 Hz entity
+replication is the console-game norm.
+
+**A/B at the blood-moon standard (64 players + ~580 endgame zombies, stride 1 vs 2):**
+
+| metric | stride 1 | stride 2 | delta |
+|---|---|---|---|
+| OnUpdateEntities avg | 7.69 ms | 4.25 ms | **-45%** |
+| OnUpdateEntities total/window | 38.5 s | 21.2 s | **-45%** |
+| GameManager.UpdateTick avg | 17.2 ms | 14.1 ms | -18% |
+| frame time | 230 ms | 175 ms | -24% (mild zombie-count confound, 594 vs 572) |
+| players / alive | 64, stable | 64, stable | connections + entity counts clean |
+
+**The largest single lever measured since P1** - it halves one of the two O(N^2)
+player-axis walls with a one-line skip. The bridge times the method wrapper, so
+"calls" stay ~equal in both arms; the halved *avg* is the skip signature (half the
+visits do full work, half return immediately).
+
+**Ships default OFF (stride 1).** The remaining gate is human-eye fidelity: bots
+cannot see rubber-banding, and +50 ms staleness on fast movers (feral sprinters at
+blood moon) is exactly the case a human should confirm before production. Stride 3-4
+(6.7/5 Hz) exists for headroom experiments, not production.
+
 ## 4. Config reference (every knob, all independently toggleable)
 
 ```
@@ -389,7 +419,9 @@ Gc.{Enabled, SkipForcedCollect, SafetyCollectAboveMB (0=auto), SafetyCollectRamF
     Incremental, IncrementalPauseTargetMs}
 Pathfinding.{GraphUpdateEveryTicks (1=vanilla), MoveRescanThresholdSq (100=vanilla),
     PoolInitScanNodes (false=vanilla; UNSAFE, external-DLL transpiler, see §3c)}
-Network.{FastSingleTargetSend}
+Network.{FastSingleTargetSend,
+    EntityDistributionEveryTicks (1=vanilla; 2=10 Hz replication, -45% on the wall,
+    needs human-eye pass, see §3g)}
 WorldTransfer.{ChunkPackagesPerObserverPerTick (3=vanilla; EXPERIMENTAL, see §3e)}
 Diagnostics.{GcMegapauseTest, WarmupSeconds, GrowSeconds}   # never enable on a live server
 ```

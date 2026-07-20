@@ -174,6 +174,17 @@ the megapause feeder at source (complements the `GC_FREE_SPACE_DIVISOR` env, whi
 only cuts collection frequency). Code -> EAC-off. See
 [`../../research/docs/aggressive-optimizations.md`](../../research/docs/aggressive-optimizations.md) §3.
 
+## Entity-replication stride (v1.11.0, default off)
+
+`EntityDistributionStridePatch` (config `Network.EntityDistributionEveryTicks`,
+1 = vanilla) runs the per-tick replication pass every Nth tick. Stride 2 = 10 Hz
+entity replication (+50 ms staleness; clients interpolate), measured **-45%** on
+`NetEntityDistribution.OnUpdateEntities` - one of the two O(N^2) player-axis walls -
+at the blood-moon standard, with stable connections and entity counts. Safe by
+construction (state-driven scan: skips delay, never lose), but ships default off
+until a human confirms fast movers do not visibly rubber-band at stride 2. See
+[`RESULTS.md`](RESULTS.md) §3g.
+
 ## Explosion particles skip (v1.10.0)
 
 `ExplosionParticlesPatch` (config `SkipOnDedicated.ExplosionParticles`, default on)
