@@ -1,0 +1,88 @@
+# AGENTS.md - 7dtd-optimizer (EfficientServer)
+
+Harmony optimization mod for **7 Days to Die** dedicated servers (target **V3.0.1**).
+Owns only reviewed runtime optim patches. Sibling projects own measurement and load.
+
+Workspace root guide: [`../MODDING_BEST_PRACTICES.md`](../MODDING_BEST_PRACTICES.md)
+
+## Scope
+
+| Owns | Does not own |
+|---|---|
+| Reviewed Harmony patches (AI LOD, task throttle, dedicated skips, mesh budgets) | Profiler / APM (use `7dtd-apm`) |
+| `config/efficientserver.json` feature groups | Load generation (use `7dtd-loadgen`) |
+| Cecil RE dump helpers under `tools/` | Terrain / RealEarth |
+| Dedicated install/run scripts | CCD/NUMA/affinity (host ops only; see `docs/HOST_TUNING.md`) |
+| Graded optim docs under `docs/` | Shipping cracked mods or redistributing game IL |
+
+Default config: `DedicatedOnly: true`. Do not turn this into a client overhaul, measurement suite, or general admin mod.
+
+## Critical rules
+
+1. **One feature group at a time**, then re-measure. Never ship optim changes without APM + loadgen evidence when making performance claims.
+2. **Lower CPU alone is not acceptance.** Keep fidelity checks for touched systems (`docs/FEATURES.md`).
+3. **Rebuild and re-validate Harmony targets after every game update.** Targets break silently on Steam patches.
+4. **Fail soft per group.** One missing target must not kill the whole mod (`PatchAllSafe` pattern).
+5. **Do not implement host topology (affinity, NUMA, IRQ) inside the DLL.** Document under `docs/HOST_TUNING.md` only.
+6. **Do not redistribute `Assembly-CSharp` or bulk game IL.** Dumps under `../research/il/` are regenerable evidence only; narratives live under `../research/docs/`.
+7. **No AI attribution** in commits, docs, or comments. **No em dashes** in any text this project ships.
+8. In-game mod DLL is **net48** against dedicated Managed; stock `0_TFP_Harmony` required; EAC off on test servers.
+
+## Build / install
+
+```bash
+make build
+make install DS="/path/to/7 Days to Die Dedicated Server"
+make run DS="/path/to/7 Days to Die Dedicated Server"
+make clean
+# optional Mono mcs path:
+make build-mcs
+```
+
+Default dedicated root: `~/.local/share/Steam/steamapps/common/7 Days to Die Dedicated Server`.
+
+Source: `Source/EfficientServer/`. Packaged mod name: `Mods/EfficientServer/`. Harmony id: `com.7dtd.efficientserver`.
+
+## Evidence loop (required for optim claims)
+
+```text
+7dtd-loadgen workload → 7dtd-apm baseline → one EfficientServer change
+  → same workload → APM compare + budget + gameplay soak
+```
+
+## Docs map
+
+| Path | Role |
+|---|---|
+| `docs/DEVELOPMENT.md` | Optimizer-only workflow |
+| `docs/ARCHITECTURE.md` | Dedicated hot-path RE summary |
+| `docs/FEATURES.md` | Feature groups and acceptance |
+| `docs/OPTIMIZATION_CANDIDATES.md` | Graded candidates (canonical optim backlog) |
+| `docs/OPTIMIZATION_IDEAS.md` | Idea map (not commitments) |
+| `docs/SIM_PARALLELISM.md` | Threading / extract / hot-path catalog |
+| `docs/SCALE_1000x10000.md` | Extreme scale thought experiment |
+| `docs/HOST_TUNING.md` | Host ops checklist |
+| `../research/docs/loop.md` | Full dedicated loop RE map |
+| `../research/docs/INDEX.md` | Research docs + dump index |
+| `TODO.md` | Phased implementation plan |
+
+## RE dumps
+
+```bash
+# Example: regenerate a dump set into workspace research/il/
+mcs -r:tools/Mono.Cecil.dll -out:tools/DumpGmUpdate.exe tools/DumpGmUpdate.cs
+mono tools/DumpGmUpdate.exe "$DS/7DaysToDieServer_Data/Managed/Assembly-CSharp.dll" \
+  ../research/il/gmUpdate-VERSION
+```
+
+Human synthesis belongs in `../research/docs/` or `docs/`, never as optim product narrative inside dump folders. Automated check: `tools/tests/test_re_dump_regen.py` (needs dedicated install + mcs/mono).
+
+## Sibling projects
+
+| Project | Role |
+|---|---|
+| `../7dtd-apm` | Host + bridge measurement, compare, budget |
+| `../7dtd-loadgen` | LiteNetLib bots and dedicated start helpers |
+| `../7days-realworld` | RealEarth terrain (unrelated optim product surface) |
+
+Do not silently install, edit, or couple into siblings. Public runner/API only.

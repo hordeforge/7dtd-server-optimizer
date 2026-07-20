@@ -1,0 +1,8 @@
+dist/
+**/bin/
+**/obj/
+tools/*.exe
+*.log
+# Generated Cecil dumps (may contain game IL excerpts)
+../research/il/
+tools/tests/_out/

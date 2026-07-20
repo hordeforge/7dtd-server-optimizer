@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<xml>
+	<Name value="EfficientServer" />
+	<DisplayName value="Efficient Dedicated Server" />
+	<Description value="Reviewed, configurable performance optimizations for dedicated servers." />
+	<Author value="7dtd" />
+	<Version value="1.8.0" />
+
+
+	<Website value="" />
+	<SkipWithAntiCheat value="true" />
+</xml>

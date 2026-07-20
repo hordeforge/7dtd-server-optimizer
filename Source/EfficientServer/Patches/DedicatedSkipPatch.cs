@@ -1,0 +1,87 @@
+using System;
+using System.Reflection;
+using HarmonyLib;
+
+namespace EfficientServer.Patches
+{
+    /// <summary>
+    /// Skip client-oriented systems that still run on dedicated World.OnUpdateTick.
+    /// </summary>
+    public static class DedicatedSkipPatch
+    {
+        // Patched manually from GameStartPatch after types resolve, in case optional types move.
+        public static void ApplyOptional(Harmony harmony)
+        {
+            if (!ModApi.Config.Enabled) return;
+            var skip = ModApi.Config.SkipOnDedicated;
+            if (skip == null) return;
+
+            if (skip.DynamicMusic)
+                TryPrefix(harmony, "DynamicMusic.Conductor", "Update");
+            if (skip.WaterSplash)
+                TryPrefix(harmony, "WaterSplashCubes", "Update");
+            if (skip.EnvironmentAudio)
+            {
+                TryPrefix(harmony, "EnvironmentAudioManager", "Update");
+                TryPrefix(harmony, "EnvironmentAudioManager", "FixedUpdate");
+                TryPrefix(harmony, "EnvironmentAudioManager", "LateUpdate");
+            }
+        }
+
+        static void TryPrefix(Harmony harmony, string typeName, string methodName)
+        {
+            try
+            {
+                Type t = FindType(typeName);
+                if (t == null)
+                {
+                    // Soft note (not "MISSING TARGET"): some of these presentation
+                    // types are legitimately absent on a headless build, but a
+                    // rename would silently disable the skip with zero signal.
+                    ModApi.Log($"skip-patch {typeName}.{methodName}: type not found (skip disabled)");
+                    return;
+                }
+                MethodInfo m = t.GetMethod(methodName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
+                if (m == null)
+                {
+                    ModApi.Log($"skip-patch {typeName}.{methodName}: method not found (skip disabled)");
+                    return;
+                }
+                MethodInfo prefix = typeof(DedicatedSkipPatch).GetMethod(nameof(SkipIfDedicated), BindingFlags.Static | BindingFlags.NonPublic);
+                harmony.Patch(m, new HarmonyMethod(prefix));
+                ModApi.Log($"skip-patch {typeName}.{methodName}");
+            }
+            catch (Exception ex)
+            {
+                ModApi.Log($"skip-patch {typeName}.{methodName}: {ex.Message}");
+            }
+        }
+
+        static bool SkipIfDedicated()
+        {
+            return !ModApi.ShouldRun();
+        }
+
+        static Type FindType(string fullOrName)
+        {
+            foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                try
+                {
+                    var t = asm.GetType(fullOrName, false);
+                    if (t != null) return t;
+                    foreach (var tt in asm.GetTypes())
+                    {
+                        if (tt.Name == fullOrName || tt.FullName == fullOrName)
+                            return tt;
+                    }
+                }
+                catch
+                {
+                    // ReflectionTypeLoadException on some assemblies
+                }
+            }
+            return null;
+        }
+    }
+}

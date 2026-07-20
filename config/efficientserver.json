@@ -1,0 +1,49 @@
+{
+  "Enabled": true,
+  "DedicatedOnly": true,
+
+  "AiLod": {
+    "Enabled": true,
+    "FullAiDistSq": 100.0,
+    "MediumAiDistSq": 400.0,
+    "FullScale": 1.0,
+    "MediumScale": 0.2,
+    "FarScale": 0.05,
+    "SkipTasksFarDistSq": 2500.0,
+    "SkipTasksUnlessAlerted": true,
+    "MidTickStride": 1
+  },
+
+  "SkipOnDedicated": {
+    "DynamicMusic": true,
+    "WaterSplash": true,
+    "EnvironmentAudio": true,
+    "ClothAndJiggle": true
+  },
+
+  "DynamicMesh": {
+    "Enabled": true,
+    "OnlyPlayerAreas": true,
+    "PlayerAreaChunkBuffer": 2,
+    "MaxRegionLoadMsPerFrame": 2,
+    "MaxActiveSyncs": 2
+  },
+
+  "Gc": {
+    "Enabled": true,
+    "SkipForcedCollect": true,
+    "SafetyCollectAboveMB": 0,
+    "SafetyCollectRamFraction": 0.5,
+    "Incremental": false,
+    "IncrementalPauseTargetMs": 0
+  },
+
+  "Pathfinding": {
+    "GraphUpdateEveryTicks": 4,
+    "MoveRescanThresholdSq": 100
+  },
+
+  "Network": {
+    "FastSingleTargetSend": false
+  }
+}
