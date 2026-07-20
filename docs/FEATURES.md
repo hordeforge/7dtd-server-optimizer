@@ -174,6 +174,20 @@ the megapause feeder at source (complements the `GC_FREE_SPACE_DIVISOR` env, whi
 only cuts collection frequency). Code -> EAC-off. See
 [`../../research/docs/aggressive-optimizations.md`](../../research/docs/aggressive-optimizations.md) §3.
 
+## Explosion particles skip (v1.10.0)
+
+`ExplosionParticlesPatch` (config `SkipOnDedicated.ExplosionParticles`, default on)
+prefixes `GameManager.ExplosionClient` to skip `Object.Instantiate` of the visual
+explosion prefab on the headless server while preserving every gameplay side effect:
+the physics push (`ApplyExplosionForce`, vanilla-gated on the prefab existing), the
+block changes (`ChangeBlocks`), and the quest event (`DetectedExplosion`). Returns
+null exactly like the vanilla no-prefab path.
+
+Measured A/B at the blood-moon standard (64p + ~550 endgame zombies): explode
+10.57 -> 9.42 ms/explosion (-11%). Honest scope: the bulk of explosion cost is the
+block-destruction application (gameplay, preserved); this removes only the
+pure-waste visual spawn. See [`RESULTS.md`](RESULTS.md) §3f.
+
 ## Chunk-send throttle (P6, EXPERIMENTAL / UNVALIDATED, v1.9.0)
 
 `ChunkSendThrottlePatch` transpiles the unique batch-cap constant (`ldc.i4.3`) in

@@ -29,6 +29,11 @@ namespace EfficientServer
         public bool WaterSplash { get; set; } = true;
         public bool EnvironmentAudio { get; set; } = true;
         public bool ClothAndJiggle { get; set; } = true;
+        // Skip Object.Instantiate of the explosion particle prefab (headless server,
+        // never rendered). Gameplay side effects (physics push, block changes, quest
+        // event) are preserved. Measured A/B at blood-moon load: ~1.1 ms of the ~10 ms
+        // per explosion (~10%); the bulk is block-destruction application (gameplay).
+        public bool ExplosionParticles { get; set; } = true;
     }
 
     public sealed class DynamicMeshConfig

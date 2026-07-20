@@ -347,13 +347,43 @@ through the world, and moving gen off-thread races the sim). Next honest step if
 pursued: a load/gen profile with a bot harness that survives the freeze (raised
 keepalive tolerance), to size the real cost before touching the gen path.
 
+## 3f. Explosion cost anatomy + particles skip (v1.10.0, 2026-07-20)
+
+At the blood-moon standard load (64 players + ~550 endgame zombies, GS250; see
+`7dtd-loadgen/BLOODMOON.md`), `GameManager.explode` was a top-3 per-frame cost
+(~10 ms/explosion, ~220 explosions per window: exploding cops + demolishers).
+Sub-split via four new bridge sections (`Explosion:AttackBlocks`,
+`Explosion:AttackEntites`, `GameManager:ExplosionClient`, `GameManager:ChangeBlocks`):
+
+| stage | avg/explosion | nature |
+|---|---|---|
+| `Explosion.AttackBlocks` (damage sphere) | 1.3 ms | gameplay |
+| `Explosion.AttackEntites` (OverlapSphere + LOS + DamageEntity) | 0.2 ms | gameplay |
+| `GameManager.ExplosionClient` | 9.0 ms | mixed, see below |
+| - of which block-destruction application (`ChangeBlocks`: SetBlock + chunk dirty + stability + broadcast to 64 clients) | ~7.9 ms | **gameplay, the true bulk** |
+| - of which `Object.Instantiate` of the visual explosion prefab | ~1.1 ms | **pure waste on a headless server** |
+
+**A/B (vanilla vs `SkipOnDedicated.ExplosionParticles`, matched ~550z arms):**
+explode 10.57 -> 9.42 ms/explosion (-11%), ExplosionClient 9.00 -> 7.87 ms. The
+patch (`ExplosionParticlesPatch`, default on) keeps every gameplay side effect
+(physics push, block changes, quest event; all vanilla-gated) and skips only the
+prefab Instantiate.
+
+**Honest verdict:** a real but small win (~1.1 ms/explosion, ~10%). The initial
+hypothesis (Instantiate = 85%) was WRONG - the bulk is `ChangeBlocks`, i.e. applying
+and broadcasting the block destruction, which is gameplay and irreducible by a skip.
+The remaining explosion-cost levers are ops knobs with gameplay tradeoffs
+(`BlockDamageAIBM` server config scales AI blood-moon block damage down, directly
+shrinking the ChangeBlocks batches) - not code.
+
 ## 4. Config reference (every knob, all independently toggleable)
 
 ```
 Enabled, DedicatedOnly
 AiLod.{Enabled, FullAiDistSq, MediumAiDistSq, FullScale, MediumScale, FarScale,
        SkipTasksFarDistSq, SkipTasksUnlessAlerted}
-SkipOnDedicated.{DynamicMusic, WaterSplash, EnvironmentAudio, ClothAndJiggle}
+SkipOnDedicated.{DynamicMusic, WaterSplash, EnvironmentAudio, ClothAndJiggle,
+    ExplosionParticles (true=skip visual spawn; gameplay preserved, see §3f)}
 DynamicMesh.{Enabled, OnlyPlayerAreas, PlayerAreaChunkBuffer, MaxRegionLoadMsPerFrame, MaxActiveSyncs}
 Gc.{Enabled, SkipForcedCollect, SafetyCollectAboveMB (0=auto), SafetyCollectRamFraction,
     Incremental, IncrementalPauseTargetMs}
