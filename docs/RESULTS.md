@@ -312,6 +312,41 @@ signal is green.
 `start_bots_long()` (38 min lifetime) + a per-sample `bots/32` guard that flags a
 collapse inline instead of misreading it as corruption.
 
+## 3e. Chunk-send throttle (P6, EXPERIMENTAL, 2026-07-20)
+
+`ChunkSendThrottlePatch` (v1.9.0, `WorldTransfer.ChunkPackagesPerObserverPerTick`,
+default 3 = vanilla) transpiles the batch-cap constant in
+`ChunkManager.SendChunksToClients` to spread a mass-join chunk transfer across more
+ticks. Built + smoke-verified (`rerouted 1 chunk batch-cap constant -> patched
+ChunkManager:SendChunksToClients()`, matched methods=8, no exception), tests cover the
+clamp + deadlock guard. **Kept as an opt-in experimental knob; NOT validated.**
+
+Motivation was the observed "other players lag when someone joins/transfers." RE
+(bottlenecks §3) flagged the chunk pipeline as ~56-60% of *instrumented sections* - but
+that is section-relative, not tick-relative; in absolute terms it is ~1-2% of the tick
+wall at reachable loads. Three A/Bs tried to size the prize:
+
+| test | method | result |
+|---|---|---|
+| clustered join | 40 bots join at spawn (share chunks) | `SendChunks` +559 ms (~1.2% tick); bots survive; too small to show a throttle win |
+| simultaneous spread | 40 bots teleported to distinct unexplored regions | multi-minute **load/gen freeze**, synthetic bots time out and disconnect (0 players); the freeze is region **load/gen**, not send |
+| staggered spread | teleport one region every 4 s | trivial - `SendChunks` +13 ms (noise), stall even dropped; top riser was `UpdateGraphs` |
+
+**Findings:** (1) `SendChunksToClients` (the P6 target) is modest and downstream in
+every *survivable* test. (2) The catastrophic join stall is **synchronous region
+load/generation on the sim thread** (`RegionFileManager` + chunk gen), which P6 does
+not throttle. (3) **Measurement wall:** the regime that actually hurts (a wave landing
+in distinct unexplored regions at once) stalls the server hard enough to kill the
+synthetic bots - real clients ride it out as lag, bots disconnect - so it cannot be
+cleanly A/B'd with the current harness.
+
+**Verdict: P6 is mechanically sound, low-risk, default-inert, but unproven and likely
+mis-targeted.** Kept as an experiment. The real join-lag lever is the sim-thread chunk
+load/gen (a big, *risky* structural target: players need those chunks to not fall
+through the world, and moving gen off-thread races the sim). Next honest step if
+pursued: a load/gen profile with a bot harness that survives the freeze (raised
+keepalive tolerance), to size the real cost before touching the gen path.
+
 ## 4. Config reference (every knob, all independently toggleable)
 
 ```
@@ -325,6 +360,7 @@ Gc.{Enabled, SkipForcedCollect, SafetyCollectAboveMB (0=auto), SafetyCollectRamF
 Pathfinding.{GraphUpdateEveryTicks (1=vanilla), MoveRescanThresholdSq (100=vanilla),
     PoolInitScanNodes (false=vanilla; UNSAFE, external-DLL transpiler, see §3c)}
 Network.{FastSingleTargetSend}
+WorldTransfer.{ChunkPackagesPerObserverPerTick (3=vanilla; EXPERIMENTAL, see §3e)}
 Diagnostics.{GcMegapauseTest, WarmupSeconds, GrowSeconds}   # never enable on a live server
 ```
 Init log tags each matched patch `(matched but config-disabled)` when its toggle is

@@ -96,6 +96,18 @@ namespace EfficientServer
         public bool FastSingleTargetSend { get; set; } = false;
     }
 
+    // Chunk/world transfer to joining clients (independent toggle).
+    public sealed class WorldTransferConfig
+    {
+        // Max chunk packages ChunkManager.SendChunksToClients batches per observer per
+        // tick (vanilla = 3). Each package is a synchronous Chunk.write encode on the
+        // sim thread, so the per-tick cost is (observers x this). Lower it (1-2) to
+        // spread a mass join transfer across more ticks - smaller per-tick spike, so
+        // players already on the server hitch less when others connect, at the cost of
+        // slightly slower per-client transfer. 3 = vanilla (no change).
+        public int ChunkPackagesPerObserverPerTick { get; set; } = 3;
+    }
+
     // DIAGNOSTIC ONLY (default off). Not a performance feature.
     public sealed class DiagnosticsConfig
     {
@@ -116,6 +128,7 @@ namespace EfficientServer
         public GcConfig Gc { get; set; } = new GcConfig();
         public PathfindingConfig Pathfinding { get; set; } = new PathfindingConfig();
         public NetworkConfig Network { get; set; } = new NetworkConfig();
+        public WorldTransferConfig WorldTransfer { get; set; } = new WorldTransferConfig();
         public DiagnosticsConfig Diagnostics { get; set; } = new DiagnosticsConfig();
 
         public static ServerPerfConfig Load(string path)
@@ -134,6 +147,7 @@ namespace EfficientServer
                 if (loaded.Gc == null) loaded.Gc = new GcConfig();
                 if (loaded.Pathfinding == null) loaded.Pathfinding = new PathfindingConfig();
                 if (loaded.Network == null) loaded.Network = new NetworkConfig();
+                if (loaded.WorldTransfer == null) loaded.WorldTransfer = new WorldTransferConfig();
                 if (loaded.Diagnostics == null) loaded.Diagnostics = new DiagnosticsConfig();
                 loaded.Normalize();
                 return loaded;
@@ -162,6 +176,11 @@ namespace EfficientServer
             // silently accepted. A legitimate low-pop tune (e.g. 40) still passes.
             Pathfinding.GraphUpdateEveryTicks = IntRange("Pathfinding.GraphUpdateEveryTicks", Pathfinding.GraphUpdateEveryTicks, 1, 200);
             Pathfinding.MoveRescanThresholdSq = FiniteRange("Pathfinding.MoveRescanThresholdSq", Pathfinding.MoveRescanThresholdSq, 100f, 10000f, 100f);
+            // 3 = vanilla batch; floor 1 (never stall the transfer entirely), cap 32
+            // (a generous ceiling; above vanilla speeds transfer at a bigger per-tick
+            // spike). A fat-finger 0 or negative would deadlock the send loop, so the
+            // floor of 1 is a correctness guard, not just a tuning bound.
+            WorldTransfer.ChunkPackagesPerObserverPerTick = IntRange("WorldTransfer.ChunkPackagesPerObserverPerTick", WorldTransfer.ChunkPackagesPerObserverPerTick, 1, 32);
             // Gc knobs keep their 0-sentinels (SafetyCollectAboveMB 0 = AUTO ceiling;
             // IncrementalPauseTargetMs 0 = no pause limit), so the floor is 0, not a
             // forced positive. This centralizes the previously ad-hoc use-site clamps

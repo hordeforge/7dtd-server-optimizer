@@ -41,7 +41,7 @@ namespace EfficientServer
                     typeof(Patches.AiLodPatch), typeof(Patches.UpdateTasksLodPatch),
                     typeof(Patches.GcGuardPatch), typeof(Patches.AstarGraphThrottlePatch),
                     typeof(Patches.AstarMoveThresholdPatch), typeof(Patches.FastSendPatch),
-                    typeof(Patches.InitScanPoolPatch),
+                    typeof(Patches.InitScanPoolPatch), typeof(Patches.ChunkSendThrottlePatch),
                 };
                 int methods = 0, missing = 0;
                 foreach (Type g in groups)
@@ -99,6 +99,8 @@ namespace EfficientServer
                 active = c.Network != null && c.Network.FastSingleTargetSend;
             else if (g == typeof(Patches.InitScanPoolPatch))
                 active = c.Pathfinding != null && c.Pathfinding.PoolInitScanNodes;
+            else if (g == typeof(Patches.ChunkSendThrottlePatch))
+                active = c.WorldTransfer != null && c.WorldTransfer.ChunkPackagesPerObserverPerTick != 3;
             return active ? "" : " (matched but config-disabled)";
         }
 

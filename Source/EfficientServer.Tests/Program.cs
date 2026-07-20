@@ -96,6 +96,15 @@ namespace EfficientServer.Tests
             Check(strideNeg.AiLod.MidTickStride == 1, "MidTickStride -3 -> 1 (clamp)");
             var net = ServerPerfConfig.Load(WriteTemp("{\"Network\":{\"FastSingleTargetSend\":true}}"));
             Check(net.Network.FastSingleTargetSend, "Network round-trip FastSingleTargetSend=true");
+
+            // v1.9.0: WorldTransfer chunk batch cap. Default 3 = vanilla; floor 1 is a
+            // correctness guard (0 would deadlock the send loop).
+            Check(d2.WorldTransfer != null && d2.WorldTransfer.ChunkPackagesPerObserverPerTick == 3,
+                "default ChunkPackagesPerObserverPerTick=3 (vanilla)");
+            var chunkZero = ServerPerfConfig.Load(WriteTemp("{\"WorldTransfer\":{\"ChunkPackagesPerObserverPerTick\":0}}"));
+            Check(chunkZero.WorldTransfer.ChunkPackagesPerObserverPerTick == 1, "ChunkPackagesPerObserverPerTick 0 -> 1 (deadlock guard)");
+            var chunkHi = ServerPerfConfig.Load(WriteTemp("{\"WorldTransfer\":{\"ChunkPackagesPerObserverPerTick\":999}}"));
+            Check(chunkHi.WorldTransfer.ChunkPackagesPerObserverPerTick == 32, "ChunkPackagesPerObserverPerTick 999 -> 32 (clamp)");
             var missing = ServerPerfConfig.Load(WriteTemp("{}"));
             Check(missing.Network != null && missing.Diagnostics != null, "missing Network/Diagnostics -> filled");
 

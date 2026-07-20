@@ -174,6 +174,29 @@ the megapause feeder at source (complements the `GC_FREE_SPACE_DIVISOR` env, whi
 only cuts collection frequency). Code -> EAC-off. See
 [`../../research/docs/aggressive-optimizations.md`](../../research/docs/aggressive-optimizations.md) §3.
 
+## Chunk-send throttle (P6, EXPERIMENTAL / UNVALIDATED, v1.9.0)
+
+`ChunkSendThrottlePatch` transpiles the unique batch-cap constant (`ldc.i4.3`) in
+`ChunkManager.SendChunksToClients` so `WorldTransfer.ChunkPackagesPerObserverPerTick`
+controls how many chunks each observer encodes+sends per tick (each is a synchronous
+`NetPackageChunk.Setup` / `Chunk.write` on the sim thread). **Default 3 = vanilla**
+(byte-identical, inert); lowering to 1-2 spreads a mass-join transfer across more
+ticks. Fail-visible (throws -> MISSING if the constant moves); floor of 1 is a
+deadlock guard (0 would stall the send loop). Code -> EAC-off.
+
+**Status: EXPERIMENTAL, kept as an opt-in knob but NOT validated.** Three A/Bs
+(2026-07-20) could not demonstrate a win:
+- **Clustered join:** `SendChunksToClients` +559 ms (~1.2% of tick) - real but small.
+- **Simultaneous spread** (bots teleported to distinct unexplored regions): a
+  multi-minute **region load/generation freeze** that killed the synthetic bots - and
+  that freeze is chunk **load/gen**, NOT the send path this patch throttles.
+- **Staggered spread** (one region at a time): trivial, nothing spiked.
+
+Conclusion: the send encode is modest and downstream; the real join-lag driver is the
+**synchronous region load/gen on the sim thread**, which P6 does not touch. It is kept
+because it is low-risk and default-inert, not because it is proven. See
+[`RESULTS.md`](RESULTS.md) §3e.
+
 ## Lifecycle
 
 Post-start setup (dynamic-mesh reapply, optional dedicated skips, GC incremental
