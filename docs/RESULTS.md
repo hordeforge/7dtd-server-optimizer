@@ -406,6 +406,36 @@ cannot see rubber-banding, and +50 ms staleness on fast movers (feral sprinters 
 blood moon) is exactly the case a human should confirm before production. Stride 3-4
 (6.7/5 Hz) exists for headroom experiments, not production.
 
+## 3h. Capacity ceiling + zero dark matter (2026-07-20)
+
+**Capacity sweep** (64 players, everything-on + replication stride 2, endgame mix
+stepped +40/round until frame > 55 ms twice): **64 players sustain ~147 endgame
+zombies at 20 TPS; sustained break by ~245** (coarse: the spawn overshot 147 -> 244,
+so the true edge is between). This is the operator number for the blood-moon regime.
+Curve + full section dumps: `~/.local/share/7dtd-apm/capacity_{curve,sections_*}.json`.
+
+**Dark-matter attribution: ZERO.** Seven previously-untimed UpdateTick/OnUpdateTick
+callees were added to the bridge (`GameStateManager:OnUpdateTick`,
+`ChunkManager:GetActiveChunkSet`, `MainThreadCacheProtectedPositions`,
+`MultiBlockManager:MainThreadUpdate`, `updateChunksToUncull`, `checkPOIUnculling`,
+`Conductor:Update`). With the correct main-thread-only child list, UpdateTick is
+**fully attributed**: 95,811 ms parent vs 95,424 ms children (0.4% residual) at the
+ceiling. No hidden lever exists. Composition at the ceiling: **TickEntities 63%**,
+OnUpdateEntities 30% (already stride-halved), SendChunksToClients 5%, all else < 2%.
+
+Caveat on naive parent-minus-children: `TickEntitiesSlice`/`Flush` (~58.7 s each)
+run on **worker threads** - the engine already parallelizes entity slices - so their
+wall-clock must be excluded from main-thread residual math (they made the first-pass
+residual read "-122%"). The main-thread `TickEntities` cost is the coordination +
+main-thread share of that parallel design, which is why the entity tick resists
+further mod-level parallelization.
+
+**Conclusion: the optimization campaign is complete.** Every millisecond of the tick
+at the ceiling is attributed to a known, measured cost; the two remaining masses
+(entity tick, replication) are the engine walls, one of which the stride already
+halves. Further gains are ops config (spawn caps at ~147, `BlockDamageAIBM`,
+ViewDistance) or the custom-server long game.
+
 ## 4. Config reference (every knob, all independently toggleable)
 
 ```
