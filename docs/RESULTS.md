@@ -487,6 +487,26 @@ exactly ~50 ms interval* - it never goes lower - so the original recovery thresh
 (45 ms) was unreachable and the governor never stepped down. `HealthyMs` is now
 floored at 51 in `Normalize` (regression-tested) and defaults to 52.
 
+## 3g-bis. Parallel interest scan: audited and REJECTED (2026-07-21)
+
+The proposed follow-up to the stride (fan the OnUpdateEntities interest compute
+across workers, enqueue serially) fails the read-safety audit on three counts:
+
+1. **The per-pair work is not math, it is side effects.** `updatePlayerEntity`
+   (IL 222) is dominated by 8x `ConnectionManager.SendPackage` + 7x package
+   `Setup` + `HashSet` Add/Remove - all serial by nature. The parallelizable
+   compute is one distSq + a set lookup.
+2. **The reads cannot leave the main thread.** The outer scan does 8 Unity
+   `transform.position` reads - main-thread-only API - so workers would need a
+   main-thread snapshot pass first, adding the very work being saved.
+3. **Amdahl.** With the stride already cutting the pass to 4.25 ms (governor
+   engages it dynamically), the parallel-safe minority caps the win under
+   ~1.5 ms/frame - against reimplementing a version-fragile method with
+   thread-ordering semantics on the wire.
+
+Verdict: not worth building at any realistic load. The replication wall's
+practical management is the stride curve (§3g) + the governor (§3i).
+
 ## 3j. TickGuard emergency load-shedding (v1.13.0, validated live 2026-07-21)
 
 `TickGuardPatch` (config `TickGuard.*`, **default off - it removes entities, a real
