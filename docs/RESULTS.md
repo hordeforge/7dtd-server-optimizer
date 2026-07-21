@@ -424,11 +424,19 @@ ceiling. No hidden lever exists. Composition at the ceiling: **TickEntities 63%*
 OnUpdateEntities 30% (already stride-halved), SendChunksToClients 5%, all else < 2%.
 
 Caveat on naive parent-minus-children: `TickEntitiesSlice`/`Flush` (~58.7 s each)
-run on **worker threads** - the engine already parallelizes entity slices - so their
-wall-clock must be excluded from main-thread residual math (they made the first-pass
-residual read "-122%"). The main-thread `TickEntities` cost is the coordination +
-main-thread share of that parallel design, which is why the entity tick resists
-further mod-level parallelization.
+must be excluded because they are **nested**, not parallel - IL proves
+`TickEntitiesFlush` = `TickEntitiesSlice(list.Count)` and `Slice` is called from
+inside the `TickEntities` path, so all three sections time the *same* work (that
+made the first-pass residual read "-122%").
+
+**Slice-mechanism RE (2026-07-21, corrects an earlier claim):** the entity tick is
+**100% serial on the main thread**. "Slices" spread entity ticks across *frames*
+(amortization: `UpdateTick` either runs one bounded `TickEntitiesSlice()` + `Flush`
+per frame or the full `TickEntities`), never across cores. There is no worker pool,
+no sync barrier, and no thread count to raise - the hoped-for "widen the slice
+workers" lever does not exist. Parallelizing the entity tick would be NEW threading
+into shared mutable world state (the SIM_PARALLELISM minefield), not a tweak of
+existing parallelism.
 
 **Conclusion: the optimization campaign is complete.** Every millisecond of the tick
 at the ceiling is attributed to a known, measured cost; the two remaining masses
