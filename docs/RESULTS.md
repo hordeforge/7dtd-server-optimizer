@@ -403,8 +403,13 @@ visits do full work, half return immediately).
 
 **Ships default OFF (stride 1).** The remaining gate is human-eye fidelity: bots
 cannot see rubber-banding, and +50 ms staleness on fast movers (feral sprinters at
-blood moon) is exactly the case a human should confirm before production. Stride 3-4
-(6.7/5 Hz) exists for headroom experiments, not production.
+blood moon) is exactly the case a human should confirm before production.
+
+**Full curve (2026-07-21, matched ~562-zombie arms):** stride 1/2/3/4 =
+7.69 / 4.25 / 2.97 / 2.34 ms avg (-0 / -45 / -61 / -70%). Textbook `cost/N + ~1 ms
+fixed`; returns diminish hard past stride 2 (2->3 buys 1.3 ms, 3->4 only 0.6 ms)
+while staleness rises linearly (+100/+150 ms). **Stride 2 is the recommended
+throttle point**; 3-4 exist for headroom experiments, not production.
 
 ## 3h. Capacity ceiling + zero dark matter (2026-07-20)
 
