@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using UnityEngine;
 
 namespace EfficientServer
 {
@@ -36,10 +37,52 @@ namespace EfficientServer
                     + $"governor={c.Governor.Enabled} tickGuard={c.TickGuard.Enabled} | "
                     + $"gcGuard={c.Gc.SkipForcedCollect} explosionParticlesSkip={c.SkipOnDedicated.ExplosionParticles}");
             }
+            else if (sub == "animoff" || sub == "animon")
+            {
+                // DIAGNOSTIC probe: RE found every zombie runs a full Unity Animator
+                // on the headless server (AlwaysAnimate; the dedicated strip path is
+                // bypassed for RootMotion/HasRagdoll entities). The engine-side eval
+                // hides in unsymbolized UnityPlayer.so CPU, so the only honest sizing
+                // is a runtime A/B: disable all enemy animators, read the frame time,
+                // re-enable. GAMEPLAY BREAKS WHILE OFF (root motion, stuns, attack
+                // cadence read animator state) - bench servers only, never production.
+                World world = GameManager.Instance != null ? GameManager.Instance.World : null;
+                if (world == null) { SdtdConsole.Instance.Output("[EfficientServer] no world"); return; }
+                if (sub == "animoff")
+                {
+                    _probeDisabled.Clear();
+                    List<Entity> entities = world.Entities.list;
+                    for (int i = 0; i < entities.Count; i++)
+                    {
+                        if (!(entities[i] is EntityEnemy enemy)) continue;
+                        Animator[] anims = enemy.GetComponentsInChildren<Animator>(true);
+                        for (int a = 0; a < anims.Length; a++)
+                        {
+                            if (!anims[a].enabled) continue;
+                            anims[a].enabled = false;
+                            _probeDisabled.Add(anims[a]);
+                        }
+                    }
+                    SdtdConsole.Instance.Output(
+                        $"[EfficientServer] animprobe: DISABLED {_probeDisabled.Count} enemy animators "
+                        + "- read world.unityDeltaMs, then run 'es animon' to restore (bench only!)");
+                }
+                else
+                {
+                    int restored = 0;
+                    for (int i = 0; i < _probeDisabled.Count; i++)
+                        if (_probeDisabled[i] != null) { _probeDisabled[i].enabled = true; restored++; }
+                    _probeDisabled.Clear();
+                    SdtdConsole.Instance.Output($"[EfficientServer] animprobe: restored {restored} animators");
+                }
+            }
             else
             {
-                SdtdConsole.Instance.Output("[EfficientServer] unknown subcommand; use: es reload | es status");
+                SdtdConsole.Instance.Output(
+                    "[EfficientServer] unknown subcommand; use: es reload | es status | es animoff | es animon (diagnostic)");
             }
         }
+
+        static readonly List<Animator> _probeDisabled = new List<Animator>();
     }
 }

@@ -607,6 +607,42 @@ under the full shipping stack:
 - Config note: a `BloodMoonFrequency=1` edit in the loadgen serverconfig was not
   honored (game kept freq 7); scheduled-day time jumps were used instead.
 
+## 3m. New RE: zombie animators run fully on the headless server (2026-07-21)
+
+Deep RE of the per-entity cost paths found the first genuinely new target since the
+campaign concluded:
+
+**Every zombie runs a full Unity Animator on the dedicated server.** `EModelBase.Init`
+HAS a dedicated strip path (`AvatarControllerDummy` + disabled animators) but
+deliberately bypasses it for `RootMotion || HasRagdoll` entities - which is ALL
+zombies (`zombieTemplateMale`: both true). Server zombies get the real
+`AvatarZombieController`, enabled animators, `cullingMode = AlwaysAnimate`, and a
+forced `SetVisible(true)` to defeat the invisible-culling early-out. Per zombie per
+frame: engine-side animator evaluation (state machines, bone transforms, root-motion
+solve) + ~1000 IL of Update/LateUpdate with 6-8 `GetCurrentAnimatorStateInfo` calls.
+
+**Why a naive skip breaks the game (three hard gameplay dependencies):**
+1. Root motion: server-authoritative zombie displacement folds `Animator.deltaPosition`
+   into `Entity.motion` (walk cycles, lunges, stagger movement).
+2. Attack cadence: `IsAnimationAttackPlaying` mixes a wall-clock timer with the live
+   animator tag-hash; the damage gate reads it.
+3. Stuns: with a dummy controller every stun clears next tick - stagger/knockdown
+   vanish from combat.
+TFP built exactly this strip and excluded zombies on purpose.
+
+**Sizing:** managed animation frames are only ~0.2% of CPU, but the engine eval hides
+inside the unsymbolized `[UnityPlayer.so]` bucket - **21.7% of all-thread CPU** at
+heavy load. The only honest sizing is a runtime A/B: `es animoff` / `es animon`
+(v1.14.2 diagnostic, BENCH ONLY - gameplay breaks while off) toggles all enemy
+animators and lets the frame time speak. NEEDS MEASUREMENT; if the slice is large,
+the viable lever is **animator LOD** (disable + manually pump `Animator.Update`
+every Nth frame for calm, distant zombies; exempt attacking/stunned/ragdolling).
+
+**Buff/effect system: NOT VIABLE** - already throttled at every layer (radiated regen
+effect fires once per 50 ticks; stats on a 10-tick decade; netsync ~100 ticks). The
+per-tick residual is ~1-2 ms per SECOND at 60 zombies. Only micro-fix: a cached list
+in `EffectManager.GetValuesAndSources` (2 allocs/s/NPC), not worth it alone.
+
 ## 4. Config reference (every knob, all independently toggleable)
 
 ```
