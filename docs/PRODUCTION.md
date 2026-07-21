@@ -42,7 +42,7 @@ recommended base for every size: all zero-gameplay-impact levers on, governor on
 |---|---|---|
 | <= 16 casual | optional `Server.TargetFps: 40-60` | delivery-jitter polish; costs CPU + idle wakeups |
 | 16-64 | defaults as-is | governor absorbs horde spikes (validated: +58% sustained blood-moon capacity) |
-| 64+ heavy hordes | consider `TickGuard.Enabled: true` | trades a thinner horde for never collapsing to ~3 TPS; despawns are silent + farthest-first, but it IS a gameplay change - announce it to players |
+| 64+ heavy hordes | consider `Governor.AnimatorEmergency: true`, then `TickGuard.Enabled: true` | trades a thinner horde for never collapsing to ~3 TPS; despawns are silent + farthest-first, but it IS a gameplay change - announce it to players |
 | chasing max capacity | `MaxSpawnedZombies` near the measured ceiling (~230 endgame at 64p on a 9950X-class host) | past it the governor throttles, then TickGuard (if enabled) sheds |
 
 Apply config edits live: `es reload` (telnet/console). `es status` shows active values.
@@ -53,6 +53,9 @@ Apply config edits live: `es reload` (telnet/console). `es status` shows active 
   - `MISSING TARGET: ...` at boot = a lever is INACTIVE after a game update. Act.
   - `Governor: ... THROTTLED / restored vanilla` = load crossed the band. Frequent
     flapping -> raise `CooldownTicks` or lower the load.
+  - `Governor: ... ANIMATOR EMERGENCY / stepped down` = tier 2 (if enabled): all
+    zombie animators off during extreme overload (~40% frame recovery; combat
+    timing degrades, nothing despawns).
   - `TickGuard: ... shed N farthest enemies` = past throttling; expect thinner hordes.
   - `SPIKE gmUpdateDuration=...` = frame spikes (rate-limited to 1/5 s).
 - **Telemetry** (no capture needed, 24/7-safe):

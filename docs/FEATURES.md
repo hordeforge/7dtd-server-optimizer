@@ -202,7 +202,7 @@ autonomously. Default off because it removes entities - a real gameplay trade
 (thinner horde at 20 TPS instead of a full horde at 3 TPS). See
 [`RESULTS.md`](RESULTS.md) §3j and [`CONFIG.md`](CONFIG.md).
 
-## Adaptive load governor (v1.12.0, default ON since v1.13.0)
+## Adaptive load governor (v1.12.0, default ON since v1.13.0; tier 2 in v1.16.0)
 
 `GovernorPatch` (config `Governor.*`) watches the tick-interval EMA and moves the
 proven throttle levers between vanilla and throttled (replication stride 2 + doubled
@@ -210,7 +210,16 @@ graph cadence) with hysteresis and a cooldown, logging every transition. Validat
 live: engages under a 435-zombie overload (cushioning 299 -> 128 ms/frame), restores
 vanilla within seconds of the load clearing. It schedules existing levers only.
 Note the recovery threshold must sit ABOVE 50 ms - the healthy loop idles at exactly
-50 ms and never below (enforced in config normalize). See [`RESULTS.md`](RESULTS.md) §3i.
+50 ms and never below (enforced in config normalize).
+
+**Tier 2 (v1.16.0, `Governor.AnimatorEmergency`, default off):** when throttling has
+not recovered the tick and the EMA exceeds `EmergencyOverMs` (80), disable ALL
+zombie animators - measured **~40% of the saturated 64-player frame** (147 -> 85 ms,
+the fence check: the animator burden at 64p is mostly main-thread JOB-FENCE waiting,
+which triples per zombie vs 24p). Combat timing degrades (timer-only attack cadence,
+no stagger); nothing despawns, clients see no visual change. Steps down one tier at
+a time with pump-on-restore. Live-validated: full autonomous chain THROTTLED ->
+ANIMATOR EMERGENCY -> step-down + EXIT. See [`RESULTS.md`](RESULTS.md) §3i, §3o.
 
 ## Entity-replication stride (v1.11.0, default off)
 
