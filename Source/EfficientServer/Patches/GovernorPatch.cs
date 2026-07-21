@@ -53,14 +53,26 @@ namespace EfficientServer.Patches
             if (_emaMs > cfg.OverBudgetMs)
             {
                 _healthyTicks = 0;
-                if (++_overTicks >= cfg.WindowTicks && _level == 0 && _cooldown == 0)
-                    SetLevel(1, cfg);
+                _overTicks++;
+                if (_cooldown == 0 && _overTicks >= cfg.WindowTicks)
+                {
+                    if (_level == 0)
+                        SetLevel(1, cfg);
+                    // Tier 2 (opt-in): throttling did not fix it and the EMA is past
+                    // the emergency threshold - shut down zombie animators (~40% of
+                    // the saturated 64p frame, RESULTS 3o + fence check).
+                    else if (_level == 1 && cfg.AnimatorEmergency && _emaMs > cfg.EmergencyOverMs)
+                        SetLevel(2, cfg);
+                }
+                // Periodic sweep while in tier 2 so mid-emergency spawns are covered.
+                if (_level == 2 && _overTicks % 100 == 0)
+                    AnimatorEmergency.Enter();
             }
             else if (_emaMs < cfg.HealthyMs)
             {
                 _overTicks = 0;
-                if (++_healthyTicks >= cfg.WindowTicks && _level == 1 && _cooldown == 0)
-                    SetLevel(0, cfg);
+                if (++_healthyTicks >= cfg.WindowTicks && _level > 0 && _cooldown == 0)
+                    SetLevel(_level - 1, cfg); // step down one tier at a time
             }
             else
             {
@@ -76,16 +88,28 @@ namespace EfficientServer.Patches
             if (_baseGraphEvery < 0)
                 _baseGraphEvery = path.GraphUpdateEveryTicks;
 
+            int previous = _level;
             _level = level;
             _overTicks = 0;
             _healthyTicks = 0;
             _cooldown = cfg.CooldownTicks;
+            if (level == 2)
+            {
+                ModApi.Log($"Governor: tick EMA {_emaMs:F1}ms > {cfg.EmergencyOverMs}ms despite throttles "
+                    + "- ANIMATOR EMERGENCY (combat timing degrades; clients see no visual change)");
+                AnimatorEmergency.Enter();
+                return;
+            }
+            if (previous == 2)
+                AnimatorEmergency.Exit();
             if (level == 1)
             {
                 net.EntityDistributionEveryTicks = 2;
                 path.GraphUpdateEveryTicks = Math.Min(200, _baseGraphEvery * 2);
-                ModApi.Log($"Governor: tick EMA {_emaMs:F1}ms > {cfg.OverBudgetMs}ms - THROTTLED "
-                    + $"(replication 10 Hz, graph updates /{path.GraphUpdateEveryTicks})");
+                ModApi.Log(previous == 2
+                    ? $"Governor: tick EMA {_emaMs:F1}ms < {cfg.HealthyMs}ms - stepped down from emergency to THROTTLED"
+                    : $"Governor: tick EMA {_emaMs:F1}ms > {cfg.OverBudgetMs}ms - THROTTLED "
+                      + $"(replication 10 Hz, graph updates /{path.GraphUpdateEveryTicks})");
             }
             else
             {

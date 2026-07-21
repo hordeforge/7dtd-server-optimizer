@@ -277,6 +277,15 @@ OverBudget 30 / Healthy 27.
 ### `WindowTicks` (100) / `CooldownTicks` (400)
 ~5 s of sustained signal to transition; ~20 s minimum between transitions.
 
+### `AnimatorEmergency` (false) / `EmergencyOverMs` (80, floor OverBudget+5)
+Tier 2 (opt-in, gameplay-affecting): when tier-1 throttling has not recovered the
+tick and the EMA is past `EmergencyOverMs`, disable ALL zombie animators - measured
+**~40% of the saturated 64-player frame** (fence check, RESULTS 3o). Combat timing
+degrades (timer-only attack cadence, no stagger, supplementary movement path) but
+nothing despawns and clients see no visual difference (zombie animation is
+client-local). Steps back down one tier at a time; exit re-enables every rig with a
+pump. Enable on servers that prefer degraded combat timing over a collapsing tick.
+
 ---
 
 ## TickGuard - emergency load shedding (v1.13.0)

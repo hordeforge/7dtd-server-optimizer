@@ -736,14 +736,23 @@ endgame zombies, frames 87-172 ms (bimodal). Sessions `050646` (steady) and
    largest attributed native cost is `GC_dirty_inner` (~13% of main busy - the
    Boehm write barrier, the price of allocation churn even between collections).
 
-**Open question (the one number this session missed):** the frame period during
-animators-off at 64 players was not sampled (the perf-only capture carries no
-bridge data). If it recovers toward budget, the animator JOB FENCES - not their
-compute - are the 64p wall's main component, and the animator-LOD coverage
-problem (3m-bis) becomes worth revisiting with fence-awareness (e.g. disabling
-animators for ALL zombies during governor-overload as an emergency tier, since
-server animation is client-invisible and combat exemptions only matter for
-fidelity of timing, not visuals).
+**Fence check (the missing number, measured):** at 64 players + ~430 zombies,
+frame 208/142/119/119 ms with animators on -> **94/81/81/84 ms with animators
+off**: **~60 ms/frame recovered, ~40% of the saturated 64p frame** (vs 20 ms at
+24 players - fence contention amplifies the animator burden as player-driven work
+multiplies sync points). Confirmed: the animator path (worker compute + main-thread
+job fences) is the dominant single component of the 64p wall.
+
+**Shipped as governor tier 2 (v1.16.0, `Governor.AnimatorEmergency`, default
+off):** when throttling has not recovered the tick and the EMA exceeds
+`EmergencyOverMs` (80), the governor disables ALL zombie animators (with periodic
+sweeps for mid-emergency spawns), stepping back down one tier at a time on
+recovery with a proper pump-on-restore. Live validation: the full chain fired
+autonomously - `THROTTLED (63.0 > 57)` -> `ANIMATOR EMERGENCY (86.1 > 80)` ->
+step-down 2 -> 1 -> 0 with EXIT restore. VERDICT PASS. While active, combat
+timing degrades in the known ways (timer-only attack cadence, no stagger,
+supplementary movement) but nothing despawns and clients see no visual change -
+gentler than TickGuard, and worth ~40% of the frame exactly when it is needed.
 
 ## 4. Config reference (every knob, all independently toggleable)
 

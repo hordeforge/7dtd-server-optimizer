@@ -180,6 +180,13 @@ namespace EfficientServer
         // 50 ms target.
         public float OverBudgetMs { get; set; } = 57f;
         public float HealthyMs { get; set; } = 52f;
+        // Tier 2 (opt-in, gameplay-affecting): when throttling has not recovered the
+        // tick and the EMA is past this, shut down all zombie animators - measured
+        // ~40% of the saturated 64-player frame (RESULTS 3o). Combat timing degrades
+        // (timer-only attack cadence, no stagger) but nothing despawns and clients
+        // see no visual change. Steps back down through tier 1 on recovery.
+        public bool AnimatorEmergency { get; set; } = false;
+        public float EmergencyOverMs { get; set; } = 80f;
         // Ticks the EMA must stay over/under before a transition (~5 s at 20 TPS).
         public int WindowTicks { get; set; } = 100;
         // Minimum ticks between transitions (~20 s at 20 TPS).
@@ -296,6 +303,7 @@ namespace EfficientServer
             // enough for high-fps tunes; the hysteresis gap is still enforced.
             Governor.OverBudgetMs = FiniteRange("Governor.OverBudgetMs", Governor.OverBudgetMs, 20f, 500f, 57f);
             Governor.HealthyMs = FiniteRange("Governor.HealthyMs", Governor.HealthyMs, 10f, Governor.OverBudgetMs - 5f, 52f);
+            Governor.EmergencyOverMs = FiniteRange("Governor.EmergencyOverMs", Governor.EmergencyOverMs, Governor.OverBudgetMs + 5f, 1000f, 80f);
             Governor.WindowTicks = IntRange("Governor.WindowTicks", Governor.WindowTicks, 20, 6000);
             Governor.CooldownTicks = IntRange("Governor.CooldownTicks", Governor.CooldownTicks, 0, 36000);
             // TickGuard: shed threshold must sit above the governor band (last resort),

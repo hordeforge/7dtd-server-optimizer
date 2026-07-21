@@ -52,7 +52,9 @@
     "OverBudgetMs": 57,
     "HealthyMs": 52,
     "WindowTicks": 100,
-    "CooldownTicks": 400
+    "CooldownTicks": 400,
+    "AnimatorEmergency": false,
+    "EmergencyOverMs": 80
   },
   "TickGuard": {
     "Enabled": false,
