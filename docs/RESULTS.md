@@ -28,15 +28,19 @@ tick-starved, small when it has headroom.
 - Emergency reserve: governor tier 2 (animators off, **~40% of the saturated 64p
   frame**) and TickGuard (farthest-first shedding) - both live-validated, both opt-in.
 
-**The walls, precisely named:** entity tick (serial main-thread by design,
-close-combat-bound), replication (20 Hz-locked, O(N^2.26) player axis), engine job
-fences (~half the saturated 64p frame is main-thread waiting; worker-pool size
-measured irrelevant). Frame rate is NOT the tick rate. PhysX ~0. GC exonerated at
-saturation. Zero unattributed tick time (0.4% residual).
+**The walls, precisely named:** entity tick (serial main-thread by design; the
+per-zombie constant is fully attributed - 54% irreducible world-collision physics,
+27% already-LOD'd AI, neighbor-collision share measured at only 4-6%), replication
+(20 Hz-locked, O(N^2.26) player axis), engine job fences (~half the saturated 64p
+frame is main-thread waiting; worker-pool size measured irrelevant). Frame rate is
+NOT the tick rate. PhysX ~0. GC exonerated at saturation. Zero unattributed tick
+time (0.4% residual). At 8 players no CPU ceiling exists at all.
 
-**Honest refutations on record:** spatial interest grid, serialize-once, mid-band
-stride, parallel interest scan, chunk-send throttle sizing, fps/TPS + delivery
-jitter, buff-system throttling, clustered-horde animator LOD, job-worker pool.
+**Honest refutations on record (eleven):** spatial interest grid, serialize-once,
+mid-band stride, parallel interest scan, chunk-send throttle sizing, fps/TPS +
+delivery jitter, buff-system throttling, clustered-horde animator LOD, job-worker
+pool, crowd-collision LOD (neighbor share 4-6%), engagement-cap director (killed
+by arithmetic pre-build).
 
 **What remains beyond modding:** the custom-server long game (zdtd) for the frame
 structure; ops config for capacity targets; allocation-source work for the ~13%
