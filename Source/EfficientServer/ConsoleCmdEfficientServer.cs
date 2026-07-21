@@ -118,11 +118,21 @@ namespace EfficientServer
                     SdtdConsole.Instance.Output($"[EfficientServer] rigprobe: restored {restored} components");
                 }
             }
+            else if (sub == "benchgod")
+            {
+                // BENCH ONLY: player damage immunity so synthetic bots survive
+                // endgame hordes and the load stays an active siege (RESULTS 3q).
+                string arg = _params.Count > 1 ? _params[1].ToLowerInvariant() : "";
+                if (arg == "on") Patches.BenchGodPatch.BenchGod = true;
+                else if (arg == "off") Patches.BenchGodPatch.BenchGod = false;
+                SdtdConsole.Instance.Output(
+                    $"[EfficientServer] benchgod={(Patches.BenchGodPatch.BenchGod ? "ON (bench only!)" : "off")}");
+            }
             else
             {
                 SdtdConsole.Instance.Output(
                     "[EfficientServer] unknown subcommand; use: es reload | es status | "
-                    + "es animoff | es animon | es rigoff | es rigon (diagnostics)");
+                    + "es animoff | es animon | es rigoff | es rigon | es benchgod on|off (diagnostics)");
             }
         }
 

@@ -349,4 +349,6 @@ call - no restart needed). Diagnostics (BENCH ONLY, gameplay breaks while active
 `es animoff` / `es animon` toggle all enemy Animators (used to measure the 19.9 ms
 animator slice); `es rigoff` / `es rigon` toggle the unguarded rig visual
 components (eyelid/gaze/feather/held-light-raycast; measured: no resolvable cost
-at saturation variance).
+at saturation variance); `es benchgod on|off` makes players damage-immune so
+synthetic bench bots survive endgame hordes and the load stays an active siege
+(RESULTS 3q spawn-equilibrium problem) - never on a real server.

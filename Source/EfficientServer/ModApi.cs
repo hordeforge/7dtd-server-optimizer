@@ -45,6 +45,7 @@ namespace EfficientServer
                     typeof(Patches.ExplosionParticlesPatch),
                     typeof(Patches.EntityDistributionStridePatch),
                     typeof(Patches.GovernorPatch), typeof(Patches.TickGuardPatch),
+                    typeof(Patches.BenchGodPatch),
                     typeof(Patches.TargetFpsPatch), typeof(Patches.AnimatorLodPatch.UpdatePatch),
                     typeof(Patches.AnimatorLodPatch.LateUpdatePatch),
                 };
@@ -116,6 +117,8 @@ namespace EfficientServer
                 active = c.TickGuard != null && c.TickGuard.Enabled;
             else if (g == typeof(Patches.TargetFpsPatch))
                 active = c.Server != null && c.Server.TargetFps > 0;
+            else if (g == typeof(Patches.BenchGodPatch))
+                active = Patches.BenchGodPatch.BenchGod; // console-toggled diagnostic
             else if (g == typeof(Patches.AnimatorLodPatch.UpdatePatch) || g == typeof(Patches.AnimatorLodPatch.LateUpdatePatch))
                 active = c.AnimatorLod != null && c.AnimatorLod.Enabled;
             return active ? "" : " (matched but config-disabled)";
