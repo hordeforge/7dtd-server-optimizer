@@ -300,10 +300,11 @@ death), bots held 32/32 the whole run. **No leak:** RSS grew +672 MB then platea
    collections stay partial/incremental even at 10 GB (78 ms worst here). The 479 ms
    is a worst-case forced event, not steady state.
 
-The one gate the soak cannot close is **visual wall-clipping** (headless: "pathing" is
-inferred from stable `alive` + normal `ms_per_tick` + zero exceptions, not seen). A
-human-client watch during a real blood moon is the final sign-off; every automated
-signal is green.
+~~The one gate the soak cannot close is **visual wall-clipping**~~ **CLOSED
+(2026-07-21): human-client pass** - chase pathing through buildings with forced
+rescans + explosions showed normal routing, no through-wall or floating, zero nav
+exceptions. P4 is now fully fidelity-validated (bench + soak + human); it stays
+default-off only because it has no measured perf win.
 
 **Bench-driver bug found + fixed mid-soak:** the first attempt collapsed at sample 2
 (`alive` 282 -> 5). Root cause was **not P4** - `modab.start_bots` hard-codes
@@ -401,9 +402,13 @@ player-axis walls with a one-line skip. The bridge times the method wrapper, so
 "calls" stay ~equal in both arms; the halved *avg* is the skip signature (half the
 visits do full work, half return immediately).
 
-**Ships default OFF (stride 1).** The remaining gate is human-eye fidelity: bots
-cannot see rubber-banding, and +50 ms staleness on fast movers (feral sprinters at
-blood moon) is exactly the case a human should confirm before production.
+**Ships default OFF (stride 1) - human-pass CONFIRMED (2026-07-21).** A live A/B
+with a human client (identical feral waves at stride 2 then stride 1) found stride 2
+**visibly less smooth** - the verdict is final: never a static base, governor-only
+(under overload, where staleness beats collapse). Baseline note: some rubber-banding
+exists even at stride 1 when zombies collide with each other - that is vanilla's
+server-side collision correction, untouched by the mod (and why stride 2 amplified
+it: corrections arrived at half rate).
 
 **Full curve (2026-07-21, matched ~562-zombie arms):** stride 1/2/3/4 =
 7.69 / 4.25 / 2.97 / 2.34 ms avg (-0 / -45 / -61 / -70%). Textbook `cost/N + ~1 ms
