@@ -419,6 +419,14 @@ zombies at 20 TPS; sustained break by ~245** (coarse: the spawn overshot 147 -> 
 so the true edge is between). This is the operator number for the blood-moon regime.
 Curve + full section dumps: `~/.local/share/7dtd-apm/capacity_{curve,sections_*}.json`.
 
+**Re-swept under the v1.13.0 SHIPPING defaults (2026-07-21, governor managing the
+levers dynamically instead of a static stride): 64 players sustain ~232 endgame
+zombies at 20 TPS, first sustained break ~279-378.** The governor stack raised
+sustained capacity **+58%** over the static-stride sweep (147 -> 232): it absorbs
+spawn spikes (a transient 65 ms round at 93z recovered instead of ending the sweep)
+and holds 51 ms at 232z. Curve:
+93@50 / 185@50 / 232@51 / 279@78(OVER) / 378@106(OVER).
+
 **Dark-matter attribution: ZERO.** Seven previously-untimed UpdateTick/OnUpdateTick
 callees were added to the bridge (`GameStateManager:OnUpdateTick`,
 `ChunkManager:GetActiveChunkSet`, `MainThreadCacheProtectedPositions`,
