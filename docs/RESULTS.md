@@ -711,6 +711,40 @@ the genuine anomaly), chunk/terrain mesh streams (client payload, not rendering)
 occlusion/LOD (guarded or never instantiated), XUi (guarded), wind/flicker/decals
 (absent or empty headless).
 
+## 3o. Instrumented saturation session: the 64-player frame is WAIT-bound (2026-07-21)
+
+Full-stack capture (perf + GC probes + bridge, symbolized) at 64 players + ~385
+endgame zombies, frames 87-172 ms (bimodal). Sessions `050646` (steady) and
+`051240` (animators force-disabled). Findings:
+
+1. **GC exonerated for the frame mass:** bt-measured stop-the-world was 178.9 ms
+   TOTAL across the 120 s window (3 pauses, worst 63 ms) - ~0.15%. The saturated
+   frame is not collection stalls. (Note: these bench boots run WITHOUT the
+   GC_FREE_SPACE_DIVISOR env - only run_server.sh sets it - so even default-GC
+   STW is not the mass here.)
+2. **The main thread is only ~52% BUSY at saturation** (51 of 99 perf samples/s)
+   while frames run 166 ms: roughly half the frame is main-thread WAITING, not
+   compute. The scheduler probe shows ~550 voluntary switch-outs per second in
+   4-64 us blocks - the signature of engine job-fence ping-pong (main schedules
+   worker jobs and blocks on their fences).
+3. **With animators force-disabled the main thread jumps to 95% busy** - the waits
+   largely vanish, consistent with animation jobs (worker-evaluated, main-fenced)
+   being the dominant fence source at 64p. All-thread CPU shares stay flat
+   (UnityPlayer.so ~15.5%, libc ~30%) because the cost moves between waiting and
+   working, not between subsystems.
+4. `UnityPlayer.so` is ~59% of main-thread BUSY samples in both states; the next
+   largest attributed native cost is `GC_dirty_inner` (~13% of main busy - the
+   Boehm write barrier, the price of allocation churn even between collections).
+
+**Open question (the one number this session missed):** the frame period during
+animators-off at 64 players was not sampled (the perf-only capture carries no
+bridge data). If it recovers toward budget, the animator JOB FENCES - not their
+compute - are the 64p wall's main component, and the animator-LOD coverage
+problem (3m-bis) becomes worth revisiting with fence-awareness (e.g. disabling
+animators for ALL zombies during governor-overload as an emergency tier, since
+server animation is client-invisible and combat exemptions only matter for
+fidelity of timing, not visuals).
+
 ## 4. Config reference (every knob, all independently toggleable)
 
 ```
