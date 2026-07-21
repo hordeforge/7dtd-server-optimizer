@@ -567,16 +567,19 @@ sim, replication, block falls) fires on a fixed ~20 Hz timer. Raising fps does N
 raise TPS, does not change ms_per_tick, and leaves every capacity number in this
 ledger untouched.
 
-**What higher fps does buy:** the per-frame path runs 2-3x more often - steadier
-packet-pump timing and finer work slicing = lower delivery jitter of the same 20 Hz
-data. Human observation at fps 40: "somewhat smoother" motion (consistent with
-jitter reduction; positions still update 20/s; placebo not excludable). Cost:
-per-frame loop overhead (measured UpdateTick total ~15 -> ~17 ms-CPU/s at 20 -> 60
-on a light server - modest) plus idle-wakeup power.
+**What higher fps buys: nothing measurable.** The jitter hypothesis was tested and
+REFUTED: inter-sendto gap distributions at fps 20 vs 60 (same load, proper arm
+control after the enforcement patch invalidated the first attempt) are statistically
+identical - outgoing sends pace on the 20 Hz tick, not the frame rate. The human
+"somewhat smoother" observation at fps 40 is therefore unbacked by any wire- or
+sim-level measurement; placebo is the leading explanation. Cost is real (per-frame
+loop overhead ~15 -> ~17 ms-CPU/s at 20 -> 60 idle). **Recommendation: leave
+`Server.TargetFps` at 0.**
 
-**`Server.TargetFps` (v1.14.0, default 0 = vanilla):** persistent knob for the
-frame rate (vanilla `settargetfps` does not survive restarts). Reasonable range
-20-60; it is a jitter/smoothness polish, not a tick-rate or capacity lever.
+**`Server.TargetFps` (v1.14.0/1, default 0 = vanilla):** persistent knob for the
+frame rate (vanilla `settargetfps` does not survive restarts; v1.14.1 re-enforces
+against vanilla's post-start reset). Measured: no effect on send timing, tick rate,
+or capacity - keep 0 unless experimenting.
 Governor note: the governor's EMA watches FRAME intervals (UpdateTick postfix), so
 its idle floor equals the frame target - thresholds calibrate to targetfps (clamps
 widened in v1.14.0; defaults assume fps 20).

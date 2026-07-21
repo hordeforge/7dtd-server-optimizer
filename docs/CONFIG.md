@@ -211,11 +211,12 @@ Opt-in Boehm incremental mode (collection in bounded slices). **Measured: margin
   FULL tick (entity sim + replication) is gated internally at ~20 Hz **regardless of
   frame rate** - measured: `TickEntities`/`OnUpdateEntities` stay at 19.9 calls/s at
   fps 20 and fps 60 alike (RESULTS 3k).
-- **Effect:** steadier packet delivery and finer slicing = lower jitter of the same
-  20 Hz simulation. Human-observed as "somewhat smoother" motion at 40. It does NOT
-  raise TPS and does NOT change capacity.
-- **Cost:** modest per-frame loop overhead + idle wakeups; movement data rate is
-  unchanged (still 20 Hz). 20-60 is the reasonable range.
+- **Effect: none measured.** The delivery-jitter hypothesis was refuted
+  (inter-send gap distributions identical at fps 20 vs 60 under matched load - the
+  send path paces on the 20 Hz tick, not frames). Does NOT raise TPS or capacity.
+  A human "somewhat smoother" impression at 40 predates the measurement and is
+  unconfirmed - likely placebo.
+- **Cost:** modest per-frame loop overhead + idle wakeups. **Recommendation: 0.**
 - **Interactions:** the governor's EMA measures FRAME intervals, so its idle floor
   equals the frame target - calibrate `HealthyMs`/`OverBudgetMs` to your fps (see
   below). Tick-counted knobs (`GraphUpdateEveryTicks`, replication stride) count
