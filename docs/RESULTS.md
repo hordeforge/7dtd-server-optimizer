@@ -813,6 +813,38 @@ knob ships default 0 for experimenters. Adjacent main-busy item still open:
 `GC_dirty_inner` (write barrier) at ~13% of main busy - the allocation-source
 levers are its only reducer.
 
+## 3q. 8-player scaling + the OnUpdateLive interior split (2026-07-21)
+
+**8 players + zombies: trivially easy.** The sweep (session `120304`) never found a
+CPU ceiling: frame stayed pinned at 50.0 ms through ~250 standing zombies with
+**93.7% compute headroom** (avg compute 3.1 ms/frame). The standing horde capped at
+~250 by SPAWN EQUILIBRIUM (the endgame mix's exploder chains kill as fast as spawns
+land around 8 clustered anchors), not by the server. Extrapolating the ~near-linear
+entity cost: 8p + 500 zombies would use ~7 ms of the 50 ms budget. **The quadratic
+player-axis terms collapse at 8p exactly as the scaling model predicts** - capacity
+at low player counts is bounded by the game's own spawn dynamics, not CPU.
+
+**The per-zombie constant, fully attributed** (interior split via the new deep
+sections, at 8p + ~224z; OnUpdateLive = 22.1 us/zombie/tick here vs 36 us at 64p -
+the difference is the player-linked fence share):
+
+| component | us/zombie/tick | share |
+|---|---|---|
+| **MoveEntityHeaded** (movement + collision integration) | **~12.0** | **54%** |
+| updateTasks (incl. EAI, path follow) | ~6.1 | 27% |
+| CanSee (throttled LOS) | ~1.4 | 6% |
+| updateCurrentBlockPosAndValue | ~1.3 | 6% |
+| EntityStats.Tick | ~0.9 | 4% |
+| UpdateJump + rest | ~0.4 | 2% |
+
+Sum ~= the whole (fully attributed). **The entity tick's biggest reducible piece is
+`MoveEntityHeaded` - movement/collision integration - at 54%**, confirming the
+crowd-collision suspicion (dense packs pay per neighbor pair; also the mechanism
+behind the visually observed zombie-collision rubber-banding). Next-lever ranking
+for the entity tick: (1) crowd-collision LOD inside MoveEntityHeaded's pair
+resolution, (2) engagement-cap director (fewer zombies paying full AI), (3) nothing
+else - the remainder is already throttled or small.
+
 ## 4. Config reference (every knob, all independently toggleable)
 
 ```
