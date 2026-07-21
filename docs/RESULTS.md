@@ -567,11 +567,17 @@ sim, replication, block falls) fires on a fixed ~20 Hz timer. Raising fps does N
 raise TPS, does not change ms_per_tick, and leaves every capacity number in this
 ledger untouched.
 
-**What higher fps buys: nothing measurable.** The jitter hypothesis was tested and
-REFUTED: inter-sendto gap distributions at fps 20 vs 60 (same load, proper arm
-control after the enforcement patch invalidated the first attempt) are statistically
-identical - outgoing sends pace on the 20 Hz tick, not the frame rate. The human
-"somewhat smoother" observation at fps 40 is therefore unbacked by any wire- or
+**What higher fps buys: nothing measurable - refuted three ways.**
+1. Inter-sendto gap distributions at fps 20 vs 60 (light load, proper arm control
+   after the enforcement patch invalidated the first attempt) are statistically
+   identical - send pacing follows tick-produced data, not frames.
+2. Under production load (24 clients + 150 zombies): **recv 1,200 calls/s and send
+   1,642 calls/s with 86-96% of inter-call gaps under 2 ms** - both directions run
+   on dedicated network threads (LiteNetLib receiver, per-connection writers) at
+   wire speed, so the frame loop cannot pace wire timing in EITHER direction. This
+   also kills the input-latency variant of the hypothesis.
+3. The sim tick is locked at 20 Hz regardless of fps (this section).
+The human "somewhat smoother" observation at fps 40 is unbacked by any wire- or
 sim-level measurement; placebo is the leading explanation. Cost is real (per-frame
 loop overhead ~15 -> ~17 ms-CPU/s at 20 -> 60 idle). **Recommendation: leave
 `Server.TargetFps` at 0.**
