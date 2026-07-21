@@ -584,6 +584,23 @@ Governor note: the governor's EMA watches FRAME intervals (UpdateTick postfix), 
 its idle floor equals the frame target - thresholds calibrate to targetfps (clamps
 widened in v1.14.0; defaults assume fps 20).
 
+## 3l. Real blood-moon event test (2026-07-21)
+
+Three actual in-game blood-moon nights (scheduled day 7/14 via `BloodMoon SetDay`,
+triggered by settime jumps; 8 then ~29 bots at gamestage 250, MaxSpawnedZombies 120)
+under the full shipping stack:
+
+- **Event compatibility: clean.** The AIDirector spawner ran its nights with the mod
+  active - zero game/nav/mod exceptions, frame healthy throughout, governor
+  correctly silent (never needed).
+- **The real event cannot stress the capacity ceiling with clustered players:** its
+  per-party concurrency cap (`BloodMoonEnemyCount` = 8) held the horde at ~18
+  concurrent zombies despite ~29 GS-250 players in one cluster - authentic vanilla
+  pacing, not a mod effect. Capacity/stress work therefore stays on the synthetic
+  blood-moon standard (`7dtd-loadgen/BLOODMOON.md`), which bypasses the pacing.
+- Config note: a `BloodMoonFrequency=1` edit in the loadgen serverconfig was not
+  honored (game kept freq 7); scheduled-day time jumps were used instead.
+
 ## 4. Config reference (every knob, all independently toggleable)
 
 ```
