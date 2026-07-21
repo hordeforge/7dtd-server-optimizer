@@ -630,13 +630,18 @@ solve) + ~1000 IL of Update/LateUpdate with 6-8 `GetCurrentAnimatorStateInfo` ca
    vanish from combat.
 TFP built exactly this strip and excluded zombies on purpose.
 
-**Sizing:** managed animation frames are only ~0.2% of CPU, but the engine eval hides
-inside the unsymbolized `[UnityPlayer.so]` bucket - **21.7% of all-thread CPU** at
-heavy load. The only honest sizing is a runtime A/B: `es animoff` / `es animon`
-(v1.14.2 diagnostic, BENCH ONLY - gameplay breaks while off) toggles all enemy
-animators and lets the frame time speak. NEEDS MEASUREMENT; if the slice is large,
-the viable lever is **animator LOD** (disable + manually pump `Animator.Update`
-every Nth frame for calm, distant zombies; exempt attacking/stunned/ragdolling).
+**MEASURED (es animoff A/B, 24 bots + ~379 endgame zombies, compute-bound 71.7 ms
+frames): the animator slice is 19.9 ms/frame = 28% of the loaded frame** - frame
+71.7 -> 51.8 ms with animators off, engineGap 67.4 -> 47.0 confirming attribution.
+~51 us per zombie per frame of engine-side animation nobody renders. **The single
+largest headless-waste finding of the campaign** - larger than every shipped lever
+except P1's breaking-load result. The lever is **animator LOD**: disable + manually
+pump `Animator.Update(accumulatedDt)` every Nth frame for calm, distant zombies
+(exempt attacking/stunned/ragdolling - root motion, attack cadence, and stuns read
+animator state; a plain permanent skip breaks combat, RESULTS above). Probe note:
+`es animon` restore is imperfect (plain `enabled=true` does not fully revive rigs -
+the frame stayed low after restore at near-constant zombie count); restart clears
+it, bench-only tool.
 
 **Buff/effect system: NOT VIABLE** - already throttled at every layer (radiated regen
 effect fires once per 50 ticks; stats on a 10-tick decade; netsync ~100 ticks). The
