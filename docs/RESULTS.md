@@ -643,6 +643,40 @@ effect fires once per 50 ticks; stats on a 10-tick decade; netsync ~100 ticks). 
 per-tick residual is ~1-2 ms per SECOND at 60 zombies. Only micro-fix: a cached list
 in `EffectManager.GetValuesAndSources` (2 allocs/s/NPC), not worth it alone.
 
+## 3n. Client-only-code sweep (2026-07-21)
+
+Systematic RE hunt for further headless waste beyond the six shipped skips. The
+dedicated binary is a separate STRIPPED build (empty `Audio.Manager.FrameUpdate`,
+empty `createWeatherEffects`) and TFP's guards consistently sit AFTER
+gameplay-coupled preludes (`SignalAI` before the audio guard, `PlaySoundInServer`
+before the particle guard, `UpdateSunMoonAngles` before the sky guard) - the
+recurring trap for naive prefix-skips.
+
+**Found and actioned:**
+- **`WorldEnvironment.AmbientSpectrumFrameUpdate` skip (v1.14.3, default on):**
+  ~650 IL of per-frame ambient-spectrum lerp ending in `RenderSettings` color writes;
+  the consumer chain (LightManager light level -> stealth) is client-computed.
+  `SkipOnDedicated.AmbientLightSpectrumUpdates`.
+- **Entity-rig visual MonoBehaviours (NEEDS MEASUREMENT, `es rigoff/rigon` probe in
+  v1.14.3):** unguarded per-entity per-frame components instantiated by
+  `SDCSUtils.setupBase` (zero IsDedicatedServer references): `EyeLidController`
+  (blink state machine + 4 bone writes), `CharacterGazeController`, `FeatherFlutter`
+  (vultures), **`LightLODHeld` (a Physics.Raycast per held light per frame)**, drone
+  lights. Patch shape if the probe shows real cost: destroy/disable these components
+  at model init on dedicated. `RagdollWhenHit` deliberately excluded (physics).
+- **`SkyManager.Update` pre-guard half (parked):** quaternion + Light/Material writes
+  run before the mid-method dedicated guard, but `sunDirV` from that math feeds the
+  SERVER weather simulation (`CalcGlobalTemperature`) every frame - a skip must
+  preserve the math and drop only the render-object writes. Transpiler-shaped, small
+  prize (~tens of us/frame); parked.
+
+**Ruled out (well-guarded or absent headless):** audio one-shots (primary-player
+gate; and `SignalAI` fires BEFORE the guard - prefix-skipping `Play` would break
+zombie hearing), particle spawns (central `ParticleEffect` guard; ExplosionClient was
+the genuine anomaly), chunk/terrain mesh streams (client payload, not rendering),
+occlusion/LOD (guarded or never instantiated), XUi (guarded), wind/flicker/decals
+(absent or empty headless).
+
 ## 4. Config reference (every knob, all independently toggleable)
 
 ```

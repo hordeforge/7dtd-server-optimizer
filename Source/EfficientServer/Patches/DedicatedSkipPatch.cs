@@ -26,6 +26,12 @@ namespace EfficientServer.Patches
                 TryPrefix(harmony, "EnvironmentAudioManager", "FixedUpdate");
                 TryPrefix(harmony, "EnvironmentAudioManager", "LateUpdate");
             }
+            // Per-frame ambient light-spectrum lerp (~650 IL) whose only outputs are
+            // RenderSettings.ambient*Color writes; the consumer chain
+            // (LightManager.GetLightLevel -> stealth) is client-computed. RE sweep
+            // 2026-07-21, RESULTS 3n.
+            if (skip.AmbientLightSpectrumUpdates)
+                TryPrefix(harmony, "WorldEnvironment", "AmbientSpectrumFrameUpdate");
         }
 
         static void TryPrefix(Harmony harmony, string typeName, string methodName)

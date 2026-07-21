@@ -37,6 +37,9 @@ namespace EfficientServer
         // Cloth physics + jiggle-bone simulation on characters (capes, flapping
         // clothes, body jiggle - pure visual deformation).
         public bool ClothAndJiggleBoneSimulation { get; set; } = true;
+        // Per-frame ambient light-spectrum lerp writing RenderSettings colors that
+        // nothing headless reads (light-level -> stealth is client-computed).
+        public bool AmbientLightSpectrumUpdates { get; set; } = true;
         // Skip Object.Instantiate of the explosion particle prefab (headless server,
         // never rendered). Gameplay side effects (physics push, block changes, quest
         // event) are preserved. Measured A/B at blood-moon load: ~1.1 ms of the ~10 ms

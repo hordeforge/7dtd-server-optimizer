@@ -17,7 +17,8 @@
     "WaterSplashParticles": true,
     "EnvironmentAudioUpdates": true,
     "ClothAndJiggleBoneSimulation": true,
-    "ExplosionParticles": true
+    "ExplosionParticles": true,
+    "AmbientLightSpectrumUpdates": true
   },
   "DynamicMesh": {
     "Enabled": true,
