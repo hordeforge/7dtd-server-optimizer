@@ -1,7 +1,6 @@
 {
   "Enabled": true,
   "DedicatedOnly": true,
-
   "AiLod": {
     "Enabled": true,
     "FullAiDistSq": 100.0,
@@ -13,7 +12,6 @@
     "SkipTasksUnlessAlerted": true,
     "MidTickStride": 1
   },
-
   "SkipOnDedicated": {
     "DynamicMusicSystem": true,
     "WaterSplashParticles": true,
@@ -21,7 +19,6 @@
     "ClothAndJiggleBoneSimulation": true,
     "ExplosionParticles": true
   },
-
   "DynamicMesh": {
     "Enabled": true,
     "OnlyPlayerAreas": true,
@@ -29,7 +26,6 @@
     "MaxRegionLoadMsPerFrame": 2,
     "MaxActiveSyncs": 2
   },
-
   "Gc": {
     "Enabled": true,
     "SkipForcedCollect": true,
@@ -38,22 +34,18 @@
     "Incremental": false,
     "IncrementalPauseTargetMs": 0
   },
-
   "Pathfinding": {
     "GraphUpdateEveryTicks": 4,
     "MoveRescanThresholdSq": 100,
     "PoolInitScanNodes": false
   },
-
   "Network": {
     "FastSingleTargetSend": true,
     "EntityDistributionEveryTicks": 1
   },
-
   "WorldTransfer": {
     "ChunkPackagesPerObserverPerTick": 3
   },
-
   "Governor": {
     "Enabled": true,
     "OverBudgetMs": 57,
@@ -61,7 +53,6 @@
     "WindowTicks": 100,
     "CooldownTicks": 400
   },
-
   "TickGuard": {
     "Enabled": false,
     "ShedAboveMs": 70,
@@ -69,5 +60,8 @@
     "ShedBatch": 15,
     "CooldownTicks": 100,
     "MinEnemiesKept": 60
+  },
+  "Server": {
+    "TargetFps": 0
   }
 }

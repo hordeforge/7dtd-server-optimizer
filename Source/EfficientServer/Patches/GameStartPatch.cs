@@ -33,10 +33,16 @@ namespace EfficientServer.Patches
         // Frame rate is NOT the tick rate - the full entity tick stays ~20 Hz at
         // any fps; extra frames smooth the per-frame path (pump, slices), lowering
         // delivery jitter. 0 = leave vanilla.
-        static void ApplyTargetFps()
+        //
+        // Applied at GameStartDone AND re-enforced periodically (TargetFpsPatch):
+        // vanilla resets targetFrameRate back to its default some time after
+        // GameStartDone (measured: the one-shot set at ~21 s was 20 fps again
+        // minutes later), so a single apply silently loses.
+        public static void ApplyTargetFps()
         {
             ServerConfig cfg = ModApi.Config != null ? ModApi.Config.Server : null;
             if (cfg == null || cfg.TargetFps <= 0) return;
+            if (UnityEngine.Application.targetFrameRate == cfg.TargetFps) return;
             UnityEngine.Application.targetFrameRate = cfg.TargetFps;
             ModApi.Log($"target frame rate -> {cfg.TargetFps} (frame path only; full tick stays ~20 Hz)");
         }

@@ -29,7 +29,7 @@ namespace EfficientServer
                 ServerPerfConfig c = ModApi.Config;
                 if (c == null) { SdtdConsole.Instance.Output("[EfficientServer] no config"); return; }
                 SdtdConsole.Instance.Output(
-                    $"[EfficientServer] enabled={c.Enabled} | graphEvery={c.Pathfinding.GraphUpdateEveryTicks} "
+                    $"[EfficientServer] enabled={c.Enabled} | targetFps={c.Server.TargetFps} | graphEvery={c.Pathfinding.GraphUpdateEveryTicks} "
                     + $"rescanSq={c.Pathfinding.MoveRescanThresholdSq} poolInitScan={c.Pathfinding.PoolInitScanNodes} | "
                     + $"fastSend={c.Network.FastSingleTargetSend} stride={c.Network.EntityDistributionEveryTicks} | "
                     + $"chunkBatch={c.WorldTransfer.ChunkPackagesPerObserverPerTick} | "

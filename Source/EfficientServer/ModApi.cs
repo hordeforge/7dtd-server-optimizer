@@ -45,6 +45,7 @@ namespace EfficientServer
                     typeof(Patches.ExplosionParticlesPatch),
                     typeof(Patches.EntityDistributionStridePatch),
                     typeof(Patches.GovernorPatch), typeof(Patches.TickGuardPatch),
+                    typeof(Patches.TargetFpsPatch),
                 };
                 int methods = 0, missing = 0;
                 foreach (Type g in groups)
@@ -112,6 +113,8 @@ namespace EfficientServer
                 active = c.Governor != null && c.Governor.Enabled;
             else if (g == typeof(Patches.TickGuardPatch))
                 active = c.TickGuard != null && c.TickGuard.Enabled;
+            else if (g == typeof(Patches.TargetFpsPatch))
+                active = c.Server != null && c.Server.TargetFps > 0;
             return active ? "" : " (matched but config-disabled)";
         }
 
