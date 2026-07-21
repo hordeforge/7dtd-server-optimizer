@@ -177,6 +177,21 @@ the megapause feeder at source (complements the `GC_FREE_SPACE_DIVISOR` env, whi
 only cuts collection frequency). Code -> EAC-off. See
 [`../../research/docs/aggressive-optimizations.md`](../../research/docs/aggressive-optimizations.md) §3.
 
+## Animator LOD (v1.15.0, default off)
+
+`AnimatorLodPatch` runs calm, distant zombies' animation rigs at a reduced rate
+(Animator disabled + manual delta-scaled `Animator.Update` pump every Nth frame).
+The raw animator cost is measured at 19.9 ms/frame (28%) at horde scale, but the
+correctness exemptions (near players / attacking / stunned) cover almost the whole
+horde during clustered sieges, so this pays only for dispersed roamer populations -
+see RESULTS 3m-bis for the honest A/B. Server-side animation is client-invisible;
+exemptions exist for combat-timing fidelity.
+
+## Ambient light-spectrum skip (v1.14.3, default on)
+
+`SkipOnDedicated.AmbientLightSpectrumUpdates` skips the per-frame ambient-spectrum
+lerp whose only outputs are RenderSettings colors nothing headless reads (RESULTS 3n).
+
 ## TickGuard emergency load-shedding (v1.13.0, default off)
 
 `TickGuardPatch` (config `TickGuard.*`) sheds the farthest-from-any-player enemies

@@ -74,6 +74,11 @@ Skip `WaterSplashCubes.Update` (visual splash particles).
 ### `ClothAndJiggleBoneSimulation` (true)
 Skip cloth/jiggle bone simulation (pure visual deformation).
 
+### `AmbientLightSpectrumUpdates` (true, v1.14.3)
+Skip the per-frame ambient light-spectrum lerp (~650 IL) whose only outputs are
+`RenderSettings` ambient-color writes; the consumer chain (light level -> stealth)
+is client-computed. Found by the client-only-code sweep (RESULTS 3n).
+
 ### `ExplosionParticles` (true, v1.10.0)
 - **Mechanism:** prefix on `GameManager.ExplosionClient` skips
   `Object.Instantiate(WorldStaticData.prefabExplosions[i])` - the visual explosion
@@ -202,6 +207,30 @@ Opt-in Boehm incremental mode (collection in bounded slices). **Measured: margin
 
 ---
 
+## AnimatorLod - reduced-rate animation for calm, distant zombies (v1.15.0)
+
+### `AnimatorLod.Enabled` (default `false`)
+- **Mechanism:** every zombie runs a full Unity Animator on the headless server
+  (`AlwaysAnimate`; measured 19.9 ms/frame = 28% of the loaded frame at ~380
+  zombies with 24 players). This LOD disables the Animator component for calm,
+  distant zombies (stopping the engine's per-frame evaluation) and manually pumps
+  `Animator.Update(FarStride x dt)` on the entity's slot frame - root motion
+  arrives in aggregate, state reads lag by at most the stride. Always full rate:
+  within `FullRateDistSq` of a player, attacking, stunned, or dead.
+- **Measured:** NO win at the clustered blood-moon standard - the correctness
+  exemptions (near players / mid-attack) cover almost the entire horde during a
+  siege (RESULTS 3m-bis). The prize is real only for DISPERSED populations
+  (wandering hordes, far roamers) where coverage approaches 100%.
+- **Gameplay impact:** server-side animation is invisible to clients (anim params
+  are never netsynced; clients animate zombies locally); the exemptions protect
+  combat timing (root-motion movement, attack cadence, stuns). Far zombies react
+  with up to `FarStride` frames of animation lag.
+- **When to enable:** servers whose load is dominated by spread-out roamers, not
+  clustered sieges.
+
+### `FullRateDistSq` (400 = 20 m) / `FarStride` (4 = 5 Hz at 20 fps)
+Band and stride; clamps [100, 1e6] and [1, 10].
+
 ## Server - loop settings (v1.14.0)
 
 ### `Server.TargetFps` (default `0` = leave vanilla, clamp [0,120])
@@ -293,3 +322,16 @@ research only.
 | `GC_INITIAL_HEAP_SIZE` | unset | Optional heap preallocation (e.g. `8G`) to avoid startup collection bursts. |
 | (`settargetfps` console cmd) | 20 | Tick rate = frame rate (see `Server.TargetFps` above for the persistent mod knob). |
 | `SEVENDTD_CPU_AFFINITY` | unset | **Leave off.** Naive pinning measured a LOSS (+122% jitter): it defeats Ryzen CPPC preferred-core boost (HOST_TUNING). |
+
+
+---
+
+## Console command (`es`, v1.13.1+)
+
+`es status` prints every active lever value; `es reload` re-reads
+`efficientserver.json` and applies it LIVE (all patches read the config object per
+call - no restart needed). Diagnostics (BENCH ONLY, gameplay breaks while active):
+`es animoff` / `es animon` toggle all enemy Animators (used to measure the 19.9 ms
+animator slice); `es rigoff` / `es rigon` toggle the unguarded rig visual
+components (eyelid/gaze/feather/held-light-raycast; measured: no resolvable cost
+at saturation variance).
