@@ -845,6 +845,35 @@ for the entity tick: (1) crowd-collision LOD inside MoveEntityHeaded's pair
 resolution, (2) engagement-cap director (fewer zombies paying full AI), (3) nothing
 else - the remainder is already throttled or small.
 
+## 3r. Crowd-collision LOD A/B: NULL - the movement constant is world-collision (v1.17.0)
+
+The lever (broadphase-staggered zombie-vs-zombie collision, 3n/3q design) was
+A/B'd on the ideal test bed: ~291 radiated zombies (non-exploder pile, no
+chain-kills) packed around 8 immortal bots (`es benchgod`, v1.16.2). Symmetric
+arms via live `es reload`:
+
+| arm | MoveEntityHeaded | TickEntity | frame |
+|---|---|---|---|
+| lod_off | 11.2 us | 19.3 us | 50.0 ms |
+| lod_on (resolve every 4th tick) | 10.7 us | 18.1 us | 50.0 ms |
+| lod_off2 | 11.2 us | 18.2 us | 50.0 ms |
+
+**The per-neighbor share of the movement cost is ~4-6%** - skipping 3/4 of all
+entity-vs-entity resolution bought 0.5 us of 11.2. The 54% movement mass (3q) is
+the **neighbor-INDEPENDENT world-collision constant**: 2-3 OverlapCapsule queries
+(paid even when empty), capsule-cast sweeps, the ground probe, and
+`CheckCollisionWithBlocks`' per-AABB block loop, every zombie, every tick.
+
+**Verdict:** the lever ships as an experimental default-off knob (harmless,
+finalizer-safe), but it is NOT a win. Reducing the movement constant further
+means striding the whole `ccEntityCollision` for far zombies or caching block
+collision - both real movement-fidelity changes, unjustified while the animator
+mass (3m) and the fence mass (3o) dominate at scale. **The per-zombie tick is
+now fully understood: ~54% irreducible world-collision physics, 27% AI (already
+LOD'd), the rest small.** The one remaining unbuilt idea for the entity axis is
+the engagement-cap director (fewer zombies running full pursuit AI), whose
+ceiling is bounded by the 27% AI share.
+
 ## 4. Config reference (every knob, all independently toggleable)
 
 ```
