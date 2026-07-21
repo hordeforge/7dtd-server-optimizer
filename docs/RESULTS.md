@@ -648,6 +648,35 @@ effect fires once per 50 ticks; stats on a 10-tick decade; netsync ~100 ticks). 
 per-tick residual is ~1-2 ms per SECOND at 60 zombies. Only micro-fix: a cached list
 in `EffectManager.GetValuesAndSources` (2 allocs/s/NPC), not worth it alone.
 
+## 3m-bis. Animator LOD built + A/B: prize is population-shape-dependent (v1.15.0)
+
+`AnimatorLodPatch` (config `AnimatorLod.{Enabled(false), FullRateDistSq(400),
+FarStride(4)}`) implements the lever: for calm, distant zombies the Animator
+component is disabled (stopping the engine's per-frame evaluation - the measured
+20 ms) and manually pumped via `Animator.Update(stride x dt)` on the entity's slot
+frame, so root motion aggregates and state reads lag by at most the stride. Always
+full-rate: near players, attacking, stunned, dead. Re-enable pumps `Update(0)`
+(fixing the stale-rig revival the bench probe exposed).
+
+**A/B at the blood-moon standard (64 players + ~420-457 endgame zombies):**
+
+| arm | frame samples | verdict |
+|---|---|---|
+| lod_off | 119.5 / 124.8 / 159.6 ms | baseline |
+| lod_on (20 m band) | 119.9 / 120.9 / 118.0 ms | no win - nearly all zombies within 20 m of 64 players = exempt |
+| lod_tight (5 m band) | 138.9 / 109.1 / 160.5 ms | no resolvable win - melee zombies cycle `attackPlayingTime` (~2 s/swing) = exempt anyway |
+
+**The honest mechanism:** the correctness exemptions (near/attacking/stunned) fire
+for almost the entire horde during a siege - exactly the regime where the 20 ms
+prize lives. Server-side animation is client-invisible (params never netsynced), so
+the exemptions exist purely for combat correctness, and combat is precisely what a
+horde does. **The lever therefore pays only for DISPERSED populations** (wandering
+hordes, far roamers, screamer trains) where coverage approaches 100% and the full
+~50 us/zombie/frame is recoverable. Ships default OFF as a situational knob; the
+clustered blood-moon ceiling is NOT moved by it. (Also noted: frame variance at
+this saturation is 109-160 ms within an arm - 3-sample A/Bs cannot resolve effects
+under ~15 ms; a longer capture is needed for any future refinement.)
+
 ## 3n. Client-only-code sweep (2026-07-21)
 
 Systematic RE hunt for further headless waste beyond the six shipped skips. The

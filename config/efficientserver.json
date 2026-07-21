@@ -64,5 +64,10 @@
   },
   "Server": {
     "TargetFps": 0
+  },
+  "AnimatorLod": {
+    "Enabled": false,
+    "FullRateDistSq": 400,
+    "FarStride": 4
   }
 }
