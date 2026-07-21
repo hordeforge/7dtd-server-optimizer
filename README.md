@@ -24,7 +24,7 @@ Source is under `Source/EfficientServer`; packaging and server launch helpers
 are under `scripts`. Rebuild and revalidate exact Harmony targets after every
 game update.
 
-## Measured impact (v1.14.x)
+## Measured impact (v1.16.x)
 
 - **Eliminates the GC megapause:** worst stop-the-world **274 ms -> 0**, full
   collections **3 -> 0** in the aggregate A/B window (vanilla lost 5.5 ticks at once
@@ -38,10 +38,15 @@ game update.
   zombies at 64 players (+58%).**
 - **TickGuard** (opt-in): last-resort shedding of the farthest zombies - a 522-zombie
   overload (3.5x the ceiling) recovered from 167 to 56 ms/frame autonomously.
+- **Governor tier 2 (opt-in):** during extreme overload, zombie animators off =
+  **~40% of the saturated 64-player frame** recovered (the frame is half main-thread
+  job-fence waiting; animation jobs are the dominant fence source). Client-invisible;
+  combat timing degrades; nothing despawns.
 - **Per-tick compute is flat by design:** the entity tick (close-combat AI, fully
   serial, frame-amortized) and network replication (O(N^2.26), 20 Hz-locked) are the
   measured engine walls; every remaining millisecond of the tick is attributed
-  (zero dark matter, RESULTS 3h).
+  (zero dark matter, RESULTS 3h), and the engine-side masses are named (RESULTS
+  3m-3p).
 
 Full ledger with session IDs, per-lever numbers, and honest negative results
 (what was tried and refuted): [`docs/RESULTS.md`](docs/RESULTS.md). Per-option

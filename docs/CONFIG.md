@@ -1,4 +1,4 @@
-# EfficientServer configuration reference (v1.13.0)
+# EfficientServer configuration reference (v1.16.1)
 
 **Owns:** every config option in minute detail - exact mechanism, gameplay impact,
 measured performance gain, default + rationale.

@@ -16,6 +16,34 @@ tick-starved, small when it has headroom.
 
 ---
 
+## Executive summary (campaign final, 2026-07-21)
+
+**Headline numbers** (each A/B'd, sessions recorded below):
+- Breaking load: **-28.5% ms/tick** (P1 throttle) - failing -> healthy.
+- GC megapause **eliminated** (worst STW 274 ms -> 0; env `GC_FREE_SPACE_DIVISOR=1`
+  + guard); tick-stall total -28% in the aggregate A/B.
+- Replication wall: **-45%** at stride 2 (curve to -70% at stride 4), governor-managed.
+- **Blood-moon capacity: ~147 -> ~232 sustained endgame zombies at 64 players (+58%)**
+  under shipping defaults (adaptive governor).
+- Emergency reserve: governor tier 2 (animators off, **~40% of the saturated 64p
+  frame**) and TickGuard (farthest-first shedding) - both live-validated, both opt-in.
+
+**The walls, precisely named:** entity tick (serial main-thread by design,
+close-combat-bound), replication (20 Hz-locked, O(N^2.26) player axis), engine job
+fences (~half the saturated 64p frame is main-thread waiting; worker-pool size
+measured irrelevant). Frame rate is NOT the tick rate. PhysX ~0. GC exonerated at
+saturation. Zero unattributed tick time (0.4% residual).
+
+**Honest refutations on record:** spatial interest grid, serialize-once, mid-band
+stride, parallel interest scan, chunk-send throttle sizing, fps/TPS + delivery
+jitter, buff-system throttling, clustered-horde animator LOD, job-worker pool.
+
+**What remains beyond modding:** the custom-server long game (zdtd) for the frame
+structure; ops config for capacity targets; allocation-source work for the ~13%
+write-barrier tax.
+
+---
+
 ## 0. Version history
 
 | Ver | Change |
@@ -26,6 +54,16 @@ tick-starved, small when it has headroom.
 | 1.4.1 | Follow-up fixes: DedicatedSkip drift log, Gc Normalize, Config test harness, config-disabled init label |
 | 1.5.0/1.5.1 | GC megapause diagnostic (`GcDiagnostics`, opt-in) |
 | 1.6.0 | #1 single-target fast send (`FastSendPatch`) |
+| 1.7.0 | Mid-band tick-stride (measured no-win, default off) + config test harness |
+| 1.8.0 | P4 InitScan node-array pool (unsafe, opt-in; alloc eliminated, no perf win) |
+| 1.9.0 | P6 chunk-send throttle (experimental; mis-targeted, kept as knob) |
+| 1.10.0 | Explosion particles skip (-11%/explosion) |
+| 1.11.0 | Entity-replication stride (curve -45/-61/-70% at 2/3/4; governor-managed) |
+| 1.12.0 | Adaptive governor (live-validated closed loop) |
+| 1.13.0/1 | TickGuard shedding; defaults policy (FastSend+Governor on); descriptive config names; CONFIG.md; `es` console command (live reload) |
+| 1.14.0-3 | Server.TargetFps (+enforcement; later measured no-effect - frame != tick); ambient-spectrum skip; anim/rig diagnostics |
+| 1.15.0 | Animator LOD (20 ms prize, exemption-limited to dispersed populations) |
+| 1.16.0/1 | Governor tier 2: animator emergency (~40% of the 64p frame); JobWorkerCount (measured null) |
 
 ---
 
