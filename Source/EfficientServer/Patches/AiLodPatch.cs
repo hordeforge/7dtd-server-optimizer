@@ -26,7 +26,7 @@ namespace EfficientServer.Patches
             float med = cfg.MediumScale;
             float far = cfg.FarScale;
             bool killCloth = ModApi.Config.SkipOnDedicated != null
-                && ModApi.Config.SkipOnDedicated.ClothAndJiggle;
+                && ModApi.Config.SkipOnDedicated.ClothAndJiggleBoneSimulation;
 
             for (int i = 0; i < alives.Count; i++)
             {

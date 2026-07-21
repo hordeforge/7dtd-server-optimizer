@@ -51,6 +51,7 @@ Docs:
 - Optimization candidates (graded): [`docs/OPTIMIZATION_CANDIDATES.md`](docs/OPTIMIZATION_CANDIDATES.md)
 - Network/serialization optimization plan: [`docs/NETWORK_OPTIMIZATION.md`](docs/NETWORK_OPTIMIZATION.md)
 - Upstream allocation reduction plan (the real GC lever): [`docs/ALLOCATION_UPSTREAM.md`](docs/ALLOCATION_UPSTREAM.md)
+- Config reference (every option: mechanism, gameplay impact, measured gain): [`docs/CONFIG.md`](docs/CONFIG.md)
 - Results ledger (every lever, A/B numbers, session IDs, config): [`docs/RESULTS.md`](docs/RESULTS.md)
 - Pathfinding / nav-graph optimization plan: [`docs/PATHFINDING_OPTIMIZATION.md`](docs/PATHFINDING_OPTIMIZATION.md)
 - Scale thought experiment (1k players / 10k AI): [`docs/SCALE_1000x10000.md`](docs/SCALE_1000x10000.md)

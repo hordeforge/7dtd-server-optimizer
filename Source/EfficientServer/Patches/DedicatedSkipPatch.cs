@@ -16,11 +16,11 @@ namespace EfficientServer.Patches
             var skip = ModApi.Config.SkipOnDedicated;
             if (skip == null) return;
 
-            if (skip.DynamicMusic)
+            if (skip.DynamicMusicSystem)
                 TryPrefix(harmony, "DynamicMusic.Conductor", "Update");
-            if (skip.WaterSplash)
+            if (skip.WaterSplashParticles)
                 TryPrefix(harmony, "WaterSplashCubes", "Update");
-            if (skip.EnvironmentAudio)
+            if (skip.EnvironmentAudioUpdates)
             {
                 TryPrefix(harmony, "EnvironmentAudioManager", "Update");
                 TryPrefix(harmony, "EnvironmentAudioManager", "FixedUpdate");

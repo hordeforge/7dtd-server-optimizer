@@ -15,10 +15,11 @@
   },
 
   "SkipOnDedicated": {
-    "DynamicMusic": true,
-    "WaterSplash": true,
-    "EnvironmentAudio": true,
-    "ClothAndJiggle": true
+    "DynamicMusicSystem": true,
+    "WaterSplashParticles": true,
+    "EnvironmentAudioUpdates": true,
+    "ClothAndJiggleBoneSimulation": true,
+    "ExplosionParticles": true
   },
 
   "DynamicMesh": {
@@ -40,10 +41,33 @@
 
   "Pathfinding": {
     "GraphUpdateEveryTicks": 4,
-    "MoveRescanThresholdSq": 100
+    "MoveRescanThresholdSq": 100,
+    "PoolInitScanNodes": false
   },
 
   "Network": {
-    "FastSingleTargetSend": false
+    "FastSingleTargetSend": true,
+    "EntityDistributionEveryTicks": 1
+  },
+
+  "WorldTransfer": {
+    "ChunkPackagesPerObserverPerTick": 3
+  },
+
+  "Governor": {
+    "Enabled": true,
+    "OverBudgetMs": 57,
+    "HealthyMs": 52,
+    "WindowTicks": 100,
+    "CooldownTicks": 400
+  },
+
+  "TickGuard": {
+    "Enabled": false,
+    "ShedAboveMs": 70,
+    "WindowTicks": 60,
+    "ShedBatch": 15,
+    "CooldownTicks": 100,
+    "MinEnemiesKept": 60
   }
 }

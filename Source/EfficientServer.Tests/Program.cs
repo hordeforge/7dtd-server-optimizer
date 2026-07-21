@@ -88,14 +88,14 @@ namespace EfficientServer.Tests
             // v1.7.0 fields: MidTickStride clamp, Network + Diagnostics defaults.
             var d2 = new ServerPerfConfig();
             Check(d2.AiLod.MidTickStride == 1, "default MidTickStride=1 (off)");
-            Check(d2.Network != null && !d2.Network.FastSingleTargetSend, "default FastSingleTargetSend=false");
+            Check(d2.Network != null && d2.Network.FastSingleTargetSend, "default FastSingleTargetSend=true (v1.13.0: provably equivalent, no gameplay impact)");
             Check(d2.Diagnostics != null && !d2.Diagnostics.GcMegapauseTest, "default GcMegapauseTest=false");
             var stride = ServerPerfConfig.Load(WriteTemp("{\"AiLod\":{\"MidTickStride\":999}}"));
             Check(stride.AiLod.MidTickStride == 20, "MidTickStride 999 -> 20 (clamp)");
             var strideNeg = ServerPerfConfig.Load(WriteTemp("{\"AiLod\":{\"MidTickStride\":-3}}"));
             Check(strideNeg.AiLod.MidTickStride == 1, "MidTickStride -3 -> 1 (clamp)");
-            var net = ServerPerfConfig.Load(WriteTemp("{\"Network\":{\"FastSingleTargetSend\":true}}"));
-            Check(net.Network.FastSingleTargetSend, "Network round-trip FastSingleTargetSend=true");
+            var net = ServerPerfConfig.Load(WriteTemp("{\"Network\":{\"FastSingleTargetSend\":false}}"));
+            Check(!net.Network.FastSingleTargetSend, "Network round-trip FastSingleTargetSend=false (opt-out)");
 
             // v1.9.0: WorldTransfer chunk batch cap. Default 3 = vanilla; floor 1 is a
             // correctness guard (0 would deadlock the send loop).
@@ -107,7 +107,11 @@ namespace EfficientServer.Tests
             Check(chunkHi.WorldTransfer.ChunkPackagesPerObserverPerTick == 32, "ChunkPackagesPerObserverPerTick 999 -> 32 (clamp)");
 
             // v1.12.0: governor defaults + the hysteresis invariant (Healthy < OverBudget).
-            Check(d2.Governor != null && !d2.Governor.Enabled, "default Governor.Enabled=false");
+            Check(d2.Governor != null && d2.Governor.Enabled, "default Governor.Enabled=true (inert when healthy)");
+            Check(d2.TickGuard != null && !d2.TickGuard.Enabled, "default TickGuard.Enabled=false (removes entities)");
+            var shed = ServerPerfConfig.Load(WriteTemp("{\"TickGuard\":{\"ShedBatch\":9999,\"ShedAboveMs\":10}}"));
+            Check(shed.TickGuard.ShedBatch == 100, "TickGuard.ShedBatch 9999 -> 100 (clamp)");
+            Check(shed.TickGuard.ShedAboveMs >= 60f, "TickGuard.ShedAboveMs 10 -> >=60 (last-resort floor)");
             var gov = ServerPerfConfig.Load(WriteTemp("{\"Governor\":{\"OverBudgetMs\":60,\"HealthyMs\":90}}"));
             Check(gov.Governor.HealthyMs <= gov.Governor.OverBudgetMs - 5f,
                 "Governor hysteresis: HealthyMs forced below OverBudgetMs-5");

@@ -174,7 +174,17 @@ the megapause feeder at source (complements the `GC_FREE_SPACE_DIVISOR` env, whi
 only cuts collection frequency). Code -> EAC-off. See
 [`../../research/docs/aggressive-optimizations.md`](../../research/docs/aggressive-optimizations.md) §3.
 
-## Adaptive load governor (v1.12.0, default off)
+## TickGuard emergency load-shedding (v1.13.0, default off)
+
+`TickGuardPatch` (config `TickGuard.*`) sheds the farthest-from-any-player enemies
+in batches (silent despawn: no loot/XP/corpse) when the tick stays past the point
+throttling can fix, never below `MinEnemiesKept`. Validated live: with the governor,
+drove a 522-zombie overload (3.5x the capacity ceiling) back from 167 to 56 ms/frame
+autonomously. Default off because it removes entities - a real gameplay trade
+(thinner horde at 20 TPS instead of a full horde at 3 TPS). See
+[`RESULTS.md`](RESULTS.md) §3j and [`CONFIG.md`](CONFIG.md).
+
+## Adaptive load governor (v1.12.0, default ON since v1.13.0)
 
 `GovernorPatch` (config `Governor.*`) watches the tick-interval EMA and moves the
 proven throttle levers between vanilla and throttled (replication stride 2 + doubled

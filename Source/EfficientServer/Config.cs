@@ -23,12 +23,20 @@ namespace EfficientServer
         public int MidTickStride { get; set; } = 1;
     }
 
+    // Each member names the WORK BEING SKIPPED on the dedicated server (true = skip
+    // it). All of it produces output only a renderer/speaker could show, so skipping
+    // is gameplay-neutral by construction.
     public sealed class SkipConfig
     {
-        public bool DynamicMusic { get; set; } = true;
-        public bool WaterSplash { get; set; } = true;
-        public bool EnvironmentAudio { get; set; } = true;
-        public bool ClothAndJiggle { get; set; } = true;
+        // The dynamic-music conductor (mood-driven soundtrack selection).
+        public bool DynamicMusicSystem { get; set; } = true;
+        // Water splash particle-cube updates (visual splashes).
+        public bool WaterSplashParticles { get; set; } = true;
+        // Ambient environment-audio graph updates (wind, biome beds).
+        public bool EnvironmentAudioUpdates { get; set; } = true;
+        // Cloth physics + jiggle-bone simulation on characters (capes, flapping
+        // clothes, body jiggle - pure visual deformation).
+        public bool ClothAndJiggleBoneSimulation { get; set; } = true;
         // Skip Object.Instantiate of the explosion particle prefab (headless server,
         // never rendered). Gameplay side effects (physics push, block changes, quest
         // event) are preserved. Measured A/B at blood-moon load: ~1.1 ms of the ~10 ms
@@ -97,8 +105,9 @@ namespace EfficientServer
         // O(1) entityId map (ClientInfoCollection.ForEntityId) instead of the linear
         // Clients scan. Only the pure single-target case is short-circuited; every
         // other filter mode falls through to vanilla. Provably equivalent (entityId
-        // is unique, so vanilla also enqueues to exactly one client).
-        public bool FastSingleTargetSend { get; set; } = false;
+        // is unique, so vanilla also enqueues to exactly one client) - hence default
+        // ON: perf win with zero gameplay impact.
+        public bool FastSingleTargetSend { get; set; } = true;
 
         // Run the entity-replication pass (NetEntityDistribution.OnUpdateEntities)
         // every N ticks. 1 = vanilla (20 Hz). 2 = 10 Hz replication (+50 ms staleness;
@@ -127,7 +136,10 @@ namespace EfficientServer
     // HealthyMs gap + CooldownTicks. See GovernorPatch.
     public sealed class GovernorConfig
     {
-        public bool Enabled { get; set; } = false;
+        // Default ON: inert while the tick is healthy (zero gameplay impact), and
+        // under sustained overload it trades minor replication staleness for a
+        // running server - the regime where vanilla fidelity is already gone.
+        public bool Enabled { get; set; } = true;
         // A healthy 20 TPS loop IDLES at exactly ~50 ms interval (it never goes
         // lower), so "healthy" must be a hair ABOVE 50, not below - the first live
         // test proved a sub-50 recovery threshold is unreachable and the governor
@@ -139,6 +151,22 @@ namespace EfficientServer
         public int WindowTicks { get; set; } = 100;
         // Minimum ticks between transitions (~20 s at 20 TPS).
         public int CooldownTicks { get; set; } = 400;
+    }
+
+    // Emergency load-shedding (default off: it REMOVES entities, a real gameplay
+    // impact). Fires only when the tick is collapsing past what the governor's
+    // throttles can fix; sheds the farthest-from-any-player enemies in batches via
+    // the game's silent despawn. See TickGuardPatch.
+    public sealed class TickGuardConfig
+    {
+        public bool Enabled { get; set; } = false;
+        // Well above the governor's OverBudgetMs: shedding is the last resort.
+        public float ShedAboveMs { get; set; } = 70f;
+        public int WindowTicks { get; set; } = 60;
+        public int ShedBatch { get; set; } = 15;
+        public int CooldownTicks { get; set; } = 100;
+        // Never shed below this many living enemies (keeps the horde a horde).
+        public int MinEnemiesKept { get; set; } = 60;
     }
 
     // DIAGNOSTIC ONLY (default off). Not a performance feature.
@@ -163,6 +191,7 @@ namespace EfficientServer
         public NetworkConfig Network { get; set; } = new NetworkConfig();
         public WorldTransferConfig WorldTransfer { get; set; } = new WorldTransferConfig();
         public GovernorConfig Governor { get; set; } = new GovernorConfig();
+        public TickGuardConfig TickGuard { get; set; } = new TickGuardConfig();
         public DiagnosticsConfig Diagnostics { get; set; } = new DiagnosticsConfig();
 
         public static ServerPerfConfig Load(string path)
@@ -183,6 +212,7 @@ namespace EfficientServer
                 if (loaded.Network == null) loaded.Network = new NetworkConfig();
                 if (loaded.WorldTransfer == null) loaded.WorldTransfer = new WorldTransferConfig();
                 if (loaded.Governor == null) loaded.Governor = new GovernorConfig();
+                if (loaded.TickGuard == null) loaded.TickGuard = new TickGuardConfig();
                 if (loaded.Diagnostics == null) loaded.Diagnostics = new DiagnosticsConfig();
                 loaded.Normalize();
                 return loaded;
@@ -224,6 +254,13 @@ namespace EfficientServer
             Governor.HealthyMs = FiniteRange("Governor.HealthyMs", Governor.HealthyMs, 51f, Governor.OverBudgetMs - 5f, 52f);
             Governor.WindowTicks = IntRange("Governor.WindowTicks", Governor.WindowTicks, 20, 6000);
             Governor.CooldownTicks = IntRange("Governor.CooldownTicks", Governor.CooldownTicks, 0, 36000);
+            // TickGuard: shed threshold must sit above the governor band (last resort),
+            // batch and floor bounded so a bad config cannot wipe the horde.
+            TickGuard.ShedAboveMs = FiniteRange("TickGuard.ShedAboveMs", TickGuard.ShedAboveMs, 60f, 1000f, 70f);
+            TickGuard.WindowTicks = IntRange("TickGuard.WindowTicks", TickGuard.WindowTicks, 20, 6000);
+            TickGuard.ShedBatch = IntRange("TickGuard.ShedBatch", TickGuard.ShedBatch, 1, 100);
+            TickGuard.CooldownTicks = IntRange("TickGuard.CooldownTicks", TickGuard.CooldownTicks, 20, 36000);
+            TickGuard.MinEnemiesKept = IntRange("TickGuard.MinEnemiesKept", TickGuard.MinEnemiesKept, 0, 10000);
             // Gc knobs keep their 0-sentinels (SafetyCollectAboveMB 0 = AUTO ceiling;
             // IncrementalPauseTargetMs 0 = no pause limit), so the floor is 0, not a
             // forced positive. This centralizes the previously ad-hoc use-site clamps

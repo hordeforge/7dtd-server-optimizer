@@ -487,13 +487,37 @@ exactly ~50 ms interval* - it never goes lower - so the original recovery thresh
 (45 ms) was unreachable and the governor never stepped down. `HealthyMs` is now
 floored at 51 in `Normalize` (regression-tested) and defaults to 52.
 
+## 3j. TickGuard emergency load-shedding (v1.13.0, validated live 2026-07-21)
+
+`TickGuardPatch` (config `TickGuard.*`, **default off - it removes entities, a real
+gameplay impact**) is the last defense layer above the governor: when the tick EMA
+stays over `ShedAboveMs` (70, a level throttling could not fix), it despawns the
+`ShedBatch` enemies FARTHEST from any player via the game's silent despawn
+(`RemoveEntity(Despawned)` - vanilla's distance-despawn path: no loot, no XP), one
+batch per cooldown, never below `MinEnemiesKept`.
+
+**Live validation (48 players, horde pushed to ~522 endgame zombies = 3.5x the
+capacity ceiling):** the full production stack engaged in order - governor first
+(`EMA 61.8ms -> THROTTLED`), then TickGuard shed 15-at-a-time (every transition
+logged with counts), driving the horde 522 -> 279 and the frame **167 -> 56 ms**:
+a server that would have sat at ~3 TPS recovered to essentially 20 TPS with no
+external intervention. VERDICT: PASS.
+
+Also in v1.13.0 (defaults policy: ON when perf-positive with zero gameplay impact):
+- `Network.FastSingleTargetSend` default **true** (provably equivalent).
+- `Governor.Enabled` default **true** (inert while healthy).
+- SkipOnDedicated keys renamed to say what is skipped:
+  `DynamicMusicSystem`, `WaterSplashParticles`, `EnvironmentAudioUpdates`,
+  `ClothAndJiggleBoneSimulation` (no back-compat by design).
+- Full per-option reference: [`CONFIG.md`](CONFIG.md).
+
 ## 4. Config reference (every knob, all independently toggleable)
 
 ```
 Enabled, DedicatedOnly
 AiLod.{Enabled, FullAiDistSq, MediumAiDistSq, FullScale, MediumScale, FarScale,
        SkipTasksFarDistSq, SkipTasksUnlessAlerted}
-SkipOnDedicated.{DynamicMusic, WaterSplash, EnvironmentAudio, ClothAndJiggle,
+SkipOnDedicated.{DynamicMusicSystem, WaterSplashParticles, EnvironmentAudioUpdates, ClothAndJiggleBoneSimulation,
     ExplosionParticles (true=skip visual spawn; gameplay preserved, see §3f)}
 DynamicMesh.{Enabled, OnlyPlayerAreas, PlayerAreaChunkBuffer, MaxRegionLoadMsPerFrame, MaxActiveSyncs}
 Gc.{Enabled, SkipForcedCollect, SafetyCollectAboveMB (0=auto), SafetyCollectRamFraction,
