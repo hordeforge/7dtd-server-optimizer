@@ -72,5 +72,9 @@
     "Enabled": false,
     "FullRateDistSq": 400,
     "FarStride": 4
+  },
+  "CrowdCollisionLod": {
+    "Enabled": false,
+    "ResolveEveryNTicks": 4
   }
 }

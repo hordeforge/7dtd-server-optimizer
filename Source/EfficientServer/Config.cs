@@ -150,6 +150,19 @@ namespace EfficientServer
         public int FarStride { get; set; } = 4;
     }
 
+    // Crowd-collision LOD: stagger zombie entity-vs-entity collision QUERIES at
+    // the broadphase (vanilla already staggers only the response). Movement/
+    // collision integration is 54% of the per-zombie tick; the per-neighbor share
+    // exists only in dense packs. Off-tick zombies still collide with the world
+    // and are still soft-push separated. Default OFF pending the A/B.
+    public sealed class CrowdCollisionLodConfig
+    {
+        public bool Enabled { get; set; } = false;
+        // Each zombie fully resolves entity collision every Nth tick (striped by
+        // entityId). 4 = vanilla's own response-stagger cadence family.
+        public int ResolveEveryNTicks { get; set; } = 4;
+    }
+
     // Server loop settings.
     public sealed class ServerConfig
     {
@@ -238,6 +251,7 @@ namespace EfficientServer
         public WorldTransferConfig WorldTransfer { get; set; } = new WorldTransferConfig();
         public ServerConfig Server { get; set; } = new ServerConfig();
         public AnimatorLodConfig AnimatorLod { get; set; } = new AnimatorLodConfig();
+        public CrowdCollisionLodConfig CrowdCollisionLod { get; set; } = new CrowdCollisionLodConfig();
         public GovernorConfig Governor { get; set; } = new GovernorConfig();
         public TickGuardConfig TickGuard { get; set; } = new TickGuardConfig();
         public DiagnosticsConfig Diagnostics { get; set; } = new DiagnosticsConfig();
@@ -261,6 +275,7 @@ namespace EfficientServer
                 if (loaded.WorldTransfer == null) loaded.WorldTransfer = new WorldTransferConfig();
                 if (loaded.Server == null) loaded.Server = new ServerConfig();
                 if (loaded.AnimatorLod == null) loaded.AnimatorLod = new AnimatorLodConfig();
+                if (loaded.CrowdCollisionLod == null) loaded.CrowdCollisionLod = new CrowdCollisionLodConfig();
                 if (loaded.Governor == null) loaded.Governor = new GovernorConfig();
                 if (loaded.TickGuard == null) loaded.TickGuard = new TickGuardConfig();
                 if (loaded.Diagnostics == null) loaded.Diagnostics = new DiagnosticsConfig();
@@ -298,6 +313,7 @@ namespace EfficientServer
             WorldTransfer.ChunkPackagesPerObserverPerTick = IntRange("WorldTransfer.ChunkPackagesPerObserverPerTick", WorldTransfer.ChunkPackagesPerObserverPerTick, 1, 32);
             // 4 = 5 Hz replication, already aggressive; anything higher is unplayable.
             Network.EntityDistributionEveryTicks = IntRange("Network.EntityDistributionEveryTicks", Network.EntityDistributionEveryTicks, 1, 4);
+            CrowdCollisionLod.ResolveEveryNTicks = IntRange("CrowdCollisionLod.ResolveEveryNTicks", CrowdCollisionLod.ResolveEveryNTicks, 1, 16);
             AnimatorLod.FullRateDistSq = FiniteRange("AnimatorLod.FullRateDistSq", AnimatorLod.FullRateDistSq, 100f, 1000000f, 400f);
             AnimatorLod.FarStride = IntRange("AnimatorLod.FarStride", AnimatorLod.FarStride, 1, 10);
             // Server.TargetFps: 0 = leave vanilla; cap 120 (beyond is pure waste).
