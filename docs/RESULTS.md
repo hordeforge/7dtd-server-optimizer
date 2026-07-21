@@ -443,6 +443,11 @@ workers" lever does not exist. Parallelizing the entity tick would be NEW thread
 into shared mutable world state (the SIM_PARALLELISM minefield), not a tweak of
 existing parallelism.
 
+**Unity PhysX share: negligible.** From the all-thread perf stacks of the heavy
+vanilla session (`053013`, ~320 zombies): physics symbols are 5 of 55,367 samples
+(**0.0%**) - zombies move via the character controller / nav path, not rigidbody
+simulation, so engine physics is not a hidden cost even at horde scale.
+
 **Conclusion: the optimization campaign is complete.** Every millisecond of the tick
 at the ceiling is attributed to a known, measured cost; the two remaining masses
 (entity tick, replication) are the engine walls, one of which the stride already
