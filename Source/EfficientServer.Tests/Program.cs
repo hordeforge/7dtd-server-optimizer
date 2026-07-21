@@ -115,10 +115,15 @@ namespace EfficientServer.Tests
             var gov = ServerPerfConfig.Load(WriteTemp("{\"Governor\":{\"OverBudgetMs\":60,\"HealthyMs\":90}}"));
             Check(gov.Governor.HealthyMs <= gov.Governor.OverBudgetMs - 5f,
                 "Governor hysteresis: HealthyMs forced below OverBudgetMs-5");
-            // A healthy 20 TPS loop idles at ~50 ms, so a sub-50 HealthyMs would never
-            // trigger recovery (proved live); the floor keeps it reachable.
-            var govLow = ServerPerfConfig.Load(WriteTemp("{\"Governor\":{\"HealthyMs\":40}}"));
-            Check(govLow.Governor.HealthyMs >= 51f, "Governor.HealthyMs 40 -> >=51 (idle-floor guard)");
+            // v1.14.0: thresholds are tick-interval ms and the tick rate follows
+            // Server.TargetFps, so sub-50 HealthyMs is legitimate on high-fps tunes;
+            // clamps are wide, hysteresis still enforced, defaults assume fps 20.
+            var govLow = ServerPerfConfig.Load(WriteTemp("{\"Governor\":{\"HealthyMs\":20,\"OverBudgetMs\":30}}"));
+            Check(govLow.Governor.HealthyMs == 20f && govLow.Governor.OverBudgetMs == 30f,
+                "high-fps governor tune 30/20 accepted");
+            Check(new ServerPerfConfig().Server.TargetFps == 0, "default Server.TargetFps=0 (leave vanilla)");
+            var fps = ServerPerfConfig.Load(WriteTemp("{\"Server\":{\"TargetFps\":999}}"));
+            Check(fps.Server.TargetFps == 120, "Server.TargetFps 999 -> 120 (clamp)");
             var govStride = ServerPerfConfig.Load(WriteTemp("{\"Network\":{\"EntityDistributionEveryTicks\":9}}"));
             Check(govStride.Network.EntityDistributionEveryTicks == 4, "EntityDistributionEveryTicks 9 -> 4 (clamp)");
             var missing = ServerPerfConfig.Load(WriteTemp("{}"));

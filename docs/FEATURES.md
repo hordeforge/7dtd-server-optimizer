@@ -81,9 +81,12 @@ write-barrier adds per-allocation overhead whose net value is workload-dependent
 guard removes the forced periodic collect, incremental mode shortens *every*
 collect including the churn-driven ones.
 
-Server frame rate is **not** a mod concern - it is the vanilla console command
-`settargetfps <N>` (same command for client and server; issue it over telnet on
-a dedicated server). It is not persistent across restarts.
+Server frame rate is NOT the tick rate: `UpdateTick` runs per frame, but the full
+entity-sim/replication tick is gated at ~20 Hz regardless of fps (measured, RESULTS
+3k). `settargetfps <N>` sets the frame rate live but does not persist;
+`Server.TargetFps` (v1.14.0) applies it at every game start. Higher fps buys
+steadier delivery/lower jitter of the same 20 Hz data - a polish, not a TPS or
+capacity change.
 
 ## GC megapause diagnostic (opt-in, never ship enabled)
 

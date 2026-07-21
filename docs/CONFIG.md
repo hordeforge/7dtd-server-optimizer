@@ -202,6 +202,25 @@ Opt-in Boehm incremental mode (collection in bounded slices). **Measured: margin
 
 ---
 
+## Server - loop settings (v1.14.0)
+
+### `Server.TargetFps` (default `0` = leave vanilla, clamp [0,120])
+- **Mechanism:** sets `Application.targetFrameRate` at game start (persistent form
+  of the non-persistent `settargetfps` console command). The frame loop runs
+  `UpdateTick` every frame for housekeeping, work slices, and the network pump; the
+  FULL tick (entity sim + replication) is gated internally at ~20 Hz **regardless of
+  frame rate** - measured: `TickEntities`/`OnUpdateEntities` stay at 19.9 calls/s at
+  fps 20 and fps 60 alike (RESULTS 3k).
+- **Effect:** steadier packet delivery and finer slicing = lower jitter of the same
+  20 Hz simulation. Human-observed as "somewhat smoother" motion at 40. It does NOT
+  raise TPS and does NOT change capacity.
+- **Cost:** modest per-frame loop overhead + idle wakeups; movement data rate is
+  unchanged (still 20 Hz). 20-60 is the reasonable range.
+- **Interactions:** the governor's EMA measures FRAME intervals, so its idle floor
+  equals the frame target - calibrate `HealthyMs`/`OverBudgetMs` to your fps (see
+  below). Tick-counted knobs (`GraphUpdateEveryTicks`, replication stride) count
+  FULL ticks and are fps-independent.
+
 ## Governor - adaptive load management (v1.12.0)
 
 ### `Governor.Enabled` (default `true`, v1.13.0)
@@ -217,10 +236,13 @@ Opt-in Boehm incremental mode (collection in bounded slices). **Measured: margin
   applies the stride-2 staleness described above - in a regime where the
   alternative is a 3 TPS server for everyone. Default ON per policy.
 
-### `OverBudgetMs` (57) / `HealthyMs` (52, floor 51)
-The hysteresis band. **`HealthyMs` must sit ABOVE 50:** a healthy 20 TPS loop
-idles at exactly ~50 ms interval and never below, so a sub-50 recovery threshold
-is unreachable (proved live; the floor is enforced in `Normalize`).
+### `OverBudgetMs` (57) / `HealthyMs` (52)
+The hysteresis band, in FRAME-INTERVAL milliseconds (the EMA is measured on
+UpdateTick, which runs per frame). The loop idles at exactly the frame target
+(50 ms at fps 20, 25 at 40, 16.7 at 60) and never below, so `HealthyMs` must sit
+ABOVE your idle frame time or recovery never triggers (proved live at fps 20 with a
+45 ms threshold). Defaults assume the vanilla fps 20; a fps-40 tune would be e.g.
+OverBudget 30 / Healthy 27.
 
 ### `WindowTicks` (100) / `CooldownTicks` (400)
 ~5 s of sustained signal to transition; ~20 s minimum between transitions.
@@ -268,4 +290,5 @@ research only.
 | `GC_NPROCS` | `nproc` | Parallel GC marking threads. Marginal but free. |
 | `MONO_ENV_OPTIONS` | `-O=all` | Mono JIT full optimization: ~5% section-avg win, direction-consistent across all timed sections (single A/B pair). |
 | `GC_INITIAL_HEAP_SIZE` | unset | Optional heap preallocation (e.g. `8G`) to avoid startup collection bursts. |
+| (`settargetfps` console cmd) | 20 | Tick rate = frame rate (see `Server.TargetFps` above for the persistent mod knob). |
 | `SEVENDTD_CPU_AFFINITY` | unset | **Leave off.** Naive pinning measured a LOSS (+122% jitter): it defeats Ryzen CPPC preferred-core boost (HOST_TUNING). |

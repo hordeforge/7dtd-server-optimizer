@@ -130,6 +130,19 @@ namespace EfficientServer
         public int ChunkPackagesPerObserverPerTick { get; set; } = 3;
     }
 
+    // Server loop settings.
+    public sealed class ServerConfig
+    {
+        // Target FRAME rate (persistent form of `settargetfps`). NOT the tick
+        // rate: the full entity-sim/replication tick stays gated at ~20 Hz at any
+        // fps (measured: TickEntities/OnUpdateEntities 19.9 calls/s at fps 20 and
+        // 60 alike). Extra frames run housekeeping, work slices, and the network
+        // pump more often - steadier delivery / lower jitter of the same 20 Hz
+        // data, human-observed as slightly smoother motion. Modest per-frame CPU
+        // cost. 0 = leave vanilla (default 20); 20-60 reasonable.
+        public int TargetFps { get; set; } = 0;
+    }
+
     // Adaptive load governor (default off): moves the proven throttle levers
     // (replication stride, graph-update cadence) between vanilla and throttled
     // based on the measured tick interval. Hysteresis via the OverBudgetMs /
@@ -190,6 +203,7 @@ namespace EfficientServer
         public PathfindingConfig Pathfinding { get; set; } = new PathfindingConfig();
         public NetworkConfig Network { get; set; } = new NetworkConfig();
         public WorldTransferConfig WorldTransfer { get; set; } = new WorldTransferConfig();
+        public ServerConfig Server { get; set; } = new ServerConfig();
         public GovernorConfig Governor { get; set; } = new GovernorConfig();
         public TickGuardConfig TickGuard { get; set; } = new TickGuardConfig();
         public DiagnosticsConfig Diagnostics { get; set; } = new DiagnosticsConfig();
@@ -211,6 +225,7 @@ namespace EfficientServer
                 if (loaded.Pathfinding == null) loaded.Pathfinding = new PathfindingConfig();
                 if (loaded.Network == null) loaded.Network = new NetworkConfig();
                 if (loaded.WorldTransfer == null) loaded.WorldTransfer = new WorldTransferConfig();
+                if (loaded.Server == null) loaded.Server = new ServerConfig();
                 if (loaded.Governor == null) loaded.Governor = new GovernorConfig();
                 if (loaded.TickGuard == null) loaded.TickGuard = new TickGuardConfig();
                 if (loaded.Diagnostics == null) loaded.Diagnostics = new DiagnosticsConfig();
@@ -248,10 +263,15 @@ namespace EfficientServer
             WorldTransfer.ChunkPackagesPerObserverPerTick = IntRange("WorldTransfer.ChunkPackagesPerObserverPerTick", WorldTransfer.ChunkPackagesPerObserverPerTick, 1, 32);
             // 4 = 5 Hz replication, already aggressive; anything higher is unplayable.
             Network.EntityDistributionEveryTicks = IntRange("Network.EntityDistributionEveryTicks", Network.EntityDistributionEveryTicks, 1, 4);
-            // Governor thresholds: keep the hysteresis gap sane (Healthy < OverBudget)
-            // and Healthy above the 50 ms idle floor (a sub-50 value never triggers).
-            Governor.OverBudgetMs = FiniteRange("Governor.OverBudgetMs", Governor.OverBudgetMs, 56f, 500f, 57f);
-            Governor.HealthyMs = FiniteRange("Governor.HealthyMs", Governor.HealthyMs, 51f, Governor.OverBudgetMs - 5f, 52f);
+            // Server.TargetFps: 0 = leave vanilla; cap 120 (beyond is pure waste).
+            Server.TargetFps = IntRange("Server.TargetFps", Server.TargetFps, 0, 120);
+            // Governor thresholds are TICK-INTERVAL milliseconds; the tick rate equals
+            // the target frame rate, so calibrate to it: HealthyMs must sit ABOVE the
+            // idle frame time (50 ms at fps 20, 25 at 40, 16.7 at 60) or recovery
+            // never triggers. Defaults assume the vanilla fps 20. Clamps are wide
+            // enough for high-fps tunes; the hysteresis gap is still enforced.
+            Governor.OverBudgetMs = FiniteRange("Governor.OverBudgetMs", Governor.OverBudgetMs, 20f, 500f, 57f);
+            Governor.HealthyMs = FiniteRange("Governor.HealthyMs", Governor.HealthyMs, 10f, Governor.OverBudgetMs - 5f, 52f);
             Governor.WindowTicks = IntRange("Governor.WindowTicks", Governor.WindowTicks, 20, 6000);
             Governor.CooldownTicks = IntRange("Governor.CooldownTicks", Governor.CooldownTicks, 0, 36000);
             // TickGuard: shed threshold must sit above the governor band (last resort),

@@ -21,11 +21,24 @@ namespace EfficientServer.Patches
                 DedicatedSkipPatch.ApplyOptional(h);
                 GcIncremental.Apply(ModApi.Config != null ? ModApi.Config.Gc : null);
                 GcDiagnostics.StartMegapauseTest(ModApi.Config != null ? ModApi.Config.Diagnostics : null);
+                ApplyTargetFps();
             }
             catch (Exception ex)
             {
                 ModApi.Log("GameStartDone handler: " + ex.Message);
             }
+        }
+
+        // Persistent form of `settargetfps` (which does not survive restarts).
+        // Frame rate is NOT the tick rate - the full entity tick stays ~20 Hz at
+        // any fps; extra frames smooth the per-frame path (pump, slices), lowering
+        // delivery jitter. 0 = leave vanilla.
+        static void ApplyTargetFps()
+        {
+            ServerConfig cfg = ModApi.Config != null ? ModApi.Config.Server : null;
+            if (cfg == null || cfg.TargetFps <= 0) return;
+            UnityEngine.Application.targetFrameRate = cfg.TargetFps;
+            ModApi.Log($"target frame rate -> {cfg.TargetFps} (frame path only; full tick stays ~20 Hz)");
         }
     }
 }

@@ -544,6 +544,43 @@ Also in v1.13.0 (defaults policy: ON when perf-positive with zero gameplay impac
   `ClothAndJiggleBoneSimulation` (no back-compat by design).
 - Full per-option reference: [`CONFIG.md`](CONFIG.md).
 
+## 3k. Frame rate vs tick rate: measured architecture (2026-07-21)
+
+Three live measurements on a running server (settargetfps via telnet, bridge data),
+which corrected each other in sequence - recorded in full because the middle step is
+a trap others will hit:
+
+1. **The bridge's "tick interval" follows fps** (50/25/16.7 ms at fps 20/40/60).
+   Misleading: that metric times `GameManager.UpdateTick` CALLS, and UpdateTick runs
+   once per Unity FRAME.
+2. **World-clock speed is fps-invariant** (21.4 vs 21.5 game-min/real-min at 20 vs
+   60) - so no game-speed breakage either way.
+3. **The decisive one - per-section call rates at fps 20 vs 60:**
+   `UpdateTick` 19.9 -> 59.7 calls/s (per frame), but `World.TickEntities` and
+   `NetEntityDistribution.OnUpdateEntities` stayed at **19.9 calls/s at BOTH** - the
+   full entity-sim + replication tick is gated internally at ~20 Hz regardless of
+   frame rate.
+
+**Architecture:** frame loop (targetfps, default 20) runs UpdateTick every frame for
+housekeeping, work slices, and the network pump; inside it, the FULL tick (entity
+sim, replication, block falls) fires on a fixed ~20 Hz timer. Raising fps does NOT
+raise TPS, does not change ms_per_tick, and leaves every capacity number in this
+ledger untouched.
+
+**What higher fps does buy:** the per-frame path runs 2-3x more often - steadier
+packet-pump timing and finer work slicing = lower delivery jitter of the same 20 Hz
+data. Human observation at fps 40: "somewhat smoother" motion (consistent with
+jitter reduction; positions still update 20/s; placebo not excludable). Cost:
+per-frame loop overhead (measured UpdateTick total ~15 -> ~17 ms-CPU/s at 20 -> 60
+on a light server - modest) plus idle-wakeup power.
+
+**`Server.TargetFps` (v1.14.0, default 0 = vanilla):** persistent knob for the
+frame rate (vanilla `settargetfps` does not survive restarts). Reasonable range
+20-60; it is a jitter/smoothness polish, not a tick-rate or capacity lever.
+Governor note: the governor's EMA watches FRAME intervals (UpdateTick postfix), so
+its idle floor equals the frame target - thresholds calibrate to targetfps (clamps
+widened in v1.14.0; defaults assume fps 20).
+
 ## 4. Config reference (every knob, all independently toggleable)
 
 ```
