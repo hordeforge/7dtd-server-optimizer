@@ -444,6 +444,32 @@ at the ceiling is attributed to a known, measured cost; the two remaining masses
 halves. Further gains are ops config (spawn caps at ~147, `BlockDamageAIBM`,
 ViewDistance) or the custom-server long game.
 
+## 3i. Adaptive load governor (v1.12.0, validated live 2026-07-21)
+
+`GovernorPatch` (config `Governor.*`, default off) closes the loop on the proven
+throttle levers: a `GameManager.UpdateTick` postfix tracks the tick-interval EMA
+(over ~32 ticks) and moves between two states:
+- **vanilla** (replication 20 Hz, configured graph cadence) while healthy, and
+- **throttled** (replication stride 2 = 10 Hz, graph cadence x2) under sustained
+  overload,
+with hysteresis (`OverBudgetMs=57` / `HealthyMs=52`), a transition window
+(`WindowTicks=100` ~ 5 s) and a cooldown (`CooldownTicks`). Every transition is
+logged with the EMA that caused it. It introduces no new behavior - it schedules
+the individually-A/B'd levers (RESULTS 3g, 1).
+
+**Live validation (48 players, horde pushed to ~435 endgame zombies, then killed):**
+- `Governor: tick EMA 59.8ms > 57ms - THROTTLED (replication 10 Hz, graph /8)` -
+  engaged autonomously during the spawn climb.
+- Under overload the throttled server ran **128 ms/frame vs 299 ms unthrottled** at
+  comparable zombie counts (test 1 vs test 2) - the cushion is real.
+- After `killall`: `Governor: tick EMA 50.2ms < 52ms - restored vanilla`. Full cycle
+  PASS.
+
+**Design bug caught by the first live test:** a healthy 20 TPS loop *idles at
+exactly ~50 ms interval* - it never goes lower - so the original recovery threshold
+(45 ms) was unreachable and the governor never stepped down. `HealthyMs` is now
+floored at 51 in `Normalize` (regression-tested) and defaults to 52.
+
 ## 4. Config reference (every knob, all independently toggleable)
 
 ```
@@ -461,6 +487,8 @@ Network.{FastSingleTargetSend,
     EntityDistributionEveryTicks (1=vanilla; 2=10 Hz replication, -45% on the wall,
     needs human-eye pass, see §3g)}
 WorldTransfer.{ChunkPackagesPerObserverPerTick (3=vanilla; EXPERIMENTAL, see §3e)}
+Governor.{Enabled (false), OverBudgetMs (57), HealthyMs (52, floored >51: the loop
+    idles at 50ms), WindowTicks (100), CooldownTicks (400)}   # closed-loop, see §3i
 Diagnostics.{GcMegapauseTest, WarmupSeconds, GrowSeconds}   # never enable on a live server
 ```
 Init log tags each matched patch `(matched but config-disabled)` when its toggle is

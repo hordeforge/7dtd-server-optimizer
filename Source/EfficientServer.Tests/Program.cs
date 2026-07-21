@@ -105,6 +105,18 @@ namespace EfficientServer.Tests
             Check(chunkZero.WorldTransfer.ChunkPackagesPerObserverPerTick == 1, "ChunkPackagesPerObserverPerTick 0 -> 1 (deadlock guard)");
             var chunkHi = ServerPerfConfig.Load(WriteTemp("{\"WorldTransfer\":{\"ChunkPackagesPerObserverPerTick\":999}}"));
             Check(chunkHi.WorldTransfer.ChunkPackagesPerObserverPerTick == 32, "ChunkPackagesPerObserverPerTick 999 -> 32 (clamp)");
+
+            // v1.12.0: governor defaults + the hysteresis invariant (Healthy < OverBudget).
+            Check(d2.Governor != null && !d2.Governor.Enabled, "default Governor.Enabled=false");
+            var gov = ServerPerfConfig.Load(WriteTemp("{\"Governor\":{\"OverBudgetMs\":60,\"HealthyMs\":90}}"));
+            Check(gov.Governor.HealthyMs <= gov.Governor.OverBudgetMs - 5f,
+                "Governor hysteresis: HealthyMs forced below OverBudgetMs-5");
+            // A healthy 20 TPS loop idles at ~50 ms, so a sub-50 HealthyMs would never
+            // trigger recovery (proved live); the floor keeps it reachable.
+            var govLow = ServerPerfConfig.Load(WriteTemp("{\"Governor\":{\"HealthyMs\":40}}"));
+            Check(govLow.Governor.HealthyMs >= 51f, "Governor.HealthyMs 40 -> >=51 (idle-floor guard)");
+            var govStride = ServerPerfConfig.Load(WriteTemp("{\"Network\":{\"EntityDistributionEveryTicks\":9}}"));
+            Check(govStride.Network.EntityDistributionEveryTicks == 4, "EntityDistributionEveryTicks 9 -> 4 (clamp)");
             var missing = ServerPerfConfig.Load(WriteTemp("{}"));
             Check(missing.Network != null && missing.Diagnostics != null, "missing Network/Diagnostics -> filled");
 

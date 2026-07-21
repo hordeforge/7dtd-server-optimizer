@@ -121,6 +121,26 @@ namespace EfficientServer
         public int ChunkPackagesPerObserverPerTick { get; set; } = 3;
     }
 
+    // Adaptive load governor (default off): moves the proven throttle levers
+    // (replication stride, graph-update cadence) between vanilla and throttled
+    // based on the measured tick interval. Hysteresis via the OverBudgetMs /
+    // HealthyMs gap + CooldownTicks. See GovernorPatch.
+    public sealed class GovernorConfig
+    {
+        public bool Enabled { get; set; } = false;
+        // A healthy 20 TPS loop IDLES at exactly ~50 ms interval (it never goes
+        // lower), so "healthy" must be a hair ABOVE 50, not below - the first live
+        // test proved a sub-50 recovery threshold is unreachable and the governor
+        // never stepped back down. 57/52 gives a 5 ms hysteresis band around the
+        // 50 ms target.
+        public float OverBudgetMs { get; set; } = 57f;
+        public float HealthyMs { get; set; } = 52f;
+        // Ticks the EMA must stay over/under before a transition (~5 s at 20 TPS).
+        public int WindowTicks { get; set; } = 100;
+        // Minimum ticks between transitions (~20 s at 20 TPS).
+        public int CooldownTicks { get; set; } = 400;
+    }
+
     // DIAGNOSTIC ONLY (default off). Not a performance feature.
     public sealed class DiagnosticsConfig
     {
@@ -142,6 +162,7 @@ namespace EfficientServer
         public PathfindingConfig Pathfinding { get; set; } = new PathfindingConfig();
         public NetworkConfig Network { get; set; } = new NetworkConfig();
         public WorldTransferConfig WorldTransfer { get; set; } = new WorldTransferConfig();
+        public GovernorConfig Governor { get; set; } = new GovernorConfig();
         public DiagnosticsConfig Diagnostics { get; set; } = new DiagnosticsConfig();
 
         public static ServerPerfConfig Load(string path)
@@ -161,6 +182,7 @@ namespace EfficientServer
                 if (loaded.Pathfinding == null) loaded.Pathfinding = new PathfindingConfig();
                 if (loaded.Network == null) loaded.Network = new NetworkConfig();
                 if (loaded.WorldTransfer == null) loaded.WorldTransfer = new WorldTransferConfig();
+                if (loaded.Governor == null) loaded.Governor = new GovernorConfig();
                 if (loaded.Diagnostics == null) loaded.Diagnostics = new DiagnosticsConfig();
                 loaded.Normalize();
                 return loaded;
@@ -196,6 +218,12 @@ namespace EfficientServer
             WorldTransfer.ChunkPackagesPerObserverPerTick = IntRange("WorldTransfer.ChunkPackagesPerObserverPerTick", WorldTransfer.ChunkPackagesPerObserverPerTick, 1, 32);
             // 4 = 5 Hz replication, already aggressive; anything higher is unplayable.
             Network.EntityDistributionEveryTicks = IntRange("Network.EntityDistributionEveryTicks", Network.EntityDistributionEveryTicks, 1, 4);
+            // Governor thresholds: keep the hysteresis gap sane (Healthy < OverBudget)
+            // and Healthy above the 50 ms idle floor (a sub-50 value never triggers).
+            Governor.OverBudgetMs = FiniteRange("Governor.OverBudgetMs", Governor.OverBudgetMs, 56f, 500f, 57f);
+            Governor.HealthyMs = FiniteRange("Governor.HealthyMs", Governor.HealthyMs, 51f, Governor.OverBudgetMs - 5f, 52f);
+            Governor.WindowTicks = IntRange("Governor.WindowTicks", Governor.WindowTicks, 20, 6000);
+            Governor.CooldownTicks = IntRange("Governor.CooldownTicks", Governor.CooldownTicks, 0, 36000);
             // Gc knobs keep their 0-sentinels (SafetyCollectAboveMB 0 = AUTO ceiling;
             // IncrementalPauseTargetMs 0 = no pause limit), so the floor is 0, not a
             // forced positive. This centralizes the previously ad-hoc use-site clamps

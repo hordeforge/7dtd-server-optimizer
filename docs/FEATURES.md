@@ -174,6 +174,16 @@ the megapause feeder at source (complements the `GC_FREE_SPACE_DIVISOR` env, whi
 only cuts collection frequency). Code -> EAC-off. See
 [`../../research/docs/aggressive-optimizations.md`](../../research/docs/aggressive-optimizations.md) §3.
 
+## Adaptive load governor (v1.12.0, default off)
+
+`GovernorPatch` (config `Governor.*`) watches the tick-interval EMA and moves the
+proven throttle levers between vanilla and throttled (replication stride 2 + doubled
+graph cadence) with hysteresis and a cooldown, logging every transition. Validated
+live: engages under a 435-zombie overload (cushioning 299 -> 128 ms/frame), restores
+vanilla within seconds of the load clearing. It schedules existing levers only.
+Note the recovery threshold must sit ABOVE 50 ms - the healthy loop idles at exactly
+50 ms and never below (enforced in config normalize). See [`RESULTS.md`](RESULTS.md) §3i.
+
 ## Entity-replication stride (v1.11.0, default off)
 
 `EntityDistributionStridePatch` (config `Network.EntityDistributionEveryTicks`,
