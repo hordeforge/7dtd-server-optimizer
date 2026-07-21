@@ -2,6 +2,14 @@
 
 **Status:** research inventory for EfficientServer, not a commit-to-ship roadmap.
 
+> **2026-07-21 campaign state:** the safe-Harmony space in this inventory is
+> RESOLVED - shipped (P1/P2, #1 fast send, GC guard, skips, explosion particles,
+> replication stride, governor, TickGuard), refuted with evidence (spatial interest
+> grid, serialize-once, mid-band stride, parallel interest scan, chunk-send
+> throttle sizing, fps/jitter levers), or measured-and-parked (P4 pool: safe,
+> no perf win). The authoritative outcome ledger is [`RESULTS.md`](RESULTS.md)
+> §1-3l; entries below are historical grading kept for the reasoning trail.
+
 **Promote only** with APM + loadgen evidence, fidelity checklist, soft-fail Harmony, config flag.
 
 **Owns:** graded A/B/C candidates, hot-path notes, APM probes, experiment order, Harmony target list.

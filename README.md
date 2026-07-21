@@ -24,22 +24,29 @@ Source is under `Source/EfficientServer`; packaging and server launch helpers
 are under `scripts`. Rebuild and revalidate exact Harmony targets after every
 game update.
 
-## Measured impact
-
-Aggregate A/B, true vanilla vs everything-on (full safe mod +
-`GC_FREE_SPACE_DIVISOR=1` launch env), matched heavy load ~320 zombies + 32 bots
-(2026-07-20, v1.8.0):
+## Measured impact (v1.14.x)
 
 - **Eliminates the GC megapause:** worst stop-the-world **274 ms -> 0**, full
-  collections **3 -> 0** in the window (vanilla lost 5.5 ticks at once to one freeze).
-- **Tick-stall total -28%**, pathfinding graph work (`UpdateGraphs`) **-27%**.
-- **Per-tick compute flat:** the entity tick (close-combat AI) and network
-  replication (O(N^2.26)) are irreducible walls; the mod's win at surviving load is
-  smoothness, not raw throughput.
+  collections **3 -> 0** in the aggregate A/B window (vanilla lost 5.5 ticks at once
+  to one freeze). Tick-stall total **-28%**; pathfinding graph work **-27%**.
 - **At a breaking load** (vanilla tick-starved), the pathfinding throttle alone is
   **-28.5% ms/tick**, pulling the server from failing back to healthy.
+- **Adaptive governor** (default on, inert while healthy): under overload it engages
+  the measured throttles (replication stride 2 = -45% on that wall, doubled graph
+  cadence), cushioning a 435-zombie overload at 128 vs 299 ms/frame and
+  self-restoring. **Raises sustained blood-moon capacity from ~147 to ~232 endgame
+  zombies at 64 players (+58%).**
+- **TickGuard** (opt-in): last-resort shedding of the farthest zombies - a 522-zombie
+  overload (3.5x the ceiling) recovered from 167 to 56 ms/frame autonomously.
+- **Per-tick compute is flat by design:** the entity tick (close-combat AI, fully
+  serial, frame-amortized) and network replication (O(N^2.26), 20 Hz-locked) are the
+  measured engine walls; every remaining millisecond of the tick is attributed
+  (zero dark matter, RESULTS 3h).
 
-Full ledger with session IDs and per-lever numbers: [`docs/RESULTS.md`](docs/RESULTS.md).
+Full ledger with session IDs, per-lever numbers, and honest negative results
+(what was tried and refuted): [`docs/RESULTS.md`](docs/RESULTS.md). Per-option
+reference: [`docs/CONFIG.md`](docs/CONFIG.md). Deploying:
+[`docs/PRODUCTION.md`](docs/PRODUCTION.md).
 
 Docs:
 
@@ -51,6 +58,7 @@ Docs:
 - Optimization candidates (graded): [`docs/OPTIMIZATION_CANDIDATES.md`](docs/OPTIMIZATION_CANDIDATES.md)
 - Network/serialization optimization plan: [`docs/NETWORK_OPTIMIZATION.md`](docs/NETWORK_OPTIMIZATION.md)
 - Upstream allocation reduction plan (the real GC lever): [`docs/ALLOCATION_UPSTREAM.md`](docs/ALLOCATION_UPSTREAM.md)
+- Production deployment + operations runbook: [`docs/PRODUCTION.md`](docs/PRODUCTION.md)
 - Config reference (every option: mechanism, gameplay impact, measured gain): [`docs/CONFIG.md`](docs/CONFIG.md)
 - Results ledger (every lever, A/B numbers, session IDs, config): [`docs/RESULTS.md`](docs/RESULTS.md)
 - Pathfinding / nav-graph optimization plan: [`docs/PATHFINDING_OPTIMIZATION.md`](docs/PATHFINDING_OPTIMIZATION.md)
