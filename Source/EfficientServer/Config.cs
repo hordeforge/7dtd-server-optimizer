@@ -161,6 +161,12 @@ namespace EfficientServer
         // data, human-observed as slightly smoother motion. Modest per-frame CPU
         // cost. 0 = leave vanilla (default 20); 20-60 reasonable.
         public int TargetFps { get; set; } = 0;
+        // Unity job-system worker thread count (0 = leave vanilla). Runtime-settable;
+        // applied at game start and on `es reload`. Experimental: the saturated frame
+        // is partly main-thread job-FENCE waiting (RESULTS 3o); worker-pool size is
+        // the one untested variable in that equation. Sweep at saturation before
+        // trusting any value.
+        public int JobWorkerCount { get; set; } = 0;
     }
 
     // Adaptive load governor (default off): moves the proven throttle levers
@@ -296,6 +302,7 @@ namespace EfficientServer
             AnimatorLod.FarStride = IntRange("AnimatorLod.FarStride", AnimatorLod.FarStride, 1, 10);
             // Server.TargetFps: 0 = leave vanilla; cap 120 (beyond is pure waste).
             Server.TargetFps = IntRange("Server.TargetFps", Server.TargetFps, 0, 120);
+            Server.JobWorkerCount = IntRange("Server.JobWorkerCount", Server.JobWorkerCount, 0, 64);
             // Governor thresholds are TICK-INTERVAL milliseconds; the tick rate equals
             // the target frame rate, so calibrate to it: HealthyMs must sit ABOVE the
             // idle frame time (50 ms at fps 20, 25 at 40, 16.7 at 60) or recovery

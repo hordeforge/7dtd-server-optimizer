@@ -22,6 +22,7 @@ namespace EfficientServer.Patches
                 GcIncremental.Apply(ModApi.Config != null ? ModApi.Config.Gc : null);
                 GcDiagnostics.StartMegapauseTest(ModApi.Config != null ? ModApi.Config.Diagnostics : null);
                 ApplyTargetFps();
+                ApplyJobWorkers();
             }
             catch (Exception ex)
             {
@@ -38,6 +39,28 @@ namespace EfficientServer.Patches
         // vanilla resets targetFrameRate back to its default some time after
         // GameStartDone (measured: the one-shot set at ~21 s was 20 fps again
         // minutes later), so a single apply silently loses.
+        // Unity job-system worker pool size (0 = vanilla). Runtime-settable; the
+        // saturated frame is partly main-thread job-fence waiting (RESULTS 3o), and
+        // pool size is the one untested variable there. Logs the current count even
+        // when leaving vanilla, so the default is visible in the log.
+        public static void ApplyJobWorkers()
+        {
+            ServerConfig cfg = ModApi.Config != null ? ModApi.Config.Server : null;
+            try
+            {
+                int current = Unity.Jobs.LowLevel.Unsafe.JobsUtility.JobWorkerCount;
+                if (cfg == null || cfg.JobWorkerCount <= 0)
+                {
+                    ModApi.Log($"job workers = {current} (vanilla)");
+                    return;
+                }
+                if (current == cfg.JobWorkerCount) return;
+                Unity.Jobs.LowLevel.Unsafe.JobsUtility.JobWorkerCount = cfg.JobWorkerCount;
+                ModApi.Log($"job workers {current} -> {cfg.JobWorkerCount}");
+            }
+            catch (Exception ex) { ModApi.Log("job worker set failed: " + ex.Message); }
+        }
+
         public static void ApplyTargetFps()
         {
             ServerConfig cfg = ModApi.Config != null ? ModApi.Config.Server : null;

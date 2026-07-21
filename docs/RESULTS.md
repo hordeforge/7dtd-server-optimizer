@@ -754,6 +754,27 @@ timing degrades in the known ways (timer-only attack cadence, no stagger,
 supplementary movement) but nothing despawns and clients see no visual change -
 gentler than TickGuard, and worth ~40% of the frame exactly when it is needed.
 
+## 3p. Job-worker-pool sweep: NULL - wait-bound is closed to the limit of modding (v1.16.1)
+
+`Server.JobWorkerCount` (0 = vanilla, runtime-settable, applied at start and on
+`es reload`) was added to test the last open variable in the wait-bound equation:
+whether Unity's job-worker pool size (measured vanilla default: **31** on the
+32-thread host) affects the fence-wait share of the saturated frame.
+
+**Sweep at 48 players + ~429 endgame zombies (live reloads, 4 samples/arm):**
+default(31) 92.3 / w4 74.8 / w8 103.3 / w16 278.5 / w24 76.6 ms median - pure
+saturation noise (the 278 was a burst window), no worker-count signal. Consistent
+with the serial-dependency model: the main thread's ~550 fences/s are
+schedule-then-wait ping-pong, where pool size is irrelevant.
+
+**Wait-bound conclusion (final):** of the three possible fixes - (1) remove the
+wait's cause, (2) resize the worker pool, (3) restructure the frame to overlap
+waits - (1) is shipped (governor tier 2 / animator LOD), (2) is measured null,
+and (3) is engine-internal, reachable only by the custom-server long game. The
+knob ships default 0 for experimenters. Adjacent main-busy item still open:
+`GC_dirty_inner` (write barrier) at ~13% of main busy - the allocation-source
+levers are its only reducer.
+
 ## 4. Config reference (every knob, all independently toggleable)
 
 ```

@@ -65,7 +65,8 @@
     "MinEnemiesKept": 60
   },
   "Server": {
-    "TargetFps": 0
+    "TargetFps": 0,
+    "JobWorkerCount": 0
   },
   "AnimatorLod": {
     "Enabled": false,

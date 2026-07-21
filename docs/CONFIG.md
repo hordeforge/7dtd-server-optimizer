@@ -251,6 +251,12 @@ Band and stride; clamps [100, 1e6] and [1, 10].
   below). Tick-counted knobs (`GraphUpdateEveryTicks`, replication stride) count
   FULL ticks and are fps-independent.
 
+### `Server.JobWorkerCount` (default `0` = vanilla, clamp [0,64], v1.16.1)
+Unity job-worker pool size (vanilla default 31 on a 32-thread host). Runtime-settable
+via `es reload`. **Measured: no resolvable effect on the saturated frame** (sweep
+4-24 workers = noise) - the main thread's fence waits are serial, not pool-bound.
+Ships 0; experimenters only (RESULTS 3p).
+
 ## Governor - adaptive load management (v1.12.0)
 
 ### `Governor.Enabled` (default `true`, v1.13.0)

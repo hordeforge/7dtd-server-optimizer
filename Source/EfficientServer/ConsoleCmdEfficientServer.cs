@@ -22,6 +22,8 @@ namespace EfficientServer
             if (sub == "reload")
             {
                 ModApi.ReloadConfig();
+                Patches.GameStartPatch.ApplyTargetFps();
+                Patches.GameStartPatch.ApplyJobWorkers();
                 SdtdConsole.Instance.Output("[EfficientServer] config reloaded");
                 sub = "status";
             }
@@ -30,7 +32,7 @@ namespace EfficientServer
                 ServerPerfConfig c = ModApi.Config;
                 if (c == null) { SdtdConsole.Instance.Output("[EfficientServer] no config"); return; }
                 SdtdConsole.Instance.Output(
-                    $"[EfficientServer] enabled={c.Enabled} | targetFps={c.Server.TargetFps} | graphEvery={c.Pathfinding.GraphUpdateEveryTicks} "
+                    $"[EfficientServer] enabled={c.Enabled} | targetFps={c.Server.TargetFps} jobWorkers={c.Server.JobWorkerCount} | graphEvery={c.Pathfinding.GraphUpdateEveryTicks} "
                     + $"rescanSq={c.Pathfinding.MoveRescanThresholdSq} poolInitScan={c.Pathfinding.PoolInitScanNodes} | "
                     + $"fastSend={c.Network.FastSingleTargetSend} stride={c.Network.EntityDistributionEveryTicks} | "
                     + $"chunkBatch={c.WorldTransfer.ChunkPackagesPerObserverPerTick} | "
