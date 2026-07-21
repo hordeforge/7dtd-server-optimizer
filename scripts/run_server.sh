@@ -38,6 +38,11 @@ export MALLOC_ARENA_MAX="${MALLOC_ARENA_MAX:-2}"
 #    with heap: ~480 ms measured at a 7 GB full collect); keep INITIAL_HEAP <= ~12 G.
 export GC_FREE_SPACE_DIVISOR="${GC_FREE_SPACE_DIVISOR:-1}"
 export GC_NPROCS="${GC_NPROCS:-$(nproc 2>/dev/null || echo 4)}"
+# Mono JIT: -O=all measured a consistent ~5% section-avg win at blood-moon load
+# (single A/B pair, direction-consistent across all timed sections; the -O=all arm
+# carried more zombies and still ran faster). EAC-safe env; override or empty to
+# disable.
+export MONO_ENV_OPTIONS="${MONO_ENV_OPTIONS:--O=all}"
 [[ -n "${GC_INITIAL_HEAP_SIZE:-}" ]] && export GC_INITIAL_HEAP_SIZE
 [[ -n "${GC_USE_ENTIRE_HEAP:-}" ]] && export GC_USE_ENTIRE_HEAP
 # Optional: opt-in incremental GC (marginal in A/B; off by default).

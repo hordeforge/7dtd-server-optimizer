@@ -443,6 +443,13 @@ workers" lever does not exist. Parallelizing the entity tick would be NEW thread
 into shared mutable world state (the SIM_PARALLELISM minefield), not a tweak of
 existing parallelism.
 
+**Mono JIT `-O=all` (env, EAC-safe): ~5% win, single-pair evidence.** A/B at the
+blood-moon standard: UpdateTick 17.05 -> 16.19 ms (-5.0%), TickEntities -4.4%,
+OnUpdateEntities -6.8%, explode -1.4% - direction-consistent across every timed
+section, with the `-O=all` arm carrying *more* zombies (562 vs 549). One matched
+pair, so not noise-proof, but free: shipped as the `run_server.sh` default
+(`MONO_ENV_OPTIONS=-O=all`, overridable).
+
 **Unity PhysX share: negligible.** From the all-thread perf stacks of the heavy
 vanilla session (`053013`, ~320 zombies): physics symbols are 5 of 55,367 samples
 (**0.0%**) - zombies move via the character controller / nav path, not rigidbody
