@@ -35,6 +35,25 @@ bridge in `7dtd-apm`.
 - [ ] Reconcile README, architecture, features, and runtime behavior.
 - [ ] Publish supported 7DTD/toolchain versions and troubleshooting.
 
+## Open: animator revival wedge (tier-2 exit)
+
+Human eval 2026-07-23 (live client, benchgod bots): tier-2 combat feel WHILE
+active is fine, but every restore path after `Animator.enabled=false` leaves
+zombies producing `deltaPosition=0` (verified via `es animstate`: state machine
+advances, `applyRootMotion=true`, `AvatarRootMotion` forwarder enabled, delta
+still zero) - they crawl at supplementary-path speed until death. Tried and
+refuted: bare enable+pump, Rebind+pump, Rebind+`SetAlive`/`SetWalkType`
+re-push (params survive fine; delta stays dead). Corpse-restore statue bug
+found and fixed en route (`IsDead()` skip). NEXT LEVER (designed, unbuilt):
+stop toggling `enabled`; switch `cullingMode` to `CullCompletely` on
+enter and restore the saved mode on exit - headless server culls everything, so
+evaluation should stop for the same win while keeping the root-motion binding
+alive. Needs: implementation in AnimatorEmergency + animoff/animon, perf
+re-validation (does CullCompletely reproduce the 147->85 ms win?), and a fresh
+human cycle with `es animstate` dp readings. Until this lands,
+`Governor.AnimatorEmergency` stays default-false; `es animoff` remains
+bench-only with a known-degraded exit.
+
 ## Verification log
 
 - 2026-07-16: duplicate load/profiling ownership confirmed; removal started.

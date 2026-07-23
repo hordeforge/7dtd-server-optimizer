@@ -57,6 +57,7 @@ namespace EfficientServer
                     for (int i = 0; i < entities.Count; i++)
                     {
                         if (!(entities[i] is EntityEnemy enemy)) continue;
+                        if (enemy.IsDead()) continue;
                         Animator[] anims = enemy.GetComponentsInChildren<Animator>(true);
                         for (int a = 0; a < anims.Length; a++)
                         {
@@ -71,11 +72,41 @@ namespace EfficientServer
                 }
                 else
                 {
-                    int restored = 0;
-                    for (int i = 0; i < _probeDisabled.Count; i++)
-                        if (_probeDisabled[i] != null) { _probeDisabled[i].enabled = true; restored++; }
+                    // 'es animon' = full revival; 'es animon bare' = enable+pump only
+                    // (A/B probe for isolating what the Rebind path wedges).
+                    bool bare = _params.Count > 1 && _params[1] == "bare";
                     _probeDisabled.Clear();
-                    SdtdConsole.Instance.Output($"[EfficientServer] animprobe: restored {restored} animators");
+                    int restored = Patches.AnimatorEmergency.RestoreAllEnemyAnimators(bare);
+                    SdtdConsole.Instance.Output($"[EfficientServer] animprobe: restored {restored} animators (mode={(bare ? "bare" : "full")})");
+                }
+            }
+            else if (sub == "animstate")
+            {
+                // Per-zombie animator truth table for debugging revival wedges.
+                World world = GameManager.Instance != null ? GameManager.Instance.World : null;
+                if (world == null) { SdtdConsole.Instance.Output("[EfficientServer] no world"); return; }
+                int movementHash = Animator.StringToHash("MovementState");
+                int aliveHash = Animator.StringToHash("IsAlive");
+                int walkHash = Animator.StringToHash("WalkType");
+                List<Entity> entities = world.Entities.list;
+                for (int i = 0; i < entities.Count; i++)
+                {
+                    if (!(entities[i] is EntityEnemy enemy)) continue;
+                    Animator[] anims = enemy.GetComponentsInChildren<Animator>(true);
+                    Animator anim = anims.Length > 0 ? anims[0] : null;
+                    if (anim == null) { SdtdConsole.Instance.Output($"  {enemy.entityId} NO ANIMATOR"); continue; }
+                    string st = "n/a";
+                    if (anim.enabled && anim.isActiveAndEnabled)
+                    {
+                        AnimatorStateInfo si = anim.GetCurrentAnimatorStateInfo(0);
+                        st = $"state={si.shortNameHash} t={si.normalizedTime:F2} trans={anim.IsInTransition(0)}";
+                    }
+                    AvatarRootMotion rm = enemy.GetComponentInChildren<AvatarRootMotion>(true);
+                    SdtdConsole.Instance.Output(
+                        $"  {enemy.entityId} {enemy.EntityName}: en={anim.enabled} spd={anim.speed:F2} rootMotion={anim.applyRootMotion} "
+                        + $"cull={anim.cullingMode} move={anim.GetInteger(movementHash)} alive={anim.GetBool(aliveHash)} walk={anim.GetInteger(walkHash)} "
+                        + $"vel={enemy.motion.magnitude:F3} dp={anim.deltaPosition.magnitude:F4} rmFwd={(rm == null ? "none" : rm.enabled.ToString())} "
+                        + $"attackTarget={(enemy.GetAttackTarget() != null)} {st}");
                 }
             }
             else if (sub == "rigoff" || sub == "rigon")

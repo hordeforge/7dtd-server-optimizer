@@ -14,8 +14,16 @@ namespace EfficientServer.Patches
     /// back to its 2 s wall-clock timer, stuns clear next tick, movement uses the
     /// supplementary displacement path instead of root motion) - the same
     /// trade-class as TickGuard, but nothing despawns and clients see no visual
-    /// difference (zombie animation is client-local). Exit re-enables every rig
-    /// with an immediate Update(0) pump (the bare-enable revival trap, 3m-bis).
+    /// difference (zombie animation is client-local).
+    ///
+    /// KNOWN DEFECT (human eval + es animstate, RESULTS 3s): exit cannot fully
+    /// restore. After enabled=false->true the animator evaluates (state advances,
+    /// applyRootMotion intact, AvatarRootMotion forwarder alive) but deltaPosition
+    /// stays 0 forever, so restored zombies move at supplementary-path crawl until
+    /// death. Rebind + re-pushing one-shot params does not revive the delta.
+    /// Planned rework: switch cullingMode to CullCompletely instead of toggling
+    /// enabled (headless = everything culled = evaluation stops, binding survives).
+    /// Until then this tier stays config-default-false.
     /// </summary>
     public static class AnimatorEmergency
     {
@@ -33,6 +41,7 @@ namespace EfficientServer.Patches
             for (int i = 0; i < entities.Count; i++)
             {
                 if (!(entities[i] is EntityEnemy enemy)) continue;
+                if (enemy.IsDead()) continue;
                 Animator[] anims = enemy.GetComponentsInChildren<Animator>(true);
                 for (int a = 0; a < anims.Length; a++)
                 {
@@ -50,17 +59,55 @@ namespace EfficientServer.Patches
         public static void Exit()
         {
             if (!Active) return;
-            int restored = 0;
-            for (int i = 0; i < Disabled.Count; i++)
-            {
-                if (Disabled[i] == null) continue;
-                Disabled[i].enabled = true;
-                Disabled[i].Update(0f); // proper revival: resume from a fresh evaluation
-                restored++;
-            }
             Disabled.Clear();
+            int restored = RestoreAllEnemyAnimators();
             Active = false;
             ModApi.Log($"Governor: animator emergency EXIT - restored {restored} rigs");
+        }
+
+        /// <summary>
+        /// Re-enable every disabled enemy animator by sweeping live entities (a
+        /// saved-ref list goes stale as entities die/pool-recycle while disabled).
+        /// Revival needs three steps (human eval found each missing one wedges
+        /// zombies into a pushed-only shuffle): Rebind resets a state machine
+        /// stuck mid-transition, but also wipes the one-shot spawn parameters
+        /// (WalkType, IsAlive) that the AI never rewrites - so re-push those via
+        /// the game's own setters, then pump one evaluation.
+        /// </summary>
+        public static int RestoreAllEnemyAnimators(bool bare = false)
+        {
+            World world = GameManager.Instance != null ? GameManager.Instance.World : null;
+            if (world == null) return 0;
+            int restored = 0;
+            List<Entity> entities = world.Entities.list;
+            for (int i = 0; i < entities.Count; i++)
+            {
+                if (!(entities[i] is EntityEnemy enemy)) continue;
+                // Corpses stay in Entities.list; reviving their animators poses dead
+                // bodies upright as statues (human eval). Death disabled them, not us.
+                if (enemy.IsDead()) continue;
+                Animator[] anims = enemy.GetComponentsInChildren<Animator>(true);
+                int revived = 0;
+                for (int a = 0; a < anims.Length; a++)
+                {
+                    if (anims[a].enabled) continue;
+                    anims[a].enabled = true;
+                    if (!bare) anims[a].Rebind();
+                    revived++;
+                }
+                if (revived == 0) continue;
+                restored += revived;
+                AvatarController av = enemy.emodel != null ? enemy.emodel.avatarController : null;
+                if (!bare && av != null)
+                {
+                    av.SetAlive();
+                    if (enemy.IsWalkTypeACrawl()) av.TurnIntoCrawler();
+                    else av.SetWalkType(enemy.GetWalkType(), true);
+                }
+                for (int a = 0; a < anims.Length; a++)
+                    if (anims[a].enabled) anims[a].Update(0f);
+            }
+            return restored;
         }
     }
 }

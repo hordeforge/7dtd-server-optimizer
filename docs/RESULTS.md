@@ -3,7 +3,7 @@
 Authoritative record of every lever: RE target, mechanism, config knob, IL target,
 A/B session IDs + numbers, and verdict. Companion: graded backlog
 [`OPTIMIZATION_CANDIDATES.md`](OPTIMIZATION_CANDIDATES.md); bottleneck catalog
-[`../../7dtd-research/docs/bottlenecks.md`](../../7dtd-research/docs/bottlenecks.md); allocation
+[`../../7dtd-research/docs/bottlenecks.md`](bottlenecks.md); allocation
 [`ALLOCATION_UPSTREAM.md`](ALLOCATION_UPSTREAM.md).
 
 All A/B captures: `7dtd-apm capture --only all,alloc`, 150 s window, matched load,
@@ -233,7 +233,7 @@ Deep bottom-up RE proved the two big remaining costs have **no safe Harmony leve
   each nearby player). A spatial grid cannot cull genuinely-nearby players, a
   conservative cull breaks removals (desync), and network LOD hits the same
   close-high-interest wall as the AI stride. See
-  [`../../7dtd-research/docs/bottlenecks.md`](../../7dtd-research/docs/bottlenecks.md) §5.
+  [`../../7dtd-research/docs/bottlenecks.md`](bottlenecks.md) §5.
 
 So the next-best levers are **not Harmony patches** - they are process/ops and config:
 
@@ -259,7 +259,7 @@ zero-fidelity-risk lever** - trades RAM (128 GB available) for fewer GC collecti
 (env is EAC-safe and set before GC init; the mod path would force EAC-off). Prefer
 `2` if RSS matters; `1` for max headroom. Not a `ms_per_tick` headline (GC is
 downstream of allocation) but a real STW-smoothness win. See
-[`../../7dtd-research/docs/runtime-tuning.md`](../../7dtd-research/docs/runtime-tuning.md).
+[`../../7dtd-research/docs/runtime-tuning.md`](runtime-tuning.md).
 
 ## 3c. P4 InitScan node-array pool (first UNSAFE lever, A/B 2026-07-20)
 
@@ -949,3 +949,35 @@ the remaining safe Harmony levers are small (each < 1% of tick); the real gains 
 the O(N^2) network wall (spatial grid, risky) and the allocation floor (~30% of
 aggregate CPU is GC + array-init). The APM now auto-discovers hot paths
 (`7dtd-research/docs/bottlenecks.md` §5b), so future targets are data-driven, not guessed.
+
+## 3s. Human eval of tier-2 (animators off): feel OK while active, exit path WEDGED (2026-07-23)
+
+Live-client eyeball of the animator-emergency trade (one player, benchgod,
+waves of ferals/radiated, `es animoff`/`es animon` cycles):
+
+- **While active:** combat feel acceptable ("seems ok") - zombies chase, hit,
+  die; the known degradations (timer attack cadence, supplementary movement)
+  did not read as broken to a human at 12-zombie scale.
+- **Exit is broken, three bugs deep.** (1) Restore replayed a saved `Animator`
+  list whose refs go Unity-null as zombies die/pool-recycle - restored 0; fixed
+  by sweeping live entities. (2) The sweep then revived CORPSE animators -
+  dead bodies stood up as idle-pose statues; fixed by `IsDead()` skip. (3) The
+  real wall: after any `enabled=false -> true` cycle the animator EVALUATES but
+  emits `deltaPosition = 0` forever (verified with the new `es animstate`
+  probe: state hash advancing, `applyRootMotion=true`, `AvatarRootMotion`
+  forwarder enabled, dp=0.0000 vs healthy 0.17-0.28) - server zombies are
+  root-motion-driven, so they crawl at supplementary-path speed until death.
+  Refuted revival attempts: bare enable+pump; +`Rebind()`; +re-pushing the
+  one-shot spawn params (`SetAlive`, `SetWalkType`/`TurnIntoCrawler` - the
+  params themselves survive fine, delta stays dead).
+- **Bonus RE fact:** healthy server zombies run at `cullingMode =
+  CullUpdateTransforms` (not the documented forced AlwaysAnimate) and the wight
+  class moves with `applyRootMotion=false` entirely.
+
+Consequence: `Governor.AnimatorEmergency` stays **default-false** and `es
+animoff` is a bench-only probe with a known-degraded exit (restart the server
+to fully recover). Designed next lever (unbuilt): flip `cullingMode` to
+`CullCompletely` instead of touching `enabled` - a headless server culls every
+renderer, so evaluation should stop for the same win while the root-motion
+binding survives; needs a perf re-validation (does it reproduce 147->85 ms?)
+plus one more human cycle. Tracked in TODO.

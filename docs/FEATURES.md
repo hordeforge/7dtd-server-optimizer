@@ -175,7 +175,7 @@ Why unsafe: it transpiles a **compiler-generated iterator `MoveNext` in the exte
 check** (zombies still path to players; no pathfinding exceptions) before use. Cuts
 the megapause feeder at source (complements the `GC_FREE_SPACE_DIVISOR` env, which
 only cuts collection frequency). Code -> EAC-off. See
-[`../../7dtd-research/docs/aggressive-optimizations.md`](../../7dtd-research/docs/aggressive-optimizations.md) §3.
+[`../../7dtd-research/docs/aggressive-optimizations.md`](aggressive-optimizations.md) §3.
 
 ## Animator LOD (v1.15.0, default off)
 
@@ -218,8 +218,13 @@ zombie animators - measured **~40% of the saturated 64-player frame** (147 -> 85
 the fence check: the animator burden at 64p is mostly main-thread JOB-FENCE waiting,
 which triples per zombie vs 24p). Combat timing degrades (timer-only attack cadence,
 no stagger); nothing despawns, clients see no visual change. Steps down one tier at
-a time with pump-on-restore. Live-validated: full autonomous chain THROTTLED ->
-ANIMATOR EMERGENCY -> step-down + EXIT. See [`RESULTS.md`](RESULTS.md) §3i, §3o.
+a time. Live-validated: full autonomous chain THROTTLED -> ANIMATOR EMERGENCY ->
+step-down + EXIT. See [`RESULTS.md`](RESULTS.md) §3i, §3o.
+
+**Stays default-off - exit path has a known wedge** (human eval, RESULTS 3s): a
+re-enabled animator evaluates but never emits root motion again
+(`deltaPosition=0`), leaving zombies at crawl speed. Culling-mode rework designed,
+tracked in TODO; until then treat tier 2 as a bench lever.
 
 ## Entity-replication stride (v1.11.0, default off)
 

@@ -289,8 +289,13 @@ tick and the EMA is past `EmergencyOverMs`, disable ALL zombie animators - measu
 **~40% of the saturated 64-player frame** (fence check, RESULTS 3o). Combat timing
 degrades (timer-only attack cadence, no stagger, supplementary movement path) but
 nothing despawns and clients see no visual difference (zombie animation is
-client-local). Steps back down one tier at a time; exit re-enables every rig with a
-pump. Enable on servers that prefer degraded combat timing over a collapsing tick.
+client-local). Steps back down one tier at a time.
+
+**KNOWN DEFECT (human eval, RESULTS 3s): the exit path cannot fully restore.**
+After any `Animator.enabled` off->on cycle the rig evaluates but emits zero root
+motion (`deltaPosition=0`), and server zombies are root-motion-driven - restored
+zombies crawl at supplementary-path speed until they die. Keep this `false` until
+the culling-mode rework lands (TODO). Feel WHILE active passed human eval.
 
 ---
 
@@ -346,8 +351,12 @@ research only.
 `es status` prints every active lever value; `es reload` re-reads
 `efficientserver.json` and applies it LIVE (all patches read the config object per
 call - no restart needed). Diagnostics (BENCH ONLY, gameplay breaks while active):
-`es animoff` / `es animon` toggle all enemy Animators (used to measure the 19.9 ms
-animator slice); `es rigoff` / `es rigon` toggle the unguarded rig visual
+`es animoff` / `es animon [bare]` toggle all enemy Animators (used to measure the
+19.9 ms animator slice; skips corpses; `bare` = enable+pump without Rebind/param
+re-push; NOTE restore is imperfect - RESULTS 3s root-motion wedge, restart to
+fully recover); `es animstate` prints a per-zombie animator truth table
+(enabled/speed/rootMotion/culling/params/velocity/deltaPosition/state) for
+debugging revival and movement issues; `es rigoff` / `es rigon` toggle the unguarded rig visual
 components (eyelid/gaze/feather/held-light-raycast; measured: no resolvable cost
 at saturation variance); `es benchgod on|off` makes players damage-immune so
 synthetic bench bots survive endgame hordes and the load stays an active siege
