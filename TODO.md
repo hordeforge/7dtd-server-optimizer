@@ -54,6 +54,17 @@ human cycle with `es animstate` dp readings. Until this lands,
 `Governor.AnimatorEmergency` stays default-false; `es animoff` remains
 bench-only with a known-degraded exit.
 
+Follow-up validation (2026-07-23, headless): `es animstate` confirms zombies
+spawned AFTER `es animoff` come up `en=True` - the probe only disables
+existing rigs, so the human report "post-off spawns moved fine" is explained
+(they ran full animators). Consequence for a permanent-off mode: it must also
+catch spawns (sweep or spawn-hook, as AnimatorEmergency.Enter already does)
+AND ship the supplementary-path speed compensation, else every zombie crawls.
+Bot-based displacement A/B (on vs off vs restored speed, no human) is written
+(`anim_validate.py`, session scratchpad) but needs the standard loadgen
+bring-up: reusing the optimizer save as bot bait left zombie AI dormant (0.0 m
+displacement even with animators on), so the measurement was void.
+
 ## Verification log
 
 - 2026-07-16: duplicate load/profiling ownership confirmed; removal started.
