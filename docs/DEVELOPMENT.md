@@ -59,14 +59,14 @@ Rebuild after **every** Steam update. Re-check Harmony targets against `Assembly
 | Path | Role |
 |---|---|
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | Dedicated hot path notes (gmUpdate, AI, mesh, networking) |
-| [`../../research/docs/loop-gmupdate.md`](../../research/docs/loop-gmupdate.md) | V3.0.1 gmUpdate phase map |
-| [`../../research/docs/entity-ai.md`](../../research/docs/entity-ai.md) | Entity/AI/path/fall/net deep chain |
+| [`../../7dtd-research/docs/loop-gmupdate.md`](../../7dtd-research/docs/loop-gmupdate.md) | V3.0.1 gmUpdate phase map |
+| [`../../7dtd-research/docs/entity-ai.md`](../../7dtd-research/docs/entity-ai.md) | Entity/AI/path/fall/net deep chain |
 | `tools/DumpGmUpdate.cs` | Frame Update-path dump |
 | `tools/DumpDeep.cs` | Entity/AI/path/manager dump + xrefs |
 | `tools/DumpOptScan.cs` | Large-method scan + optim-oriented dumps |
 | `tools/DumpDeeper.cs` | Multi-subsystem deeper dump (EAI, MoveHelper, constants) |
-| [`../../research/docs/INDEX.md`](../../research/docs/INDEX.md) | Index of all RE dump sets |
-| [`../../research/docs/loop.md`](../../research/docs/loop.md) | Complete dedicated game/sim loop map + open gaps |
+| [`../../7dtd-research/docs/INDEX.md`](../../7dtd-research/docs/INDEX.md) | Index of all RE dump sets |
+| [`../../7dtd-research/docs/loop.md`](../../7dtd-research/docs/loop.md) | Complete dedicated game/sim loop map + open gaps |
 | `tools/tests/test_re_dump_regen.py` | Regenerates DumpFrameEntries against local dedicated DLL |
 | [`OPTIMIZATION_CANDIDATES.md`](OPTIMIZATION_CANDIDATES.md) | Graded optim candidates (this project) |
 | [`OPTIMIZATION_IDEAS.md`](OPTIMIZATION_IDEAS.md) | Optim idea map |
@@ -74,11 +74,11 @@ Rebuild after **every** Steam update. Re-check Harmony targets against `Assembly
 | Sibling `7dtd-apm` | Host + bridge evidence (not in this repo) |
 | Sibling `7dtd-loadgen` | Controlled clients |
 
-Narratives under `research/docs/`; IL under `research/il/` is **generated**. Regenerate after game updates; do not redistribute game IL.
+Narratives under `7dtd-research/docs/`; IL under `7dtd-research/il/` is **generated**. Regenerate after game updates; do not redistribute game IL.
 
 ```bash
 mcs -r:tools/Mono.Cecil.dll -out:tools/DumpGmUpdate.exe tools/DumpGmUpdate.cs
-mono tools/DumpGmUpdate.exe "$DS/7DaysToDieServer_Data/Managed/Assembly-CSharp.dll" research/il/gmUpdate-VERSION
+mono tools/DumpGmUpdate.exe "$DS/7DaysToDieServer_Data/Managed/Assembly-CSharp.dll" 7dtd-research/il/gmUpdate-VERSION
 ```
 
 ## Research ideas (not commitments)

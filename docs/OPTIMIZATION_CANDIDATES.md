@@ -14,7 +14,7 @@
 
 **Owns:** graded A/B/C candidates, hot-path notes, APM probes, experiment order, Harmony target list.
 
-**Does not own:** raw IL dumps (those stay under `research/il/` as regenerable evidence).
+**Does not own:** raw IL dumps (those stay under `7dtd-research/il/` as regenerable evidence).
 
 | Related | Role |
 |---|---|
@@ -22,8 +22,8 @@
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | Stock hot path RE summary |
 | [`SIM_PARALLELISM.md`](SIM_PARALLELISM.md) | Threads / extract / conductor |
 | [`HOST_TUNING.md`](HOST_TUNING.md) | Ops CCD/NUMA/storage |
-| [`../../research/docs/loop.md`](../../research/docs/loop.md) | Full dedicated loop map |
-| [`../../research/docs/INDEX.md`](../../research/docs/INDEX.md) | IL dump index |
+| [`../../7dtd-research/docs/loop.md`](../../7dtd-research/docs/loop.md) | Full dedicated loop map |
+| [`../../7dtd-research/docs/INDEX.md`](../../7dtd-research/docs/INDEX.md) | IL dump index |
 
 Game version pin: **V3.0.1** dedicated `Assembly-CSharp`. Do not redistribute game IL.
 
@@ -537,7 +537,7 @@ Each: feature flag, dedicated-only, soft-fail log, FEATURES fidelity notes.
 
 ## 8. Loop surfaces (cross-check)
 
-Every Grade A/B row anchors a method on the dedicated loop map ([`../../research/docs/loop.md`](../../research/docs/loop.md)).
+Every Grade A/B row anchors a method on the dedicated loop map ([`../../7dtd-research/docs/loop.md`](../../7dtd-research/docs/loop.md)).
 
 | Surface | Method anchors | Grade |
 |---|---|---|
@@ -554,13 +554,13 @@ Every Grade A/B row anchors a method on the dedicated loop map ([`../../research
 
 | Evidence | Path |
 |---|---|
-| Frame / gmUpdate | `research/il/gmUpdate-v3.0.1/` |
-| Entity→AI→path | `research/il/deep-v3.0.1/` |
-| EAI/MoveHelper constants | `research/il/deeper-v3.0.1/` |
-| Large-method scan | `research/docs/inventory-opt-scan.md` + `research/il/opt-scan-v3.0.1/*_il.txt` |
-| Timer/AIDirector/net bands | `research/il/gaps-v3.0.1/` |
-| MB inventory | `research/il/frame-entries-v3.0.1/` |
-| Loop notes | `research/docs/inventory-loop-complete.md` + `research/il/loop-complete-v3.0.1/` |
+| Frame / gmUpdate | `7dtd-research/il/gmUpdate-v3.0.1/` |
+| Entity→AI→path | `7dtd-research/il/deep-v3.0.1/` |
+| EAI/MoveHelper constants | `7dtd-research/il/deeper-v3.0.1/` |
+| Large-method scan | `7dtd-research/docs/inventory-opt-scan.md` + `7dtd-research/il/opt-scan-v3.0.1/*_il.txt` |
+| Timer/AIDirector/net bands | `7dtd-research/il/gaps-v3.0.1/` |
+| MB inventory | `7dtd-research/il/frame-entries-v3.0.1/` |
+| Loop notes | `7dtd-research/docs/inventory-loop-complete.md` + `7dtd-research/il/loop-complete-v3.0.1/` |
 
 Regenerate dumps with `tools/Dump*.cs` (see DEVELOPMENT.md). Optim **narrative** lives only under `7dtd-optimizer/docs/`.
 
@@ -569,13 +569,13 @@ Regenerate dumps with `tools/Dump*.cs` (see DEVELOPMENT.md). Optim **narrative**
 ## 10. Bottleneck-audit additions (2026-07-19)
 
 Full ranked catalog + bang-for-buck ordering:
-[`../../research/docs/bottlenecks.md`](../../research/docs/bottlenecks.md) (42 verified
+[`../../7dtd-research/docs/bottlenecks.md`](../../7dtd-research/docs/bottlenecks.md) (42 verified
 findings). New/actionable levers not already graded above, by impact-per-line:
 
 | Lever | Grade | Code | Impact |
 |---|---|---|---|
 | **`ConnectionManager.SendPackage` entityId-map lookup (`FastSendPatch`, v1.6.0)** | **A - SHIPPED + VALIDATED** | done (prefix, `Network.FastSingleTargetSend`) | removes the O(clients) linear `Clients` scan for pure single-target sends via the existing `ForEntityId` map. A/B: correct (60/60, 120/120 stable), ms_per_tick **-1.8%@60p -> -4.2%@128p**, `ConnectionManager.Update` -5.2%@128p; scales toward the 450-500p death-spiral |
-| ~~`PooledExpandableMemoryStream` presize + retain~~ | **downgraded** | n/a | RE correction: `Reset()`=`SetLength(0)` already retains the buffer; not a realloc problem. Serialization churn is a *count* problem -> serialize-once ([`../../research/docs/allocation-reuse.md`](../../research/docs/allocation-reuse.md)) |
+| ~~`PooledExpandableMemoryStream` presize + retain~~ | **downgraded** | n/a | RE correction: `Reset()`=`SetLength(0)` already retains the buffer; not a realloc problem. Serialization churn is a *count* problem -> serialize-once ([`../../7dtd-research/docs/allocation-reuse.md`](../../7dtd-research/docs/allocation-reuse.md)) |
 | Path admission cap + `ASPPathFinder` reuse | A/B | small | bounds path-request spikes + per-build alloc at `EntityAlive.FindPath` enqueue |
 | Off-sim `Chunk.write` encode / cached chunk blobs | B | moderate (threading) | chunk pipeline is 56-60% of tick; biggest single CPU reclaim |
 | Shared spatial interest grid (chunk-cell uniform grid) | B/C | large (new subsystem) | collapses the O(N^2.26)/O(N^2.27) player walls + E x P products toward linear; reused by `NetEntityDistribution` interest, `GetClosestPlayer` (A4), and the `SendPackage` map |
@@ -588,7 +588,7 @@ missing spatial index or a serial main-thread stage**. Spatial bucketing + off-t
 
 ## Changelog
 
-- **2026-07-19:** bottleneck audit (42 verified) consolidated into `research/docs/bottlenecks.md`; §10 additions (SendPackage entityId-map = top new bang-for-buck, buffer presize+retain, off-sim chunk encode, spatial interest grid). GC megapause measured (479 ms @ 6.9 GB); allocation-reuse research documented.
+- **2026-07-19:** bottleneck audit (42 verified) consolidated into `7dtd-research/docs/bottlenecks.md`; §10 additions (SendPackage entityId-map = top new bang-for-buck, buffer presize+retain, off-sim chunk encode, spatial interest grid). GC megapause measured (479 ms @ 6.9 GB); allocation-reuse research documented.
 - **2026-07-17:** scale ladder (exp8, 99 entities) added; per-entity tick cost measured linear (~0.08 ms), 1000-AI extrapolation and GC-pause-as-lag conclusion recorded.
 - **2026-07-16 (later):** 4b measured-evidence campaign added; experiment order re-ranked (chunk streaming first).
-- **2026-07-16:** Moved from `research/il/opt-scan-v3.0.1/` into optimizer project; merged deeper/gaps optim findings; IL folders keep dumps only.
+- **2026-07-16:** Moved from `7dtd-research/il/opt-scan-v3.0.1/` into optimizer project; merged deeper/gaps optim findings; IL folders keep dumps only.

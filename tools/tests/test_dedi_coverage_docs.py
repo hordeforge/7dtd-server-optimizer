@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Structural proof: dedicated RE coverage docs + dump evidence exist and are IL-backed.
 
-Drives real repo artifacts under research/docs and research/il (no hard-coded
+Drives real repo artifacts under 7dtd-research/docs and 7dtd-research/il (no hard-coded
 game constants as the pass condition; asserts files and dump-backed markers).
 """
 from __future__ import annotations
@@ -11,8 +11,8 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
-DOCS = ROOT / "research" / "docs"
-IL = ROOT / "research" / "il"
+DOCS = ROOT / "7dtd-research" / "docs"
+IL = ROOT / "7dtd-research" / "il"
 
 FAMILY_DOCS = [
     "coverage.md",
@@ -28,7 +28,7 @@ FAMILY_DOCS = [
     "INDEX.md",
 ]
 
-# Product RealEarth docs (not under research/docs)
+# Product RealEarth docs (not under 7dtd-research/docs)
 PRODUCT_DOCS = ROOT / "7days-realworld" / "docs"
 PRODUCT_REALEARTH = [
     "realearth-runtime.md",
@@ -60,7 +60,7 @@ TOOLS = [
 
 
 def has_il_backed_claim(text: str) -> bool:
-    if "research/il/" in text or "../il/" in text or "il/" in text:
+    if "7dtd-research/il/" in text or "../il/" in text or "il/" in text:
         if re.search(
             r"IL\s*=\s*\d+|IL=\d+|y\s*>>\s*2|ldc\.i4|ChunkBlockYDim|ticksPerSecond",
             text,
@@ -169,13 +169,13 @@ def main() -> int:
             if old in text:
                 fails.append(f"{name} still references {old}")
 
-    # RealEarth product docs live under 7days-realworld/docs (not research/docs)
+    # RealEarth product docs live under 7days-realworld/docs (not 7dtd-research/docs)
     for name in PRODUCT_REALEARTH:
         p = PRODUCT_DOCS / name
         if not p.is_file() or p.stat().st_size < 200:
             fails.append(f"missing product RealEarth doc: {p}")
         if (DOCS / name).exists():
-            fails.append(f"RealEarth doc still under research/docs: {name}")
+            fails.append(f"RealEarth doc still under 7dtd-research/docs: {name}")
 
     # research INDEX should not own product RealEarth as primary
     idx = (DOCS / "INDEX.md").read_text(encoding="utf-8", errors="replace")

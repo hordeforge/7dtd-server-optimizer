@@ -4,5 +4,5 @@ dist/
 tools/*.exe
 *.log
 # Generated Cecil dumps (may contain game IL excerpts)
-../research/il/
+../7dtd-research/il/
 tools/tests/_out/

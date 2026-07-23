@@ -161,7 +161,7 @@ class DumpDediComplete {
     book.AppendLine("- NetPackage* types: "+asm.MainModule.Types.Count(t=>t.Name.StartsWith("NetPackage")));
 
     File.WriteAllText(Path.Combine(outDir,"DEDI_COMPLETE_auto.md"), book.ToString());
-    File.WriteAllText(Path.Combine(outDir,"INDEX.md"), "# dedi-complete dump\n\nAuto: DEDI_COMPLETE_auto.md\nNarrative: research/docs/coverage.md\n");
+    File.WriteAllText(Path.Combine(outDir,"INDEX.md"), "# dedi-complete dump\n\nAuto: DEDI_COMPLETE_auto.md\nNarrative: 7dtd-research/docs/coverage.md\n");
     File.WriteAllText(Path.Combine(outDir,"README.md"), "# dedi-complete-v3.0.1\n\nRegenerable. DumpDediComplete.cs\n");
     Console.WriteLine("OK types="+total+" methods="+withBody+" -> "+outDir);
   }

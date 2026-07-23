@@ -1,7 +1,7 @@
 # 7 Days to Die Dedicated Server - reverse engineering notes
 
 **Owns:** EfficientServer-oriented map of the dedicated hot path (optim context).  
-**Not:** full generic RE narratives ([research loop](../../research/docs/loop.md)), feature behavior ([FEATURES](FEATURES.md)), host topology ([HOST_TUNING](HOST_TUNING.md)).
+**Not:** full generic RE narratives ([research loop](../../7dtd-research/docs/loop.md)), feature behavior ([FEATURES](FEATURES.md)), host topology ([HOST_TUNING](HOST_TUNING.md)).
 
 **Target:** Steam dedicated server **V 3.0.1 (b4)**  
 **Engine:** Unity **2022.3.62f2** (Mono, not IL2CPP)  
@@ -12,10 +12,10 @@
 This document maps the **real hot path** of the official dedicated process. It is research for performance work, not a redistribution of game source.
 
 **Complete loop map (peers, all subsystem families, open gaps):**
-[`../../research/docs/loop.md`](../../research/docs/loop.md)  
+[`../../7dtd-research/docs/loop.md`](../../7dtd-research/docs/loop.md)  
 **Stock ceilings (sim, net, AI, GC):**
-[`../../research/docs/engine-limitations.md`](../../research/docs/engine-limitations.md)  
-**Dump index:** [`../../research/docs/INDEX.md`](../../research/docs/INDEX.md)
+[`../../7dtd-research/docs/engine-limitations.md`](../../7dtd-research/docs/engine-limitations.md)  
+**Dump index:** [`../../7dtd-research/docs/INDEX.md`](../../7dtd-research/docs/INDEX.md)
 
 ## Why a full reimplementation is the wrong first move
 
@@ -55,7 +55,7 @@ Launch flags used by stock `startserver.sh`:
 
 **Critical RE fact (V3.0.1):** `ConnectionManager.Update` and `DynamicMeshManager.Update` are **not** called from `gmUpdate`. They are separate `MonoBehaviour` updates on the same Unity frame. Hijacking only `gmUpdate` does not own net or mesh.
 
-Deep dump + phase map: [`../../research/docs/loop-gmupdate.md`](../../research/docs/loop-gmupdate.md) (regenerate with `tools/DumpGmUpdate.cs`).
+Deep dump + phase map: [`../../7dtd-research/docs/loop-gmupdate.md`](../../7dtd-research/docs/loop-gmupdate.md) (regenerate with `tools/DumpGmUpdate.cs`).
 
 ---
 
@@ -218,9 +218,9 @@ GetPath → SetPath → UpdateNavigation → MoveHelper → LookHelper
 
 Stock scale **throttles decision AI**, not path-follow/move helpers. EfficientServer far **skip of whole `updateTasks`** is stronger (also stops nav follow that frame).
 
-Deep chain dump: [`../../research/docs/entity-ai.md`](../../research/docs/entity-ai.md).
+Deep chain dump: [`../../7dtd-research/docs/entity-ai.md`](../../7dtd-research/docs/entity-ai.md).
 Optim candidates (graded): [`OPTIMIZATION_CANDIDATES.md`](OPTIMIZATION_CANDIDATES.md).
-RE dump index: [`../../research/docs/INDEX.md`](../../research/docs/INDEX.md).
+RE dump index: [`../../7dtd-research/docs/INDEX.md`](../../7dtd-research/docs/INDEX.md).
 
 ### Async entity create
 
@@ -295,16 +295,16 @@ Cecil helpers under `tools/` (`DumpGmUpdate.cs`, `Dump*.cs`, `Find*.cs`).
 
 V3.0.1 dumps:
 
-- Frame narrative: [`../../research/docs/loop-gmupdate.md`](../../research/docs/loop-gmupdate.md); dumps: [`../../research/il/gmUpdate-v3.0.1/`](../../research/il/gmUpdate-v3.0.1/)
-- Entity/AI/path/net/fall: [`../../research/docs/entity-ai.md`](../../research/docs/entity-ai.md); dumps: [`../../research/il/deep-v3.0.1/`](../../research/il/deep-v3.0.1/)
-- Optim scan dumps: [`../../research/il/opt-scan-v3.0.1/`](../../research/il/opt-scan-v3.0.1/) (raw only)
-- Deeper multi-subsystem dumps: [`../../research/il/deeper-v3.0.1/`](../../research/il/deeper-v3.0.1/)
+- Frame narrative: [`../../7dtd-research/docs/loop-gmupdate.md`](../../7dtd-research/docs/loop-gmupdate.md); dumps: [`../../7dtd-research/il/gmUpdate-v3.0.1/`](../../7dtd-research/il/gmUpdate-v3.0.1/)
+- Entity/AI/path/net/fall: [`../../7dtd-research/docs/entity-ai.md`](../../7dtd-research/docs/entity-ai.md); dumps: [`../../7dtd-research/il/deep-v3.0.1/`](../../7dtd-research/il/deep-v3.0.1/)
+- Optim scan dumps: [`../../7dtd-research/il/opt-scan-v3.0.1/`](../../7dtd-research/il/opt-scan-v3.0.1/) (raw only)
+- Deeper multi-subsystem dumps: [`../../7dtd-research/il/deeper-v3.0.1/`](../../7dtd-research/il/deeper-v3.0.1/)
 
 Do not commit game IL or `Assembly-CSharp.dll`. Regenerate after every game update ([`DEVELOPMENT.md`](DEVELOPMENT.md)).
 
 ```bash
 cd tools && mcs -r:Mono.Cecil.dll -out:DumpGmUpdate.exe DumpGmUpdate.cs
-mono DumpGmUpdate.exe "/path/to/7DaysToDieServer_Data/Managed/Assembly-CSharp.dll" ../research/il/gmUpdate-VERSION
+mono DumpGmUpdate.exe "/path/to/7DaysToDieServer_Data/Managed/Assembly-CSharp.dll" ../7dtd-research/il/gmUpdate-VERSION
 ```
 
 ## Legal / distribution
@@ -316,11 +316,11 @@ mono DumpGmUpdate.exe "/path/to/7DaysToDieServer_Data/Managed/Assembly-CSharp.dl
 
 ## Open gaps
 
-See [`../../research/docs/loop.md`](../../research/docs/loop.md) §14. Several former gaps closed in [`../../research/docs/closed-gaps.md`](../../research/docs/closed-gaps.md) (timer 20 Hz, AIDirector CreateComponents, net package thresholds, AstarPath). Still open: Unity script order, entity Behaviour.enabled on dedi, region serializers, native LiteNet/EAC.
+See [`../../7dtd-research/docs/loop.md`](../../7dtd-research/docs/loop.md) §14. Several former gaps closed in [`../../7dtd-research/docs/closed-gaps.md`](../../7dtd-research/docs/closed-gaps.md) (timer 20 Hz, AIDirector CreateComponents, net package thresholds, AstarPath). Still open: Unity script order, entity Behaviour.enabled on dedi, region serializers, native LiteNet/EAC.
 
 ## Changelog
 
-- **2026-07-16:** Optim candidates doc under `docs/OPTIMIZATION_CANDIDATES.md` (not research/il).
+- **2026-07-16:** Optim candidates doc under `docs/OPTIMIZATION_CANDIDATES.md` (not 7dtd-research/il).
 - **2026-07-16:** Gap-close: ticks/sec 20, path→AstarPath, AIDirector component list, net bands.
 - **2026-07-16:** loop complete map link; dual entity paths; open gaps pointer.
 - **2026-07-16:** Link deeper synthesis (path drain ≤8/slice, MoveHelper, EAI rank); RESEARCH_INDEX.
@@ -332,9 +332,9 @@ See [`../../research/docs/loop.md`](../../research/docs/loop.md) §14. Several f
 |---|---|
 | [FEATURES.md](FEATURES.md) | Shipped patches |
 | [HOST_TUNING.md](HOST_TUNING.md) | Host ops |
-| [loop.md](../../research/docs/loop.md) | Full loop narrative |
-| [engine-limitations.md](../../research/docs/engine-limitations.md) | Stock ceilings (sim, net, AI, GC) |
-| [measured-scaling.md](../../research/docs/measured-scaling.md) | Live scale |
+| [loop.md](../../7dtd-research/docs/loop.md) | Full loop narrative |
+| [engine-limitations.md](../../7dtd-research/docs/engine-limitations.md) | Stock ceilings (sim, net, AI, GC) |
+| [measured-scaling.md](../../7dtd-research/docs/measured-scaling.md) | Live scale |
 | [OPTIMIZATION_CANDIDATES.md](OPTIMIZATION_CANDIDATES.md) | Candidates |
 
 ## Changelog

@@ -6,8 +6,8 @@ built. Promote each lever only with APM before/after + a desync/fidelity check.
 **Owns:** the detailed attack plan for `NetEntityDistribution` / `ConnectionManager`
 serialization cost. Graded summary lives in
 [`OPTIMIZATION_CANDIDATES.md`](OPTIMIZATION_CANDIDATES.md) (B3, A4); measured
-exponents in [`../../research/docs/measured-scaling.md`](../../research/docs/measured-scaling.md)
-and the loop RE in [`../../research/docs/network.md`](../../research/docs/network.md).
+exponents in [`../../7dtd-research/docs/measured-scaling.md`](../../7dtd-research/docs/measured-scaling.md)
+and the loop RE in [`../../7dtd-research/docs/network.md`](../../7dtd-research/docs/network.md).
 
 ---
 

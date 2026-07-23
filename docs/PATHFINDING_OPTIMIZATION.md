@@ -1,7 +1,7 @@
 # Pathfinding / nav-graph optimization (`AstarManager.UpdateGraphs`)
 
 **Owns:** pathfinding optim notes.  
-**Not:** entity AI full map ([research entity-ai](../../research/docs/entity-ai.md)).
+**Not:** entity AI full map ([research entity-ai](../../7dtd-research/docs/entity-ai.md)).
 
 
 **Status:** P1 **BUILT + VALIDATED** (EfficientServer v1.3.0, `AstarGraphThrottlePatch`).

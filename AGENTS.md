@@ -24,7 +24,7 @@ Default config: `DedicatedOnly: true`. Do not turn this into a client overhaul, 
 3. **Rebuild and re-validate Harmony targets after every game update.** Targets break silently on Steam patches.
 4. **Fail soft per group.** One missing target must not kill the whole mod (`PatchAllSafe` pattern).
 5. **Do not implement host topology (affinity, NUMA, IRQ) inside the DLL.** Document under `docs/HOST_TUNING.md` only.
-6. **Do not redistribute `Assembly-CSharp` or bulk game IL.** Dumps under `../research/il/` are regenerable evidence only; narratives live under `../research/docs/`.
+6. **Do not redistribute `Assembly-CSharp` or bulk game IL.** Dumps under `../7dtd-research/il/` are regenerable evidence only; narratives live under `../7dtd-research/docs/`.
 7. **No AI attribution** in commits, docs, or comments. **No em dashes** in any text this project ships.
 8. In-game mod DLL is **net48** against dedicated Managed; stock `0_TFP_Harmony` required; EAC off on test servers.
 
@@ -62,20 +62,20 @@ Source: `Source/EfficientServer/`. Packaged mod name: `Mods/EfficientServer/`. H
 | `docs/SIM_PARALLELISM.md` | Threading / extract / hot-path catalog |
 | `docs/SCALE_1000x10000.md` | Extreme scale thought experiment |
 | `docs/HOST_TUNING.md` | Host ops checklist |
-| `../research/docs/loop.md` | Full dedicated loop RE map |
-| `../research/docs/INDEX.md` | Research docs + dump index |
+| `../7dtd-research/docs/loop.md` | Full dedicated loop RE map |
+| `../7dtd-research/docs/INDEX.md` | Research docs + dump index |
 | `TODO.md` | Phased implementation plan |
 
 ## RE dumps
 
 ```bash
-# Example: regenerate a dump set into workspace research/il/
+# Example: regenerate a dump set into workspace 7dtd-research/il/
 mcs -r:tools/Mono.Cecil.dll -out:tools/DumpGmUpdate.exe tools/DumpGmUpdate.cs
 mono tools/DumpGmUpdate.exe "$DS/7DaysToDieServer_Data/Managed/Assembly-CSharp.dll" \
-  ../research/il/gmUpdate-VERSION
+  ../7dtd-research/il/gmUpdate-VERSION
 ```
 
-Human synthesis belongs in `../research/docs/` or `docs/`, never as optim product narrative inside dump folders. Automated check: `tools/tests/test_re_dump_regen.py` (needs dedicated install + mcs/mono).
+Human synthesis belongs in `../7dtd-research/docs/` or `docs/`, never as optim product narrative inside dump folders. Automated check: `tools/tests/test_re_dump_regen.py` (needs dedicated install + mcs/mono).
 
 ## Sibling projects
 

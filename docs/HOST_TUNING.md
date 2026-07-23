@@ -4,8 +4,8 @@
 **Owns:** CCD/NUMA/affinity/IRQ/storage host placement (ops).  
 **Not:** in-process Harmony optim ([FEATURES](FEATURES.md)), game sim map ([ARCHITECTURE](ARCHITECTURE.md)), RealEarth product status.  
 **Companion docs:** [`ARCHITECTURE.md`](ARCHITECTURE.md) (sim hot path), [`DEVELOPMENT.md`](DEVELOPMENT.md) (EfficientServer), sibling `7dtd-apm` (evidence), workspace [`MODDING_BEST_PRACTICES.md`](../../MODDING_BEST_PRACTICES.md).  
-**Engine loop / scale evidence:** [`../../research/docs/loop.md`](../../research/docs/loop.md), [`../../research/docs/measured-scaling.md`](../../research/docs/measured-scaling.md).  
-**Stock ceilings:** [`../../research/docs/engine-limitations.md`](../../research/docs/engine-limitations.md).
+**Engine loop / scale evidence:** [`../../7dtd-research/docs/loop.md`](../../7dtd-research/docs/loop.md), [`../../7dtd-research/docs/measured-scaling.md`](../../7dtd-research/docs/measured-scaling.md).  
+**Stock ceilings:** [`../../7dtd-research/docs/engine-limitations.md`](../../7dtd-research/docs/engine-limitations.md).
 
 EfficientServer only changes **in-process** behavior via Harmony. Much of dedicated performance is **outside** the game DLL: stock config, workload shape, storage, and CPU topology. This document is the measure-first checklist for host and process placement.
 
@@ -357,9 +357,9 @@ Is MaxSpawnedZombies / view distance / mesh / SandboxCode sane?
 | [ARCHITECTURE](ARCHITECTURE.md) | Single-thread sim hot path |
 | [FEATURES](FEATURES.md) | EfficientServer feature groups |
 | [SCALE_1000x10000](SCALE_1000x10000.md) | Extreme scale design notes |
-| [research loop](../../research/docs/loop.md) | gmUpdate / dedicated frame |
-| [measured-scaling](../../research/docs/measured-scaling.md) | Live player/entity scaling laws |
-| [runtime-tuning](../../research/docs/runtime-tuning.md) | GC / FPS process knobs |
+| [research loop](../../7dtd-research/docs/loop.md) | gmUpdate / dedicated frame |
+| [measured-scaling](../../7dtd-research/docs/measured-scaling.md) | Live player/entity scaling laws |
+| [runtime-tuning](../../7dtd-research/docs/runtime-tuning.md) | GC / FPS process knobs |
 | APM | [`../../7dtd-apm/docs/APM.md`](../../7dtd-apm/docs/APM.md) |
 | Loadgen | [`../../7dtd-loadgen/docs/README.md`](../../7dtd-loadgen/docs/README.md) |
 

@@ -3,7 +3,7 @@
 Authoritative record of every lever: RE target, mechanism, config knob, IL target,
 A/B session IDs + numbers, and verdict. Companion: graded backlog
 [`OPTIMIZATION_CANDIDATES.md`](OPTIMIZATION_CANDIDATES.md); bottleneck catalog
-[`../../research/docs/bottlenecks.md`](../../research/docs/bottlenecks.md); allocation
+[`../../7dtd-research/docs/bottlenecks.md`](../../7dtd-research/docs/bottlenecks.md); allocation
 [`ALLOCATION_UPSTREAM.md`](ALLOCATION_UPSTREAM.md).
 
 All A/B captures: `7dtd-apm capture --only all,alloc`, 150 s window, matched load,
@@ -233,7 +233,7 @@ Deep bottom-up RE proved the two big remaining costs have **no safe Harmony leve
   each nearby player). A spatial grid cannot cull genuinely-nearby players, a
   conservative cull breaks removals (desync), and network LOD hits the same
   close-high-interest wall as the AI stride. See
-  [`../../research/docs/bottlenecks.md`](../../research/docs/bottlenecks.md) §5.
+  [`../../7dtd-research/docs/bottlenecks.md`](../../7dtd-research/docs/bottlenecks.md) §5.
 
 So the next-best levers are **not Harmony patches** - they are process/ops and config:
 
@@ -259,7 +259,7 @@ zero-fidelity-risk lever** - trades RAM (128 GB available) for fewer GC collecti
 (env is EAC-safe and set before GC init; the mod path would force EAC-off). Prefer
 `2` if RSS matters; `1` for max headroom. Not a `ms_per_tick` headline (GC is
 downstream of allocation) but a real STW-smoothness win. See
-[`../../research/docs/runtime-tuning.md`](../../research/docs/runtime-tuning.md).
+[`../../7dtd-research/docs/runtime-tuning.md`](../../7dtd-research/docs/runtime-tuning.md).
 
 ## 3c. P4 InitScan node-array pool (first UNSAFE lever, A/B 2026-07-20)
 
@@ -948,4 +948,4 @@ replication + per-entity AI (update/vision/EAI) + character physics + nav scan. 
 the remaining safe Harmony levers are small (each < 1% of tick); the real gains are
 the O(N^2) network wall (spatial grid, risky) and the allocation floor (~30% of
 aggregate CPU is GC + array-init). The APM now auto-discovers hot paths
-(`research/docs/bottlenecks.md` §5b), so future targets are data-driven, not guessed.
+(`7dtd-research/docs/bottlenecks.md` §5b), so future targets are data-driven, not guessed.

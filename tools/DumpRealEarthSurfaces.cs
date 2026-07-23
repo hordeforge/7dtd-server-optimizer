@@ -1,7 +1,7 @@
 // Regenerable RE dump: surfaces RealEarth Streamed path depends on.
 // Chunk storage, height/index math, claims/PPL, Origin, region files, prefab place,
 // chunk gen/load pipeline, light/stability hooks, World height APIs.
-// Output: research/il/realearth-surfaces-VERSION/
+// Output: 7dtd-research/il/realearth-surfaces-VERSION/
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -37,7 +37,7 @@ class DumpRealEarthSurfaces
     book.AppendLine("Regenerate:");
     book.AppendLine("```");
     book.AppendLine("mcs -r:Mono.Cecil.dll -out:DumpRealEarthSurfaces.exe DumpRealEarthSurfaces.cs");
-    book.AppendLine("mono DumpRealEarthSurfaces.exe $ASM research/il/realearth-surfaces-VERSION");
+    book.AppendLine("mono DumpRealEarthSurfaces.exe $ASM 7dtd-research/il/realearth-surfaces-VERSION");
     book.AppendLine("```");
     book.AppendLine();
     book.AppendLine("Narrative: `7days-realworld/docs/realearth-surfaces.md`");

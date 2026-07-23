@@ -1,5 +1,5 @@
 // Regenerable RE: WorldConstants vertical dims + terrain height / generate surfaces.
-// Output: research/il/terrain-VERSION/ (raw) + feeds research/docs/terrain-height.md
+// Output: 7dtd-research/il/terrain-VERSION/ (raw) + feeds 7dtd-research/docs/terrain-height.md
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -32,7 +32,7 @@ class DumpTerrain
     book.AppendLine("UTC: " + DateTime.UtcNow.ToString("u"));
     book.AppendLine("Assembly: `" + args[0] + "`");
     book.AppendLine();
-    book.AppendLine("Regenerate: `mcs -r:Mono.Cecil.dll -out:DumpTerrain.exe DumpTerrain.cs && mono DumpTerrain.exe $ASM research/il/terrain-VERSION`");
+    book.AppendLine("Regenerate: `mcs -r:Mono.Cecil.dll -out:DumpTerrain.exe DumpTerrain.cs && mono DumpTerrain.exe $ASM 7dtd-research/il/terrain-VERSION`");
     book.AppendLine();
 
     Section("1. WorldConstants and related literals");
