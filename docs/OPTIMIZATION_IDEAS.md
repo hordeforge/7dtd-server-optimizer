@@ -315,8 +315,8 @@ Is the bottleneck a content mod TE/NPC pack?
 - Extract sim / threading policy / hot-path catalog: [`SIM_PARALLELISM.md`](SIM_PARALLELISM.md) (§5-7)
 - Stock frame RE: [`ARCHITECTURE.md`](ARCHITECTURE.md)
 - Dedicated loop RE map: [`../../7dtd-research/docs/loop.md`](../../7dtd-research/docs/loop.md)
-- NAIWAZI ServerKit reconstruction (gateway split, free AC/Bot RE): [`../../7dtd-research/naiwazi/NOTES.md`](../../7dtd-research/naiwazi/NOTES.md)
-- ServerTools (dmustanger) admin suite, optim-relevant bits: [`../../7dtd-research/7dtd-ServerTools/NOTES.md`](../../7dtd-research/7dtd-ServerTools/NOTES.md)
+- NAIWAZI ServerKit reconstruction (gateway split, free AC/Bot RE): [`../../7dtd-research/oss-tools/naiwazi.md`](../../7dtd-research/oss-tools/naiwazi.md)
+- ServerTools (dmustanger) admin suite, optim-relevant bits: [`../../7dtd-research/oss-tools/servertools.md`](../../7dtd-research/oss-tools/servertools.md)
 - Open-source tools survey (IceCoffee, SphereII, CSMM, MVirus, OCB, Allocs, …): [`../../7dtd-research/oss-tools/NOTES.md`](../../7dtd-research/oss-tools/NOTES.md)
 
 ## Changelog
