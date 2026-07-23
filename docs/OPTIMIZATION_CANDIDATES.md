@@ -557,10 +557,10 @@ Every Grade A/B row anchors a method on the dedicated loop map ([`../../7dtd-res
 | Frame / gmUpdate | `7dtd-research/il/gmUpdate-v3.0.1/` |
 | Entity→AI→path | `7dtd-research/il/deep-v3.0.1/` |
 | EAI/MoveHelper constants | `7dtd-research/il/deeper-v3.0.1/` |
-| Large-method scan | `7dtd-research/docs/inventory-opt-scan.md` + `7dtd-research/il/opt-scan-v3.0.1/*_il.txt` |
+| Large-method scan | `7dtd-research/docs/inventories/opt-scan.md` + `7dtd-research/il/opt-scan-v3.0.1/*_il.txt` |
 | Timer/AIDirector/net bands | `7dtd-research/il/gaps-v3.0.1/` |
 | MB inventory | `7dtd-research/il/frame-entries-v3.0.1/` |
-| Loop notes | `7dtd-research/docs/inventory-loop-complete.md` + `7dtd-research/il/loop-complete-v3.0.1/` |
+| Loop notes | `7dtd-research/docs/inventories/loop-complete.md` + `7dtd-research/il/loop-complete-v3.0.1/` |
 
 Regenerate dumps with `tools/Dump*.cs` (see DEVELOPMENT.md). Optim **narrative** lives only under `7dtd-optimizer/docs/`.
 
