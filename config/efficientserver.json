@@ -38,7 +38,9 @@
   "Pathfinding": {
     "GraphUpdateEveryTicks": 4,
     "MoveRescanThresholdSq": 100,
-    "PoolInitScanNodes": false
+    "PoolInitScanNodes": false,
+    "MaxPathEnqueuesPerTick": 0,
+    "DropPathWhenFarDistSq": 0
   },
   "Network": {
     "FastSingleTargetSend": true,

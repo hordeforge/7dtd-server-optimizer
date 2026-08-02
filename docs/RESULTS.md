@@ -982,3 +982,29 @@ to fully recover). Designed next lever (unbuilt): flip `cullingMode` to
 renderer, so evaluation should stop for the same win while the root-motion
 binding survives; needs a perf re-validation (does it reproduce 147->85 ms?)
 plus one more human cycle. Tracked in TODO.
+
+## 3t. CullCompletely animator emergency + path admission live gate (2026-08-02)
+
+Harness: `scripts/validate_anim_path_admission.py` (loadgen bots + telnet).
+Session report: `server/logs/validate_anim_path_20260802_141640.json`.
+
+**Load:** 8 bots + ~98 endgame zombies, Navezgane, EfficientServer shipping defaults
+(path knobs 0). Frame stayed at the healthy ~50 ms idle floor (not a stress ceiling).
+
+| Check | Result | Evidence |
+|---|---|---|
+| Join | PASS | 8/8 bots |
+| `es animoff` CullCompletely | **PASS** | log: ENTER CullCompletely on **97** rigs; animstate off cull=`CullCompletely` n=97 |
+| `es animon` restore | **PASS** | log: EXIT restored cullingMode on **97** rigs |
+| Root-motion after restore | **PASS** | animstate: **96** moving (vel>0.05), **34** with `dp>0` (e.g. 0.0958 / 0.0521). Not every mover has non-zero dp (idle/supplementary motion still present) |
+| Frame win under stress | **SKIP_light_load** | baseline frame ~50 ms; no over-budget win claim at this load |
+| Path admission fidelity | **PASS** | cap=64, dropFarSq=2500 via `es reload`; alive stayed 98; no entity collapse |
+| Path frame | PASS_or_noise | tickAvg ~20.7 -> 21.3 ms at light load (noise; not a claim) |
+
+**Honest takeaways:**
+1. CullCompletely enter/exit is **mechanically live-validated** (rig counts match).
+2. Exit is **better than enabled=false** (non-zero dp on many movers); residual dp=0 on
+   some walkers remains - not a full green light for default-on `AnimatorEmergency`.
+3. Path admission knobs reload live and do not collapse the horde at this load.
+4. Stress A/B (64p + 200+z over budget) still needed for a frame-ms prize claim.
+

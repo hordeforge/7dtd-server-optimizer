@@ -1,6 +1,6 @@
 # Plan: Animator CullCompletely emergency + path admission
 
-**Status:** built; measure open  
+**Status:** built; light-load live gate PASS; stress measure open  
 **Date:** 2026-07-28  
 **Targets:** EfficientServer (Harmony, net48)
 
@@ -59,4 +59,12 @@ near players. Do not claim ms/tick win without APM session IDs.
 - [x] ModApi register + ConfigNote
 - [x] CONFIG.md / FEATURES / PERF brief / TODO
 - [x] `make build` + `make test` (build OK; tests PASS with DOTNET_ROOT)
-- [ ] Commit (optimizer only for code)  # next
+- [x] Commit (optimizer only for code) `ca9a0fd`
+
+## D. Light-load live gate (2026-08-02)
+
+- [x] Install EfficientServer with CullCompletely + PathAdmission
+- [x] Loadgen 8 bots + ~100 endgame (Navezgane)
+- [x] animoff/animon + animstate dp check
+- [x] path cap/drop reload fidelity
+- [ ] Stress (64p, over-budget frame) for animator ms win
