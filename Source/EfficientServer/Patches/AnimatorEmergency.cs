@@ -4,34 +4,39 @@ using UnityEngine;
 namespace EfficientServer.Patches
 {
     /// <summary>
-    /// Emergency animator shutdown, driven by the governor's second escalation
-    /// tier. Measured basis (RESULTS 3o + fence check): at 64 players + ~400
-    /// endgame zombies the animator path (worker-job compute + the main-thread
-    /// FENCES on those jobs) is ~60 ms of a ~147 ms saturated frame (~40%) -
-    /// disabling all enemy animators recovered the frame from ~147 to ~85 ms.
+    /// Emergency animator cost cut, driven by the governor's second escalation
+    /// tier (or `es animoff` bench probe). Measured basis (RESULTS 3o + fence
+    /// check): at 64 players + ~400 endgame zombies the animator path is ~60 ms
+    /// of a ~147 ms saturated frame (~40%). Disabling evaluation recovered
+    /// ~147 -> ~85 ms.
     ///
-    /// While active, combat fidelity degrades in known ways (attack cadence falls
-    /// back to its 2 s wall-clock timer, stuns clear next tick, movement uses the
-    /// supplementary displacement path instead of root motion) - the same
-    /// trade-class as TickGuard, but nothing despawns and clients see no visual
-    /// difference (zombie animation is client-local).
+    /// Mechanism (v1.18+): set <see cref="Animator.cullingMode"/> to
+    /// <see cref="AnimatorCullingMode.CullCompletely"/> while leaving
+    /// <c>enabled = true</c>. A headless dedicated server has no visible
+    /// renderers, so CullCompletely stops evaluation without tearing down the
+    /// root-motion binding. The previous approach (<c>enabled = false</c>) left
+    /// <c>deltaPosition = 0</c> forever after restore (RESULTS 3s) - refuted
+    /// revival: bare enable, Rebind, re-push WalkType/IsAlive.
     ///
-    /// KNOWN DEFECT (human eval + es animstate, RESULTS 3s): exit cannot fully
-    /// restore. After enabled=false->true the animator evaluates (state advances,
-    /// applyRootMotion intact, AvatarRootMotion forwarder alive) but deltaPosition
-    /// stays 0 forever, so restored zombies move at supplementary-path crawl until
-    /// death. Rebind + re-pushing one-shot params does not revive the delta.
-    /// Planned rework: switch cullingMode to CullCompletely instead of toggling
-    /// enabled (headless = everything culled = evaluation stops, binding survives).
-    /// Until then this tier stays config-default-false.
+    /// While active, combat fidelity still degrades in known ways (attack
+    /// cadence falls back to wall-clock timer, stuns clear next tick, movement
+    /// uses the supplementary displacement path). Clients still animate locally.
+    /// <see cref="GovernorConfig.AnimatorEmergency"/> stays default-false until
+    /// a live human cycle clears the exit path with <c>es animstate</c> dp &gt; 0.
     /// </summary>
     public static class AnimatorEmergency
     {
-        static readonly List<Animator> Disabled = new List<Animator>();
+        // instanceId -> prior culling mode. UnityEngine.Object cannot be a reliable
+        // dictionary key after destroy; instance IDs stay stable for the GO lifetime.
+        static readonly Dictionary<int, AnimatorCullingMode> SavedModes =
+            new Dictionary<int, AnimatorCullingMode>();
+
         public static bool Active { get; private set; }
 
-        // Called on entering the tier, and periodically while in it so zombies
-        // spawned mid-emergency get swept too.
+        /// <summary>
+        /// Enter emergency (or re-sweep while already active so mid-emergency
+        /// spawns are covered). Idempotent on already-culled rigs.
+        /// </summary>
         public static void Enter()
         {
             World world = GameManager.Instance != null ? GameManager.Instance.World : null;
@@ -45,34 +50,37 @@ namespace EfficientServer.Patches
                 Animator[] anims = enemy.GetComponentsInChildren<Animator>(true);
                 for (int a = 0; a < anims.Length; a++)
                 {
-                    if (!anims[a].enabled) continue;
-                    anims[a].enabled = false;
-                    Disabled.Add(anims[a]);
+                    Animator anim = anims[a];
+                    if (anim == null) continue;
+                    // Never touch enabled. Only change cullingMode.
+                    if (anim.cullingMode == AnimatorCullingMode.CullCompletely)
+                        continue;
+                    int id = anim.GetInstanceID();
+                    if (!SavedModes.ContainsKey(id))
+                        SavedModes[id] = anim.cullingMode;
+                    anim.cullingMode = AnimatorCullingMode.CullCompletely;
                     swept++;
                 }
             }
             if (!Active || swept > 0)
-                ModApi.Log($"Governor: animator emergency {(Active ? "sweep" : "ENTER")} - disabled {swept} rigs");
+                ModApi.Log($"Governor: animator emergency {(Active ? "sweep" : "ENTER")} - CullCompletely on {swept} rigs (saved={SavedModes.Count})");
             Active = true;
         }
 
         public static void Exit()
         {
-            if (!Active) return;
-            Disabled.Clear();
+            if (!Active && SavedModes.Count == 0) return;
             int restored = RestoreAllEnemyAnimators();
+            SavedModes.Clear();
             Active = false;
-            ModApi.Log($"Governor: animator emergency EXIT - restored {restored} rigs");
+            ModApi.Log($"Governor: animator emergency EXIT - restored cullingMode on {restored} rigs");
         }
 
         /// <summary>
-        /// Re-enable every disabled enemy animator by sweeping live entities (a
-        /// saved-ref list goes stale as entities die/pool-recycle while disabled).
-        /// Revival needs three steps (human eval found each missing one wedges
-        /// zombies into a pushed-only shuffle): Rebind resets a state machine
-        /// stuck mid-transition, but also wipes the one-shot spawn parameters
-        /// (WalkType, IsAlive) that the AI never rewrites - so re-push those via
-        /// the game's own setters, then pump one evaluation.
+        /// Restore every live enemy animator's saved (or healthy default)
+        /// culling mode. Does not toggle enabled, does not Rebind.
+        /// <paramref name="bare"/> is retained for console A/B compatibility and
+        /// is ignored for culling restore (no Rebind path exists here).
         /// </summary>
         public static int RestoreAllEnemyAnimators(bool bare = false)
         {
@@ -83,31 +91,46 @@ namespace EfficientServer.Patches
             for (int i = 0; i < entities.Count; i++)
             {
                 if (!(entities[i] is EntityEnemy enemy)) continue;
-                // Corpses stay in Entities.list; reviving their animators poses dead
-                // bodies upright as statues (human eval). Death disabled them, not us.
+                // Corpses stay in Entities.list; leave death pose alone.
                 if (enemy.IsDead()) continue;
                 Animator[] anims = enemy.GetComponentsInChildren<Animator>(true);
-                int revived = 0;
                 for (int a = 0; a < anims.Length; a++)
                 {
-                    if (anims[a].enabled) continue;
-                    anims[a].enabled = true;
-                    if (!bare) anims[a].Rebind();
-                    revived++;
+                    Animator anim = anims[a];
+                    if (anim == null) continue;
+                    int id = anim.GetInstanceID();
+                    AnimatorCullingMode prior;
+                    if (!SavedModes.TryGetValue(id, out prior))
+                    {
+                        // Probe may have entered without a dict entry if the rig
+                        // was already CullCompletely, or spawn arrived mid-exit.
+                        // Healthy server zombies use CullUpdateTransforms (RE).
+                        if (anim.cullingMode != AnimatorCullingMode.CullCompletely)
+                            continue;
+                        prior = AnimatorCullingMode.CullUpdateTransforms;
+                    }
+                    if (anim.cullingMode == prior) continue;
+                    anim.cullingMode = prior;
+                    // Ensure enabled stayed true (never force-disable in this path).
+                    if (!anim.enabled)
+                        anim.enabled = true;
+                    if (!bare)
+                        anim.Update(0f);
+                    restored++;
                 }
-                if (revived == 0) continue;
-                restored += revived;
-                AvatarController av = enemy.emodel != null ? enemy.emodel.avatarController : null;
-                if (!bare && av != null)
-                {
-                    av.SetAlive();
-                    if (enemy.IsWalkTypeACrawl()) av.TurnIntoCrawler();
-                    else av.SetWalkType(enemy.GetWalkType(), true);
-                }
-                for (int a = 0; a < anims.Length; a++)
-                    if (anims[a].enabled) anims[a].Update(0f);
             }
             return restored;
+        }
+
+        /// <summary>
+        /// True when this animator is under emergency CullCompletely (or any
+        /// active emergency session). Used by AnimatorLod so it does not re-enable
+        /// or fight culling.
+        /// </summary>
+        public static bool IsEmergencyCulled(Animator anim)
+        {
+            if (!Active || anim == null) return false;
+            return anim.cullingMode == AnimatorCullingMode.CullCompletely;
         }
     }
 }

@@ -41,12 +41,22 @@ namespace EfficientServer.Patches
 
         static bool Gate(AvatarZombieController controller, bool pump)
         {
-            AnimatorLodConfig cfg = ModApi.Config != null ? ModApi.Config.AnimatorLod : null;
-            if (!ModApi.ShouldRun() || cfg == null || !cfg.Enabled)
-                return true;
             EntityAlive entity = controller.entity;
             Animator anim = controller.anim;
             if (entity == null || anim == null)
+                return true;
+
+            // Governor tier-2 / es animoff: CullCompletely owns the rig. Do not
+            // re-enable, re-pump, or fight cullingMode. Skip managed Update work.
+            if (AnimatorEmergency.Active)
+            {
+                if (entity.IsDead())
+                    return true;
+                return false;
+            }
+
+            AnimatorLodConfig cfg = ModApi.Config != null ? ModApi.Config.AnimatorLod : null;
+            if (!ModApi.ShouldRun() || cfg == null || !cfg.Enabled)
                 return true;
 
             bool exempt =
@@ -69,6 +79,7 @@ namespace EfficientServer.Patches
 
             // Strided mode: engine evaluation off, manual pump on this entity's slot
             // frame (slots striped by entityId so the per-frame pump load is spread).
+            // NOTE: calm-far LOD still uses enabled=false; emergency uses CullCompletely only.
             if (anim.enabled)
                 anim.enabled = false;
             bool slotFrame = (Time.frameCount + entity.entityId) % cfg.FarStride == 0;

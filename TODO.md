@@ -35,7 +35,11 @@ bridge in `7dtd-apm`.
 - [ ] Reconcile README, architecture, features, and runtime behavior.
 - [ ] Publish supported 7DTD/toolchain versions and troubleshooting.
 
-## Open: animator revival wedge (tier-2 exit)
+## Open: animator revival wedge (tier-2 exit) - CODE BUILT, MEASURE OPEN
+
+**2026-07-28:** `AnimatorEmergency` rewritten to `cullingMode = CullCompletely` (no `enabled` toggle). `es animoff`/`animon` use the same path. Still need: heavy-load frame A/B, human `es animstate` dp check, then consider defaulting `Governor.AnimatorEmergency`. Path admission knobs also shipped default-off.
+
+### Prior notes
 
 Human eval 2026-07-23 (live client, benchgod bots): tier-2 combat feel WHILE
 active is fine, but every restore path after `Animator.enabled=false` leaves

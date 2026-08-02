@@ -167,6 +167,22 @@ Opt-in Boehm incremental mode (collection in bounded slices). **Measured: margin
 
 ---
 
+### `MaxPathEnqueuesPerTick` (default `0`, clamp [0,2000])
+- **Mechanism:** Harmony prefix on `EntityAlive.FindPath`. Non-priority path
+  requests past this count in a Unity frame are dropped (original not called).
+  `0` = unlimited (vanilla). Priority (attack target, investigate, alert ticks,
+  active sleeper) always admits and does **not** consume the budget.
+- **Does not** change path *compute* drain (~8 starts/frame stock).
+- **When to raise/set:** blood-moon path-spam A/B only; start around 32-128.
+- **Default 0:** no behavior change until explicitly tuned.
+
+### `DropPathWhenFarDistSq` (default `0`, clamp [0,4e6])
+- **Mechanism:** drop non-priority `FindPath` when `aiClosestPlayerDistSq` is at
+  least this (squared meters). `0` = off. Example `2500` = 50 m.
+- Same priority bypass as the enqueue cap.
+- **Default 0:** vanilla.
+
+
 ## Network
 
 ### `FastSingleTargetSend` (default `true`, v1.13.0)
@@ -292,7 +308,7 @@ nothing despawns and clients see no visual difference (zombie animation is
 client-local). Steps back down one tier at a time.
 
 **KNOWN DEFECT (human eval, RESULTS 3s): the exit path cannot fully restore.**
-After any `Animator.enabled` off->on cycle the rig evaluates but emits zero root
+v1.18+ emergency uses `cullingMode = CullCompletely` (keeps `enabled`). Legacy note: after any `Animator.enabled` off->on cycle the rig evaluates but emits zero root
 motion (`deltaPosition=0`), and server zombies are root-motion-driven - restored
 zombies crawl at supplementary-path speed until they die. Keep this `false` until
 the culling-mode rework lands (TODO). Feel WHILE active passed human eval.

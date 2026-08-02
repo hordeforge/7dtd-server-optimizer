@@ -96,7 +96,7 @@ namespace EfficientServer.Patches
             if (level == 2)
             {
                 ModApi.Log($"Governor: tick EMA {_emaMs:F1}ms > {cfg.EmergencyOverMs}ms despite throttles "
-                    + "- ANIMATOR EMERGENCY (combat timing degrades; clients see no visual change)");
+                    + "- ANIMATOR EMERGENCY CullCompletely (combat timing degrades; clients see no visual change)");
                 AnimatorEmergency.Enter();
                 return;
             }

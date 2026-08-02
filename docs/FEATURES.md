@@ -315,3 +315,17 @@ General modding rules: [`../../MODDING_BEST_PRACTICES.md`](../../MODDING_BEST_PR
 ## Changelog
 
 - **2026-07-19:** Ownership/related docs polish.
+
+## Path admission (v1.18)
+
+`PathAdmissionPatch` optionally caps non-priority `EntityAlive.FindPath` enqueues
+per frame and/or drops far non-alert path requests. Defaults both off (vanilla).
+Alerted / attack-target / investigate / active-sleeper always path. See CONFIG
+`Pathfinding.MaxPathEnqueuesPerTick` and `DropPathWhenFarDistSq`.
+
+## Animator emergency (v1.18 CullCompletely)
+
+Governor tier 2 and `es animoff` set enemy `Animator.cullingMode` to
+`CullCompletely` without disabling the component, so exit can restore root motion.
+Still default-off (`Governor.AnimatorEmergency`). Validate with `es animstate`
+(`dp` should be non-zero after `es animon` on moving zombies).

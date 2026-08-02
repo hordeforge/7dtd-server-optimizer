@@ -99,6 +99,17 @@ namespace EfficientServer
         // safe (scans hold the A* work-item lock, no path worker reads mid-scan).
         // Transpiles an external-DLL iterator - fail-visibly if the IL drifts.
         public bool PoolInitScanNodes { get; set; } = false;
+
+        // Path admission at EntityAlive.FindPath (A2). 0 = unlimited (vanilla).
+        // Caps non-priority path enqueues per Unity frame; alerted / attack-target /
+        // investigate / active-sleeper always admit and do not consume the budget.
+        // Does not change path compute drain (still ~8 starts/frame stock).
+        public int MaxPathEnqueuesPerTick { get; set; } = 0;
+
+        // Drop non-priority FindPath when aiClosestPlayerDistSq >= this. 0 = off
+        // (vanilla). Units are squared meters (same as AI LOD distance knobs).
+        // Alerted entities never drop. Example: 2500 = 50 m.
+        public float DropPathWhenFarDistSq { get; set; } = 0f;
     }
 
     // Each network lever is an independent toggle (default off = vanilla).
@@ -200,10 +211,12 @@ namespace EfficientServer
         public float OverBudgetMs { get; set; } = 57f;
         public float HealthyMs { get; set; } = 52f;
         // Tier 2 (opt-in, gameplay-affecting): when throttling has not recovered the
-        // tick and the EMA is past this, shut down all zombie animators - measured
-        // ~40% of the saturated 64-player frame (RESULTS 3o). Combat timing degrades
+        // tick and the EMA is past this, put all zombie animators into CullCompletely
+        // (v1.18+; keeps enabled so root-motion can restore). Measured ~40% of the
+        // saturated 64-player frame (RESULTS 3o). Combat timing degrades
         // (timer-only attack cadence, no stagger) but nothing despawns and clients
         // see no visual change. Steps back down through tier 1 on recovery.
+        // Default false until human es animstate dp check clears exit.
         public bool AnimatorEmergency { get; set; } = false;
         public float EmergencyOverMs { get; set; } = 80f;
         // Ticks the EMA must stay over/under before a transition (~5 s at 20 TPS).
@@ -306,6 +319,10 @@ namespace EfficientServer
             // silently accepted. A legitimate low-pop tune (e.g. 40) still passes.
             Pathfinding.GraphUpdateEveryTicks = IntRange("Pathfinding.GraphUpdateEveryTicks", Pathfinding.GraphUpdateEveryTicks, 1, 200);
             Pathfinding.MoveRescanThresholdSq = FiniteRange("Pathfinding.MoveRescanThresholdSq", Pathfinding.MoveRescanThresholdSq, 100f, 10000f, 100f);
+            // 0 = unlimited / off. Cap admits high enough for a full BM wave of
+            // non-priority wander requests without clipping combat (combat bypasses).
+            Pathfinding.MaxPathEnqueuesPerTick = IntRange("Pathfinding.MaxPathEnqueuesPerTick", Pathfinding.MaxPathEnqueuesPerTick, 0, 2000);
+            Pathfinding.DropPathWhenFarDistSq = FiniteRange("Pathfinding.DropPathWhenFarDistSq", Pathfinding.DropPathWhenFarDistSq, 0f, 4000000f, 0f);
             // 3 = vanilla batch; floor 1 (never stall the transfer entirely), cap 32
             // (a generous ceiling; above vanilla speeds transfer at a bigger per-tick
             // spike). A fat-finger 0 or negative would deadlock the send loop, so the

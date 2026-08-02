@@ -240,8 +240,8 @@ Priority = (expected capacity or smoothness gain) x (evidence readiness) /
 
 | Rank | Work | Type | Why now | Fidelity gate |
 |---:|---|---|---|---|
-| **1** | **Animator `CullCompletely` emergency** | Build + measure | Largest unbuilt headless win; design already RE'd | Restore dp != 0; combat chase soak |
-| **2** | **Path admission (A2)** under synthetic BM | Build + measure | Enqueue unbounded; drain 8/frame; BM path spam | No stuck ferals; alerted never dropped |
+| **1** | **Animator `CullCompletely` emergency** | **Built v1.18** (default-off) | Enter/exit + es animoff use CullCompletely | Human `es animstate` dp + heavy A/B still required |
+| **2** | **Path admission (A2)** under synthetic BM | **Built v1.18** (default-off knobs) | Cap + far-drop at FindPath; priority bypass | APM BM session; no stuck near-player AI |
 | **3** | **Ops pack as first-class** | Docs + launch | ViewDistance, MaxSpawnedZombies, `GC_FREE_SPACE_DIVISOR`, `MONO_ENV_OPTIONS=-O=all` already validated | Publish recommended serverconfig matrix |
 | **4** | **Chunk blob cache design** | Research design | Setup always calls `Chunk.write` on sim; multi-observer join | Byte-identical packages; invalidation on block edit |
 | **5** | **Spatial interest + closest-player grid** | Large project | Only structural fix for 450-500p cliff | Client never missing in-range entities; removal correctness |

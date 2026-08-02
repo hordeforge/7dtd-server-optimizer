@@ -33,7 +33,8 @@ namespace EfficientServer
                 if (c == null) { SdtdConsole.Instance.Output("[EfficientServer] no config"); return; }
                 SdtdConsole.Instance.Output(
                     $"[EfficientServer] enabled={c.Enabled} | targetFps={c.Server.TargetFps} jobWorkers={c.Server.JobWorkerCount} | graphEvery={c.Pathfinding.GraphUpdateEveryTicks} "
-                    + $"rescanSq={c.Pathfinding.MoveRescanThresholdSq} poolInitScan={c.Pathfinding.PoolInitScanNodes} | "
+                    + $"rescanSq={c.Pathfinding.MoveRescanThresholdSq} poolInitScan={c.Pathfinding.PoolInitScanNodes} "
+                    + $"pathCap={c.Pathfinding.MaxPathEnqueuesPerTick} pathDropFarSq={c.Pathfinding.DropPathWhenFarDistSq} | "
                     + $"fastSend={c.Network.FastSingleTargetSend} stride={c.Network.EntityDistributionEveryTicks} | "
                     + $"chunkBatch={c.WorldTransfer.ChunkPackagesPerObserverPerTick} | "
                     + $"governor={c.Governor.Enabled} tickGuard={c.TickGuard.Enabled} | "
@@ -41,43 +42,27 @@ namespace EfficientServer
             }
             else if (sub == "animoff" || sub == "animon")
             {
-                // DIAGNOSTIC probe: RE found every zombie runs a full Unity Animator
-                // on the headless server (AlwaysAnimate; the dedicated strip path is
-                // bypassed for RootMotion/HasRagdoll entities). The engine-side eval
-                // hides in unsymbolized UnityPlayer.so CPU, so the only honest sizing
-                // is a runtime A/B: disable all enemy animators, read the frame time,
-                // re-enable. GAMEPLAY BREAKS WHILE OFF (root motion, stuns, attack
-                // cadence read animator state) - bench servers only, never production.
+                // DIAGNOSTIC probe / emergency path: set enemy Animator.cullingMode to
+                // CullCompletely (keeps enabled=true so root-motion can restore). Same
+                // path the governor tier-2 uses. GAMEPLAY DEGRADES WHILE OFF (timer
+                // attack cadence, supplementary movement) - bench or emergency only.
                 World world = GameManager.Instance != null ? GameManager.Instance.World : null;
                 if (world == null) { SdtdConsole.Instance.Output("[EfficientServer] no world"); return; }
                 if (sub == "animoff")
                 {
-                    _probeDisabled.Clear();
-                    List<Entity> entities = world.Entities.list;
-                    for (int i = 0; i < entities.Count; i++)
-                    {
-                        if (!(entities[i] is EntityEnemy enemy)) continue;
-                        if (enemy.IsDead()) continue;
-                        Animator[] anims = enemy.GetComponentsInChildren<Animator>(true);
-                        for (int a = 0; a < anims.Length; a++)
-                        {
-                            if (!anims[a].enabled) continue;
-                            anims[a].enabled = false;
-                            _probeDisabled.Add(anims[a]);
-                        }
-                    }
+                    Patches.AnimatorEmergency.Enter();
                     SdtdConsole.Instance.Output(
-                        $"[EfficientServer] animprobe: DISABLED {_probeDisabled.Count} enemy animators "
-                        + "- read world.unityDeltaMs, then run 'es animon' to restore (bench only!)");
+                        "[EfficientServer] animprobe: ENTER CullCompletely emergency "
+                        + $"(active={Patches.AnimatorEmergency.Active}) - read frame time, then 'es animon'");
                 }
                 else
                 {
-                    // 'es animon' = full revival; 'es animon bare' = enable+pump only
-                    // (A/B probe for isolating what the Rebind path wedges).
+                    // bare is accepted for CLI compat but culling restore ignores it.
                     bool bare = _params.Count > 1 && _params[1] == "bare";
-                    _probeDisabled.Clear();
-                    int restored = Patches.AnimatorEmergency.RestoreAllEnemyAnimators(bare);
-                    SdtdConsole.Instance.Output($"[EfficientServer] animprobe: restored {restored} animators (mode={(bare ? "bare" : "full")})");
+                    Patches.AnimatorEmergency.Exit();
+                    SdtdConsole.Instance.Output(
+                        $"[EfficientServer] animprobe: EXIT emergency (bare={bare}); "
+                        + "check 'es animstate' for dp>0 on moving zombies");
                 }
             }
             else if (sub == "animstate")
@@ -163,11 +148,10 @@ namespace EfficientServer
             {
                 SdtdConsole.Instance.Output(
                     "[EfficientServer] unknown subcommand; use: es reload | es status | "
-                    + "es animoff | es animon | es rigoff | es rigon | es benchgod on|off (diagnostics)");
+                    + "es animoff | es animon | es animstate | es rigoff | es rigon | es benchgod on|off (diagnostics)");
             }
         }
 
-        static readonly List<Animator> _probeDisabled = new List<Animator>();
         static readonly List<Behaviour> _rigDisabled = new List<Behaviour>();
     }
 }

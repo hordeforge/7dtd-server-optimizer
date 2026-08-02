@@ -40,7 +40,8 @@ namespace EfficientServer
                 {
                     typeof(Patches.AiLodPatch), typeof(Patches.UpdateTasksLodPatch),
                     typeof(Patches.GcGuardPatch), typeof(Patches.AstarGraphThrottlePatch),
-                    typeof(Patches.AstarMoveThresholdPatch), typeof(Patches.FastSendPatch),
+                    typeof(Patches.AstarMoveThresholdPatch), typeof(Patches.PathAdmissionPatch),
+                    typeof(Patches.FastSendPatch),
                     typeof(Patches.InitScanPoolPatch), typeof(Patches.ChunkSendThrottlePatch),
                     typeof(Patches.ExplosionParticlesPatch),
                     typeof(Patches.EntityDistributionStridePatch),
@@ -101,6 +102,9 @@ namespace EfficientServer
                 active = c.Pathfinding != null && c.Pathfinding.GraphUpdateEveryTicks > 1;
             else if (g == typeof(Patches.AstarMoveThresholdPatch))
                 active = c.Pathfinding != null && c.Pathfinding.MoveRescanThresholdSq > 100f;
+            else if (g == typeof(Patches.PathAdmissionPatch))
+                active = c.Pathfinding != null && (c.Pathfinding.MaxPathEnqueuesPerTick > 0
+                    || c.Pathfinding.DropPathWhenFarDistSq > 0f);
             else if (g == typeof(Patches.FastSendPatch))
                 active = c.Network != null && c.Network.FastSingleTargetSend;
             else if (g == typeof(Patches.InitScanPoolPatch))
