@@ -1,6 +1,7 @@
 # EfficientServer results ledger (minute detail)
 
 Authoritative record of every lever: RE target, mechanism, config knob, IL target,
+Next-work map: [`PERF_RESEARCH_BRIEF.md`](PERF_RESEARCH_BRIEF.md).
 A/B session IDs + numbers, and verdict. Companion: graded backlog
 [`OPTIMIZATION_CANDIDATES.md`](OPTIMIZATION_CANDIDATES.md); bottleneck catalog
 [`../../7dtd-research/docs/bottlenecks.md`](bottlenecks.md); allocation
