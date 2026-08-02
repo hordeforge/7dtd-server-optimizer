@@ -1,4 +1,4 @@
-# Perf research brief for EfficientServer (V3.0.1)
+# Perf research brief for EfficientServer (V3.1.0)
 
 **Owns:** ranked map from stock RE + measured APM to what the optimizer should
 do next, what is already closed, and which "big wins" are dead ends.

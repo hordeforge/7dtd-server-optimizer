@@ -25,7 +25,7 @@
 | [`../../7dtd-research/docs/loop.md`](../../7dtd-research/docs/loop.md) | Full dedicated loop map |
 | [`../../7dtd-research/docs/INDEX.md`](../../7dtd-research/docs/INDEX.md) | IL dump index |
 
-Game version pin: **V3.0.1** dedicated `Assembly-CSharp`. Do not redistribute game IL.
+Game version pin: **V3.1.0** dedicated `Assembly-CSharp`. Do not redistribute game IL.
 
 ---
 
@@ -562,20 +562,20 @@ Every Grade A/B row anchors a method on the dedicated loop map ([`../../7dtd-res
 | MB inventory | `7dtd-research/il/frame-entries-v3.0.1/` |
 | Loop notes | `7dtd-research/docs/inventories/loop-complete.md` + `7dtd-research/il/loop-complete-v3.0.1/` |
 
-Regenerate dumps with `tools/Dump*.cs` (see DEVELOPMENT.md). Optim **narrative** lives only under `7dtd-optimizer/docs/`.
+Regenerate dumps with the RE tooling in `../../7dtd-research/tools/` (see [`../../7dtd-research/tools/README.md`](../../7dtd-research/tools/README.md)). Optim **narrative** lives only under `7dtd-optimizer/docs/`.
 
 ---
 
 ## 10. Bottleneck-audit additions (2026-07-19)
 
 Full ranked catalog + bang-for-buck ordering:
-[`../../7dtd-research/docs/bottlenecks.md`](../../7dtd-research/docs/bottlenecks.md) (42 verified
+[`../../7dtd-research/docs/bottlenecks.md`](bottlenecks.md) (42 verified
 findings). New/actionable levers not already graded above, by impact-per-line:
 
 | Lever | Grade | Code | Impact |
 |---|---|---|---|
 | **`ConnectionManager.SendPackage` entityId-map lookup (`FastSendPatch`, v1.6.0)** | **A - SHIPPED + VALIDATED** | done (prefix, `Network.FastSingleTargetSend`) | removes the O(clients) linear `Clients` scan for pure single-target sends via the existing `ForEntityId` map. A/B: correct (60/60, 120/120 stable), ms_per_tick **-1.8%@60p -> -4.2%@128p**, `ConnectionManager.Update` -5.2%@128p; scales toward the 450-500p death-spiral |
-| ~~`PooledExpandableMemoryStream` presize + retain~~ | **downgraded** | n/a | RE correction: `Reset()`=`SetLength(0)` already retains the buffer; not a realloc problem. Serialization churn is a *count* problem -> serialize-once ([`../../7dtd-research/docs/allocation-reuse.md`](../../7dtd-research/docs/allocation-reuse.md)) |
+| ~~`PooledExpandableMemoryStream` presize + retain~~ | **downgraded** | n/a | RE correction: `Reset()`=`SetLength(0)` already retains the buffer; not a realloc problem. Serialization churn is a *count* problem -> serialize-once ([`../../7dtd-research/docs/allocation-reuse.md`](allocation-reuse.md)) |
 | Path admission cap + `ASPPathFinder` reuse | A/B | small | bounds path-request spikes + per-build alloc at `EntityAlive.FindPath` enqueue |
 | Off-sim `Chunk.write` encode / cached chunk blobs | B | moderate (threading) | chunk pipeline is 56-60% of tick; biggest single CPU reclaim |
 | Shared spatial interest grid (chunk-cell uniform grid) | B/C | large (new subsystem) | collapses the O(N^2.26)/O(N^2.27) player walls + E x P products toward linear; reused by `NetEntityDistribution` interest, `GetClosestPlayer` (A4), and the `SendPackage` map |

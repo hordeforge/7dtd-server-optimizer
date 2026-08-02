@@ -1,6 +1,6 @@
 # AGENTS.md - 7dtd-optimizer (EfficientServer)
 
-Harmony optimization mod for **7 Days to Die** dedicated servers (target **V3.0.1**).
+Harmony optimization mod for **7 Days to Die** dedicated servers (target **V3.1.0**).
 Owns only reviewed runtime optim patches. Sibling projects own measurement and load.
 
 Workspace root guide: [`../MODDING_BEST_PRACTICES.md`](../MODDING_BEST_PRACTICES.md)
@@ -68,14 +68,18 @@ Source: `Source/EfficientServer/`. Packaged mod name: `Mods/EfficientServer/`. H
 
 ## RE dumps
 
+Stock-game RE tooling lives in **`../7dtd-research/tools/`** (not here): general
+dumpers (`src/`), the legacy per-family dumpers (`legacy/`), and the dump-regen
+test (`tools/tests/`). Build + usage: [`../7dtd-research/tools/README.md`](../7dtd-research/tools/README.md);
+method: [`../7dtd-research/docs/re-methodology.md`](../7dtd-research/docs/re-methodology.md).
+
 ```bash
-# Example: regenerate a dump set into workspace 7dtd-research/il/
-mcs -r:tools/Mono.Cecil.dll -out:tools/DumpGmUpdate.exe tools/DumpGmUpdate.cs
-mono tools/DumpGmUpdate.exe "$DS/7DaysToDieServer_Data/Managed/Assembly-CSharp.dll" \
-  ../7dtd-research/il/gmUpdate-VERSION
+cd ../7dtd-research/tools && ./build.sh
+mono bin/legacy/DumpGmUpdate.exe "$DS/7DaysToDieServer_Data/Managed/Assembly-CSharp.dll" \
+  ../il/gmUpdate-VERSION
 ```
 
-Human synthesis belongs in `../7dtd-research/docs/` or `docs/`, never as optim product narrative inside dump folders. Automated check: `tools/tests/test_re_dump_regen.py` (needs dedicated install + mcs/mono).
+Human synthesis belongs in `../7dtd-research/docs/` or `docs/`, never as optim product narrative inside dump folders. Automated check: `../7dtd-research/tools/tests/test_re_dump_regen.py` (needs dedicated install + mcs/mono).
 
 ## Sibling projects
 
@@ -86,3 +90,13 @@ Human synthesis belongs in `../7dtd-research/docs/` or `docs/`, never as optim p
 | `../7days-realworld` | RealEarth terrain (unrelated optim product surface) |
 
 Do not silently install, edit, or couple into siblings. Public runner/API only.
+
+## Stock-game research -> 7dtd-research
+
+Anything that studies the **stock** dedicated server belongs in
+[`../7dtd-research/`](../7dtd-research/), not here: reverse-engineering
+narratives (`docs/`), the Mono.Cecil dump tooling (`tools/`), wire/protocol
+analysis, and engine cost/loop RE. This repo owns the reviewed Harmony optimization mod;
+it does not host stock-game RE docs or dumpers. When RE is needed, add it
+under `../7dtd-research/` and link back. How to RE:
+[`../7dtd-research/docs/re-methodology.md`](../7dtd-research/docs/re-methodology.md).

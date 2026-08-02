@@ -1,5 +1,7 @@
 # EfficientServer results ledger (minute detail)
 
+**Game pin:** V3.1.0 (b14); campaign measurements below were taken on V3.0.1 unless noted.
+
 Authoritative record of every lever: RE target, mechanism, config knob, IL target,
 Next-work map: [`PERF_RESEARCH_BRIEF.md`](PERF_RESEARCH_BRIEF.md).
 A/B session IDs + numbers, and verdict. Companion: graded backlog

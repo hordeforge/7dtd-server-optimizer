@@ -3,7 +3,7 @@
 **Owns:** EfficientServer-oriented map of the dedicated hot path (optim context).  
 **Not:** full generic RE narratives ([research loop](../../7dtd-research/docs/loop.md)), feature behavior ([FEATURES](FEATURES.md)), host topology ([HOST_TUNING](HOST_TUNING.md)).
 
-**Target:** Steam dedicated server **V 3.0.1 (b4)**  
+**Target:** Steam dedicated server **V 3.1.0 (b14)**  
 **Engine:** Unity **2022.3.62f2** (Mono, not IL2CPP)  
 **Main game assembly:** `7DaysToDieServer_Data/Managed/Assembly-CSharp.dll` (~11 MB, ~4400 types)  
 **Networking stack:** LiteNetLib (+ optional SteamNetworking, disabled by default on dedicated)  
@@ -53,9 +53,9 @@ Launch flags used by stock `startserver.sh`:
 
 `get_IsDedicatedServer()` gates some client-only work, but **not everything**. Several systems still run on dedicated.
 
-**Critical RE fact (V3.0.1):** `ConnectionManager.Update` and `DynamicMeshManager.Update` are **not** called from `gmUpdate`. They are separate `MonoBehaviour` updates on the same Unity frame. Hijacking only `gmUpdate` does not own net or mesh.
+**Critical RE fact (V3.1.0; same as 3.0.1):** `ConnectionManager.Update` and `DynamicMeshManager.Update` are **not** called from `gmUpdate`. They are separate `MonoBehaviour` updates on the same Unity frame. Hijacking only `gmUpdate` does not own net or mesh.
 
-Deep dump + phase map: [`../../7dtd-research/docs/loop-gmupdate.md`](../../7dtd-research/docs/loop-gmupdate.md) (regenerate with `tools/DumpGmUpdate.cs`).
+Deep dump + phase map: [`../../7dtd-research/docs/loop-gmupdate.md`](../../7dtd-research/docs/loop-gmupdate.md) (regenerate with `../7dtd-research/tools/` (legacy/DumpGmUpdate or src/DumpMethod)).
 
 ---
 
@@ -82,7 +82,7 @@ Unity frame
  └─ GameManager.LateUpdate
 ```
 
-### `gmUpdate` phases (V3.0.1 ordered)
+### `gmUpdate` phases (V3.1.0 ordered; gmUpdate IL still 631)
 
 `IsDedicatedServer` checked **6** times. Exception handler around a destroy-`GameObject` queue (`Monitor.Enter/Exit`).
 
@@ -191,7 +191,7 @@ Also toggles cloth/jiggle at larger radii (IL uses constants including **625** /
 
 **EfficientServer** tightens bands / far skip further (config).
 
-### Pathfinding (V3.0.1 production)
+### Pathfinding (V3.1.0 production)
 
 `AstarManager.Init` installs **`ASPPathFinderThread`** as `PathFinderThread.Instance` and `StartWorkerThreads()` → **`StartCoroutine(FindPaths)`** (not the OS-thread `AStarPathFinderThread`, which still exists in the binary).
 
@@ -334,7 +334,7 @@ See [`../../7dtd-research/docs/loop.md`](../../7dtd-research/docs/loop.md) §14.
 | [HOST_TUNING.md](HOST_TUNING.md) | Host ops |
 | [loop.md](../../7dtd-research/docs/loop.md) | Full loop narrative |
 | [engine-limitations.md](../../7dtd-research/docs/engine-limitations.md) | Stock ceilings (sim, net, AI, GC) |
-| [measured-scaling.md](../../7dtd-research/docs/measured-scaling.md) | Live scale |
+| [measured-scaling.md](measured-scaling.md) | Live scale |
 | [OPTIMIZATION_CANDIDATES.md](OPTIMIZATION_CANDIDATES.md) | Candidates |
 
 ## Changelog
