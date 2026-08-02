@@ -1,6 +1,7 @@
 # EfficientServer results ledger (minute detail)
 
 **Game pin:** V3.1.0 (b14); campaign measurements below were taken on V3.0.1 unless noted.
+V3.1.0 moderate A/B: [V310_APM_BASELINE.md](V310_APM_BASELINE.md) (sessions 135519 ES-on / 135942 ES-off).
 
 Authoritative record of every lever: RE target, mechanism, config knob, IL target,
 Next-work map: [`PERF_RESEARCH_BRIEF.md`](PERF_RESEARCH_BRIEF.md).
