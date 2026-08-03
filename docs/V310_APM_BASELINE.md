@@ -143,7 +143,61 @@ Honest notes: path admission did not improve frame at this load (+5.6 ms noise).
 - **2026-08-03:** Heavy 48p ES on/off + animator stress gate on V3.1.0.
 - **2026-08-02:** Moderate 16p pair (section above).
 
+
+
+## Canonical-heavy-v2 (64 clients, forensic 150s, seed 20240717)
+
+Full profile from `7dtd-apm/plans/profile.canonical.json`.
+
+| Knob | Value |
+|---|---|
+| clients | **64** |
+| MaxPlayers | 64 |
+| warmup / capture | 90 s / 150 s forensic |
+| bot_mix | traverse:30,wander:20,combat:25,bait:10,demolition:10,chatty:5 |
+| spawn | 6/player every 8s + horde 40s x4 + max_dynamite 80 |
+| seed | 20240717 |
+
+| Arm | Session | ES |
+|---|---|---|
+| ON | `session_20260803_004634_pid2107665` | Enabled=true |
+| OFF | `session_20260803_005248_pid2125881` | Enabled=false |
+
+Loadgen **64/64** both arms (walks ~216k).
+
+| Metric | ES ON | ES OFF | Notes |
+|---|---:|---:|---|
+| ms_per_tick | **57.2** | **42.8** | ON worse (+34%) |
+| window_updates | 1136 | 2100 | ON completed fewer ticks in window |
+| late_ticks | 731 | 1804 | ON fewer absolute late |
+| late_tick_share | **64.4%** | **85.9%** | ON better share |
+| tick_stall_ms | 125020 | 74056 | ON worse absolute stall sum |
+| STW worst ms | **110** | **373** | ON **-70%** |
+| STW total ms | 884 | 1156 | ON **-24%** |
+| alloc MB/s (layer) | 0.75 | 3.32 | ON lower |
+| TickEntities p95 | 10.7 | 7.5 | ON higher |
+| UpdateGraphs total | 780 | 753 | ~flat |
+| health grade | D 44.0 | D 45.7 | ~flat fail |
+| gross alloc budget | 36.5 FAIL | 42.5 FAIL | both over |
+
+Subsystem share ON: entity 40%, network 28%, **explosions 17%**, io 9%.  
+OFF: entity 43%, network 34%, explosions 10%.
+
+### Honest interpretation (do not overclaim)
+
+At full 64p + demolition chaos, **ES is not a free win on ms_per_tick**.
+
+1. **Clear ON wins:** STW worst/total, late-tick *share*, alloc rate.
+2. **Clear ON losses / mixed:** ms_per_tick, tick_stall_ms sum, TickEntities p95, fewer window_updates.
+3. Workloads are **not perfectly composition-matched** (explosion share 17% vs 10%). Chaos + dynamite dominate; ES levers (graph throttle, GC guard, net stride) do not cancel explosion/disk walls.
+4. **Moderate 16p and heavy 48p** remain the clean wins. Canonical 64p shows the **stress ceiling and residual walls** (entity x player replication, explosions, IO), not a reason to ship more unmeasured Harmony.
+
 ## Changelog
 
+- **2026-08-03 (later):** Full canonical-heavy-v2 64p ES on/off (mixed; STW win, ms_per_tick not).
+
+## Changelog
+
+- **2026-08-03 (later):** Full canonical-heavy-v2 64p ES on/off (mixed).
 - **2026-08-03:** Heavy 48p ES on/off + animator stress gate.
 - **2026-08-02:** First V3.1.0 matched ES on/off moderate forensic pair.

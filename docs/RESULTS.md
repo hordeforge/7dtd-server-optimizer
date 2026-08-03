@@ -1,7 +1,7 @@
 # EfficientServer results ledger (minute detail)
 
 **Game pin:** V3.1.0 (b14); campaign measurements below were taken on V3.0.1 unless noted.
-V3.1.0 APM: [V310_APM_BASELINE.md](V310_APM_BASELINE.md) moderate 16p (135519/135942) + heavy 48p (001826/003006) + animator stress 20260803.
+V3.1.0 APM: [V310_APM_BASELINE.md](V310_APM_BASELINE.md) moderate 16p + heavy 48p + canonical 64p (004634/005248 mixed) + animator stress 20260803.
 
 Authoritative record of every lever: RE target, mechanism, config knob, IL target,
 Next-work map: [`PERF_RESEARCH_BRIEF.md`](PERF_RESEARCH_BRIEF.md).
