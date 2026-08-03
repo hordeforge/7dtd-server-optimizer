@@ -1,6 +1,6 @@
 # Plan: Animator CullCompletely emergency + path admission
 
-**Status:** built; light-load live gate PASS; stress measure open  
+**Status:** built; light + stress gates PASS; human combat soak open  
 **Date:** 2026-07-28  
 **Targets:** EfficientServer (Harmony, net48)
 
@@ -67,4 +67,4 @@ near players. Do not claim ms/tick win without APM session IDs.
 - [x] Loadgen 8 bots + ~100 endgame (Navezgane)
 - [x] animoff/animon + animstate dp check
 - [x] path cap/drop reload fidelity
-- [ ] Stress (64p, over-budget frame) for animator ms win
+- [x] Stress (24p + ~273z, over-budget frame 85->76 ms) 2026-08-03

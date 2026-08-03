@@ -75,6 +75,75 @@ uv run 7dtd-apm scenario run --clients 16 --actions 4000 --seconds 90 --warmup 4
 
 Toggle ES: set `Mods/EfficientServer/Config/efficientserver.json` `Enabled` true/false and restart dedi (same world seed policy as usual).
 
+
+
+## Heavy pair (48 clients, forensic 120s, seed 20240803)
+
+Not full canonical 64p (disk/time constrained); still over-budget stress.
+
+| Knob | Value |
+|---|---|
+| clients | 48 |
+| MaxPlayers | 64 |
+| warmup / capture | 60 s / 120 s forensic |
+| bot_mix | traverse:30,wander:20,combat:25,bait:10,demolition:10,chatty:5 |
+| spawn | 5/player every 9s + horde 40s x3 |
+| seed | 20240803 |
+
+| Arm | Session | ES |
+|---|---|---|
+| ON | `session_20260803_001826_pid2015349` | Enabled=true |
+| OFF | `session_20260803_003006_pid2055555` | Enabled=false |
+
+Loadgen **48/48** both arms (walks ~128k, attacks ~270-280).
+
+| Metric | ES ON | ES OFF | Delta |
+|---|---:|---:|---:|
+| ms_per_tick | **24.2** | **37.0** | **-34.7%** |
+| window_updates | 3130 | 1778 | more ticks completed ON |
+| late_ticks | 654 | 782 | -16% |
+| late_tick_share | **20.9%** | **44.0%** | **-52% relative** |
+| tick_stall_ms | 22419 | 28942 | **-22.5%** |
+| STW worst ms | **42.8** | **349.9** | **-87.8%** |
+| STW total ms | 256 | 617 | **-58%** |
+| UpdateGraphs total ms | 740 | 978 | **-24%** |
+| UpdateGraphs avg ms | 0.71 | 6.70 | throttle visible |
+| health grade | C 57.4 | D 50.3 | better ON |
+| gross alloc budget | 30.8 MB/s FAIL | 40.1 MB/s FAIL | both over 15 |
+
+Subsystem share ON: entity_tick 61%, network 21%, falling 7%, explosions 5%.  
+OFF: entity_tick 53%, network 30% (more time in net under deeper stall).
+
+**Interpretation:** Under real over-budget load, ES on 3.1.0 recovers **~1/3 of ms_per_tick**, roughly **halves late-tick share**, and nearly **eliminates megapause-class STW** (350 ms -> 43 ms). Matches V3.0.1 campaign story (smoothness + stress recovery).
+
+## Animator CullCompletely stress (2026-08-03)
+
+Harness: `scripts/validate_anim_path_admission.py`  
+Report: `server/logs/validate_anim_path_20260803_082721.json`
+
+| Knob | Value |
+|---|---|
+| bots | 24 |
+| endgame spawn target | 350 (reached ~273 alive) |
+| ES | Enabled=true |
+
+| Check | Result |
+|---|---|
+| Join | PASS 24/24 |
+| CullCompletely enter | PASS (mixed cull modes in animstate; CullCompletely present) |
+| Root-motion after restore | **PASS** 209/271 moving with **dp>0** |
+| Frame win (over budget) | **PASS** baseline **85.4 ms** -> off **75.8 ms** (delta **-9.7 ms**, -11%) |
+| Path admission fidelity | PASS (alive held ~271-272) |
+| Overall | **PASS** |
+
+Honest notes: path admission did not improve frame at this load (+5.6 ms noise). Animator emergency still default-off until human combat soak; stress frame win is real but smaller than the old 147->85 class under different load.
+
 ## Changelog
 
+- **2026-08-03:** Heavy 48p ES on/off + animator stress gate on V3.1.0.
+- **2026-08-02:** Moderate 16p pair (section above).
+
+## Changelog
+
+- **2026-08-03:** Heavy 48p ES on/off + animator stress gate.
 - **2026-08-02:** First V3.1.0 matched ES on/off moderate forensic pair.

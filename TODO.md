@@ -39,6 +39,8 @@ bridge in `7dtd-apm`.
 
 **2026-07-28:** `AnimatorEmergency` rewritten to `cullingMode = CullCompletely` (no `enabled` toggle). `es animoff`/`animon` use the same path.
 
+**2026-08-03 stress:** 24 bots + ~273 endgame, frame 85->76 ms on CullCompletely; 209/271 movers with dp>0 after restore. Stress frame win PASS. Still human combat soak before defaulting Governor.AnimatorEmergency.
+
 **2026-08-02 live gate:** `validate_anim_path_admission.py` PASS overall. CullCompletely 97/97 enter+exit; root-motion **34/96** moving with dp>0 after restore. Frame win SKIP (light load). Path admission fidelity PASS. Still need: **stress** frame A/B (over-budget) before defaulting `Governor.AnimatorEmergency`. Path knobs stay default-off.
 
 ### Prior notes
