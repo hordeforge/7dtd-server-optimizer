@@ -24,7 +24,7 @@ bridge in `7dtd-apm`.
 ## Phase 2: reproducible evidence
 
 - [x] Define small, medium, and high scenarios executed by `7dtd-loadgen`. (Seed-locked tier ladder + heavy canonical standard: `7dtd-apm/plans/profile.{canonical,tiers}.json`; docs LOAD_PROFILE.md, 2026-07-18.)
-- [ ] Capture baseline/candidate evidence with `7dtd-apm` and record session IDs.
+- [x] Capture baseline/candidate evidence with `7dtd-apm` and record session IDs. (V3.1.0: moderate 16p 135519/135942; heavy 48p 001826/003006; canonical 64p 004634/005248 mixed; see docs/V310_APM_BASELINE.md)
 - [ ] Add regression budgets including simulation/gameplay correctness checks.
 - [ ] Document every configuration field, unit, range, runtime behavior, and tradeoff.
 
@@ -41,7 +41,7 @@ bridge in `7dtd-apm`.
 
 **2026-08-03 stress:** 24 bots + ~273 endgame, frame 85->76 ms on CullCompletely; 209/271 movers with dp>0 after restore. Stress frame win PASS. Still human combat soak before defaulting Governor.AnimatorEmergency.
 
-**2026-08-02 live gate:** `validate_anim_path_admission.py` PASS overall. CullCompletely 97/97 enter+exit; root-motion **34/96** moving with dp>0 after restore. Frame win SKIP (light load). Path admission fidelity PASS. Still need: **stress** frame A/B (over-budget) before defaulting `Governor.AnimatorEmergency`. Path knobs stay default-off.
+**2026-08-02 live gate:** `validate_anim_path_admission.py` PASS overall. CullCompletely 97/97 enter+exit; root-motion **34/96** moving with dp>0 after restore. Frame win SKIP (light load). Path admission fidelity PASS. **Stress done 2026-08-03** (over-budget PASS). Remaining before default-on: **human combat soak**. Path knobs stay default-off.
 
 ### Prior notes
 
@@ -88,3 +88,19 @@ displacement even with animators on), so the measurement was void.
 Every retained optimization is version-checked, independently configurable,
 tested for correctness, measured with sibling loadgen/APM projects, documented,
 and safe to disable or roll back.
+
+## Residual (post V3.1.0 campaign, 2026-08-03)
+
+Honest open items only. Do not re-open refuted levers without new APM evidence.
+
+| Residual | Status | Notes |
+|---|---|---|
+| `Governor.AnimatorEmergency` default-on | **blocked on human soak** | Stress gate PASS (85->76 ms, root-motion restore). Light + stress automated gates green. |
+| Path admission defaults | **keep 0/0 vanilla** | Fidelity PASS; no reliable frame win under stress noise. |
+| Canonical 64p ms_per_tick win | **not claimed** | ES ON worse ms/tick at 64p chaos; STW/late-share still better. Residual walls: entity tick, explosions, IO. |
+| Safe Harmony space | **exhausted** | Entity wall ≈ world-collision + close AI; player wall O(N²); serialize-once already stock. |
+| Config unit / dedicated-only tests | open | Phase 1 remaining checkboxes above. |
+| Packaging upgrade/rollback verify | open | Phase 3. |
+| Full blood-moon capacity re-sweep on 3.1 | optional | Prior BM capacity was V3.0.1 campaign; 3.1 has moderate/heavy/canon only. |
+
+Evidence hub: [docs/V310_APM_BASELINE.md](docs/V310_APM_BASELINE.md) · [docs/RESULTS.md](docs/RESULTS.md) · [docs/PERF_RESEARCH_BRIEF.md](docs/PERF_RESEARCH_BRIEF.md).
