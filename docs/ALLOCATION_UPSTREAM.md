@@ -176,7 +176,7 @@ deprioritized.** The genuinely worthwhile network lever remains the send-path sc
   by A and B, so lifetime rules live in one place. The reuse-technique catalog
   (presize-and-retain, ArrayPool, Clear-and-reuse, Span/stackalloc, thread-local
   scratch) and the Boehm "trade RAM for fewer collections" knobs are in
-  [`../../7dtd-research/docs/allocation-reuse.md`](../../7dtd-research/docs/allocation-reuse.md).
+  [`../../7dtd-research/docs/allocation-reuse.md`](allocation-reuse.md).
   Key finding there: the game already pools the writer/stream *objects*, so the
   remaining churn is the expandable buffer **reallocating** on growth - the fix is
   presize + retain at max capacity (free with 128 GB RAM), not new pooling.

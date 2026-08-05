@@ -61,24 +61,20 @@ Rebuild after **every** Steam update. Re-check Harmony targets against `Assembly
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | Dedicated hot path notes (gmUpdate, AI, mesh, networking) |
 | [`../../7dtd-research/docs/loop-gmupdate.md`](../../7dtd-research/docs/loop-gmupdate.md) | V3.0.1 gmUpdate phase map |
 | [`../../7dtd-research/docs/entity-ai.md`](../../7dtd-research/docs/entity-ai.md) | Entity/AI/path/fall/net deep chain |
-| `tools/DumpGmUpdate.cs` | Frame Update-path dump |
-| `tools/DumpDeep.cs` | Entity/AI/path/manager dump + xrefs |
-| `tools/DumpOptScan.cs` | Large-method scan + optim-oriented dumps |
-| `tools/DumpDeeper.cs` | Multi-subsystem deeper dump (EAI, MoveHelper, constants) |
+| [`../../7dtd-research/tools/`](../../7dtd-research/tools/) | **All RE dumpers** (general `src/` + legacy per-family `legacy/`), build + regen tests |
+| [`../../7dtd-research/docs/re-methodology.md`](../../7dtd-research/docs/re-methodology.md) | How to RE: dump, read IL, reconstruct layouts |
 | [`../../7dtd-research/docs/INDEX.md`](../../7dtd-research/docs/INDEX.md) | Index of all RE dump sets |
 | [`../../7dtd-research/docs/loop.md`](../../7dtd-research/docs/loop.md) | Complete dedicated game/sim loop map + open gaps |
-| `tools/tests/test_re_dump_regen.py` | Regenerates DumpFrameEntries against local dedicated DLL |
 | [`OPTIMIZATION_CANDIDATES.md`](OPTIMIZATION_CANDIDATES.md) | Graded optim candidates (this project) |
 | [`OPTIMIZATION_IDEAS.md`](OPTIMIZATION_IDEAS.md) | Optim idea map |
-| `tools/Dump*.cs`, `Find*.cs` | Other Mono.Cecil helpers against dedicated Managed |
 | Sibling `7dtd-apm` | Host + bridge evidence (not in this repo) |
 | Sibling `7dtd-loadgen` | Controlled clients |
 
 Narratives under `7dtd-research/docs/`; IL under `7dtd-research/il/` is **generated**. Regenerate after game updates; do not redistribute game IL.
 
 ```bash
-mcs -r:tools/Mono.Cecil.dll -out:tools/DumpGmUpdate.exe tools/DumpGmUpdate.cs
-mono tools/DumpGmUpdate.exe "$DS/7DaysToDieServer_Data/Managed/Assembly-CSharp.dll" 7dtd-research/il/gmUpdate-VERSION
+cd ../7dtd-research/tools && ./build.sh
+mono bin/legacy/DumpGmUpdate.exe "$DS/7DaysToDieServer_Data/Managed/Assembly-CSharp.dll" ../il/gmUpdate-VERSION
 ```
 
 ## Research ideas (not commitments)
