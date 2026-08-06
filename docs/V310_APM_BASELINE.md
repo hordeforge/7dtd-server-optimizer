@@ -46,8 +46,8 @@ stall**, and nearly **eliminates megapause-class STW** (364 ms → 31 ms). Graph
 throttle still shows (UpdateGraphs avg 7.45 → 1.46 ms). Aligns with 2026-08-02
 moderate story; STW and late-tick wins remain the headline, not health grade.
 
-**Not measured this run:** Animator CullCompletely human soak; path-admission BM
-session; canonical-heavy 64p.
+**Not measured in the moderate ES pair:** Animator CullCompletely human soak;
+canonical-heavy 64p. Path-admission BM-ish pair: § below (2026-08-07).
 
 ---
 
@@ -161,6 +161,60 @@ Subsystem share ON: entity_tick 61%, network 21%, falling 7%, explosions 5%.
 OFF: entity_tick 53%, network 30% (more time in net under deeper stall).
 
 **Interpretation:** Under real over-budget load, ES on 3.1.0 recovers **~1/3 of ms_per_tick**, roughly **halves late-tick share**, and nearly **eliminates megapause-class STW** (350 ms -> 43 ms). Matches V3.0.1 campaign story (smoothness + stress recovery).
+
+## Path admission BM-ish A/B (2026-08-07)
+
+**Goal:** measure A2 path admission under synthetic path-spam load (not light load).
+**Lever only:** `Pathfinding.MaxPathEnqueuesPerTick` + `DropPathWhenFarDistSq`.
+All other ES shipping defaults stayed on both arms.
+
+| Knob | OFF arm | ON arm |
+|---|---|---|
+| MaxPathEnqueuesPerTick | **0** (unlimited) | **32** |
+| DropPathWhenFarDistSq | **0** (off) | **2500** (50 m) |
+| clients | 24 | 24 |
+| seed | 20240807 | 20240807 |
+| bot_mix | combat:40,bait:25,traverse:20,wander:15 | same |
+| spawn | 6/player every 7s + horde 30s x4 | same |
+| MaxSpawnedZombies | 256 | 256 |
+| warmup / capture | 50 s / 90 s forensic | same |
+
+| Arm | Session | PathAdmissionPatch |
+|---|---|---|
+| OFF | `session_20260806_161109_pid3677624` | matched but **config-disabled** |
+| ON | `session_20260806_161552_pid3692080` | **active** (no config-disabled) |
+
+Loadgen: **24/24 pass** both arms (walks ~28.9k, attacks ~170; gatePass true).
+
+| Metric | Path OFF | Path ON | Δ ON vs OFF |
+|---|---:|---:|---:|
+| UpdateTick avg ms | **7.68** | **10.32** | **+34.4%** (worse) |
+| UpdateTick p95 ms | 13.45 | 17.95 | **+33.5%** |
+| late_ticks | **266** / 2253 | **310** / 1610 | **+16.5%** |
+| late_tick_share | **11.8%** | **19.3%** | **+63%** |
+| tick_stall_ms | **7983** | **9469** | **+18.6%** |
+| STW worst ms | 53.4 | 39.8 | -25.5% (not path-specific) |
+| gross alloc MB/s | 28.0 FAIL | 32.6 FAIL | both over budget |
+| TickEntities p95 | 10.09 | 12.52 | **+24%** |
+| UpdateGraphs calls | 642 | 528 | -18% (noise / load) |
+| entity_tick window ms | 38144 | 39663 | **+4%** |
+| health grade | D 47.2 | D 51.4 | ~flat |
+
+Compare log: `docs/evidence/compare_20260807_path_off_vs_on.txt`.
+
+**Verdict: do not default-on path admission from this measure.**
+
+1. Under this BM-ish path-spam profile, enabling cap=32 + far-drop@50m **worsened**
+   lag (late ticks, stall, UpdateTick avg/p95, TickEntities p95).
+2. Bot pass-rate stayed 24/24 (no mass stuck-bot signal at loadgen gate), so this is
+   a **perf miss**, not a proven fidelity failure.
+3. Aligns with 2026-08-03 stress note: path admission did not improve frame (+noise).
+4. Path admission remains a **default-off spike lever** for future targeted BM
+   capacity work; needs a different load (true blood-moon director + path queue
+   telemetry) before any default change.
+
+**Still open:** human combat soak for Animator CullCompletely; true BM capacity
+sweep; FindPaths drain re-pin (research polish).
 
 ## Animator CullCompletely stress (2026-08-03)
 

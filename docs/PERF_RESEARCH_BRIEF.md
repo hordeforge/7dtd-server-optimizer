@@ -274,7 +274,7 @@ Priority = (expected capacity or smoothness gain) x (evidence readiness) /
 | Rank | Work | Type | Why now | Fidelity gate |
 |---:|---|---|---|---|
 | **1** | **Animator `CullCompletely` emergency** | **Built v1.18** (default-off) | Enter/exit + es animoff use CullCompletely | Human `es animstate` dp + heavy A/B still required |
-| **2** | **Path admission (A2)** under synthetic BM | **Built v1.18** (default-off knobs) | Cap + far-drop at FindPath; priority bypass | APM BM session; no stuck near-player AI |
+| **2** | **Path admission (A2)** under synthetic BM | **Built; measured 2026-08-07 default-off** | BM-ish 24p: cap=32+drop@50m **worsened** late ticks / UpdateTick; loadgen still 24/24 | Keep off; only revisit with path-queue telemetry + true BM director |
 | **3** | **Ops pack as first-class** | Docs + launch | ViewDistance, MaxSpawnedZombies, `GC_FREE_SPACE_DIVISOR`, `MONO_ENV_OPTIONS=-O=all` already validated | Publish recommended serverconfig matrix |
 | **4** | **Chunk blob cache design** | Design + optional patch | Ownership closed (Setup on sim from SendChunks/RebuildTerrain); multi-observer join still pays N× encode | Byte-identical packages; invalidation on block edit / TE / density |
 | **5** | **Spatial interest + closest-player grid** | Large project | Only structural fix for 450-500p cliff | Client never missing in-range entities; removal correctness |
@@ -352,6 +352,9 @@ and **path admission under BM**, with ops config as the free capacity dial.
 
 ## Changelog
 
+- **2026-08-07:** Path admission BM-ish A/B (24p combat/bait, sessions `161109`/
+  `161552`): enabling MaxPathEnqueuesPerTick=32 + DropPathWhenFarDistSq=2500
+  **worsened** lag; keep default-off. See V310_APM_BASELINE.md.
 - **2026-08-06:** Consumed research Clone triage (162 sites, skip XUi) and chunk
   encode ownership (SendChunks sole UpdateTick; Setup from SendChunks + RebuildTerrain).
   Rank 6 demoted to optional micro-patches; rank 4 ownership closed; §7 gaps table updated.

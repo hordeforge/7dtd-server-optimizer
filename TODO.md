@@ -56,8 +56,13 @@ Headline ON vs OFF: UpdateTick avg **-17.5%**, late_ticks **-68%**, tick_stall
 Both arms still fail absolute forensic budgets. Details: `docs/V310_APM_BASELINE.md`
 § Remeasure 2026-08-06.
 
+**Path admission BM-ish A/B (2026-08-07):** sessions `161109` (path OFF) /
+`161552` (cap=32, dropFarSq=2500). Loadgen 24/24 both. Lag **worse** ON
+(late_ticks +16%, UpdateTick avg +34%). **Keep default-off.** Details:
+`docs/V310_APM_BASELINE.md` § Path admission BM-ish A/B.
+
 **Still measure/product:** Animator CullCompletely **human combat soak** before default-on;
-path admission BM APM session; optional Clone micro-patches only with soak.
+optional Clone micro-patches only with soak; true BM capacity sweep if needed.
 
 See `docs/PERF_RESEARCH_BRIEF.md` §4.4-4.5, §5 ranks 1/2/4/6.
 
