@@ -44,6 +44,18 @@ Stock RE closed two brief gaps without new EfficientServer code:
 | ItemStack.Clone triage | 162 sites; ~56 XUi (ignore for dedi); mass TE+inventory+net Setup | `7dtd-research/docs/items.md` |
 | Chunk encode ownership | SendChunks sole caller UpdateTick; Setup from SendChunks + RebuildTerrain | `7dtd-research/docs/world-chunks.md` |
 
+**Measured 2026-08-06 (moderate 16p forensic A/B, shipping defaults):**
+
+| Arm | Session |
+|---|---|
+| ES ON | `session_20260806_155401_pid3593984` |
+| ES OFF | `session_20260806_160357_pid3639944` |
+
+Headline ON vs OFF: UpdateTick avg **-17.5%**, late_ticks **-68%**, tick_stall
+**-56%**, STW worst **-91.5%** (364→31 ms), UpdateGraphs avg 7.45→1.46 ms.
+Both arms still fail absolute forensic budgets. Details: `docs/V310_APM_BASELINE.md`
+§ Remeasure 2026-08-06.
+
 **Still measure/product:** Animator CullCompletely **human combat soak** before default-on;
 path admission BM APM session; optional Clone micro-patches only with soak.
 

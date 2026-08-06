@@ -1,0 +1,88 @@
+# APM session compare
+
+- **A:** `/home/maci/.local/share/7dtd-apm/session_20260806_160357_pid3639944`
+- **B:** `/home/maci/.local/share/7dtd-apm/session_20260806_155401_pid3593984`
+- **Overall better (lower total layer pressure):** **A**
+- Sum layer scores: A=270.0  B=300.0
+- Layers A better: 1  B better: 1
+
+## Layer deltas (B − A; negative = B improved)
+
+| layer | A | B | Δ | better |
+|-------|---|---|---|--------|
+| io | 10.0 | 45.0 | +35.0 | A |
+| runtime_gc | 85.0 | 80.0 | -5.0 | B |
+| app_sim | 40.0 | 40.0 | +0.0 | tie |
+| cpu | 15.0 | 15.0 | +0.0 | tie |
+| memory_cache | 70.0 | 70.0 | +0.0 | tie |
+| scheduler | 50.0 | 50.0 | +0.0 | tie |
+| sync_locks | 0.0 | 0.0 | +0.0 | tie |
+
+## Managed section per-call heat deltas
+
+| section | A | B | Δ | better |
+|---------|---|---|---|--------|
+| AstarManager.UpdateGraphs | 22.1629 | 10.9904 | -11.173 | B |
+| GameManager.UpdateTick | 10.6543 | 8.4096 | -2.245 | B |
+| World.TickEntities | 8.7053 | 6.5226 | -2.183 | B |
+| World.SaveWorldState | 3.4072 | 1.8347 | -1.573 | B |
+| World.TickEntitiesSlice | 6.8084 | 5.9427 | -0.866 | B |
+| World.TickEntitiesFlush | 6.81 | 5.9448 | -0.865 | B |
+| ChunkManager.DetermineChunksToLoad | 1.2177 | 0.9314 | -0.286 | B |
+| NetEntityDistribution.OnUpdateEntities | 1.0768 | 0.8324 | -0.244 | B |
+| World.OnUpdateTick | 1.1787 | 1.0112 | -0.167 | B |
+| ChunkManager.SendChunksToClients | 0.7485 | 0.6439 | -0.105 | B |
+| ConnectionManager.Update | 0.4939 | 0.4533 | -0.041 | B |
+| AIDirector.Tick | 0.0803 | 0.1141 | +0.034 | A |
+| EAIManager.Update | 0.0329 | 0.0669 | +0.034 | A |
+| ChunkProviderGenerateWorld.SaveRandomChunks | 0.2848 | 0.2523 | -0.032 | B |
+| World.EntityActivityUpdate | 0.1229 | 0.0947 | -0.028 | B |
+| NetPackageChunk.Setup | 0.085 | 0.0644 | -0.021 | B |
+| World.TickEntity | 0.0898 | 0.0694 | -0.02 | B |
+| EntityAlive.OnUpdateLive | 0.0659 | 0.0509 | -0.015 | B |
+| EntityAlive.CanSee | 0.0686 | 0.0812 | +0.013 | A |
+| TileEntityFeatureData.InstantiateModule | 0.0726 | 0.0593 | -0.013 | B |
+
+- **Late ticks (bridge tick overage >60ms):** A=84 B=27 (Δ -57)
+- **Gross GC alloc MB/s (churn):** A=18.26 B=16.13
+- **Worst STW pause ms (main-thread freeze):** A=364.0 B=31.0
+- **Chunk stream MB/s:** A=3.28 B=3.21
+
+## Subsystem attribution deltas (window-scoped ms; needs --reset-bridge on both)
+
+| subsystem | A ms | B ms | Δ | better |
+|-----------|------|------|---|--------|
+| entity_tick | 28178.3 | 23274.5 | -4903.8 | B |
+| network | 2907.0 | 2498.4 | -408.6 | B |
+| io_saves | 1262.9 | 1162.4 | -100.5 | B |
+| spawn_director | 334.0 | 318.6 | -15.4 | B |
+| managers | 78.5 | 71.3 | -7.2 | B |
+| deco_world | 124.8 | 121.9 | -2.9 | B |
+| explosions | 2.3 | 2.2 | -0.1 | B |
+| falling_blocks | 2.2 | 2.1 | -0.1 | B |
+
+## Speedscope / folded frame deltas (B − A sample weight)
+
+| Δ | A | B | frame |
+|---|---|---|-------|
+| +10155 | 147779 | 157934 | `[jit]` |
+| -815 | 815 | 0 | `[perf-3639944.map]` |
+| +698 | 0 | 698 | `[perf-3593984.map]` |
+| -437 | 7440 | 7003 | `[UnityPlayer.so]` |
+| -311 | 3955 | 3644 | `[libmonobdwgc-2.0.so]` |
+| -263 | 4789 | 4526 | `[libc.so.6]` |
+| -102 | 730 | 628 | `__pthread_cleanup_pop` |
+| -77 | 322 | 245 | `WaterDataHandle.InitializeFromChunk` |
+| -76 | 80 | 4 | `TextureUtils.ApplyTint` |
+| -70 | 344 | 274 | `ChunkCluster.RegenerateChunk` |
+| -69 | 341 | 272 | `[MESH] MeshGenerator.GenerateMesh` |
+| -68 | 340 | 272 | `[MESH] MeshGeneratorMC2.CreateMesh` |
+| -68 | 100 | 32 | `UnityEngine.SetupCoroutine.InvokeMoveNext` |
+| +59 | 220 | 279 | `__condvar_confirm_wakeup` |
+| -56 | 175 | 119 | `ChunkBlockLayer.GetAt` |
+| -48 | 50 | 2 | `UnityEngine.Color32.op_Implicit` |
+| -47 | 434 | 387 | `mono_thread_info_uninstall_interrupt` |
+| -36 | 36 | 0 | `TEFeatureLockable.Write` |
+| -32 | 1283 | 1251 | `[LOCK] ___pthread_cond_timedwait64` |
+| -32 | 98 | 66 | `__atomic_wide_counter_load_relaxed` |
+

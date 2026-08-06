@@ -1,9 +1,55 @@
 # V3.1.0 APM / loadgen evidence (EfficientServer)
 
-**Date:** 2026-08-02  
+**Date:** 2026-08-02 (original); **remeasure 2026-08-06** below  
 **Game:** V 3.1.0 (b14) dedicated Navezgane  
 **Mods:** `0_TFP_Harmony`, `7dtd-apm-bridge` 2.0.0, `EfficientServer` 1.17.0  
 **Workload:** moderate matched pair (not full canonical-heavy-v2)
+
+---
+
+## Remeasure 2026-08-06 (moderate 16p forensic)
+
+Same knobs as the original moderate pair (seed `20240802`, 16 clients, 45s warm,
+90s forensic, spawn/horde as below). Shipping ES defaults; **AnimatorEmergency
+and path admission still default-off** (not the lever under test).
+
+| Arm | Session | ES |
+|---|---|---|
+| ON | `session_20260806_155401_pid3593984` | Enabled=true |
+| OFF | `session_20260806_160357_pid3639944` | Enabled=false |
+
+Loadgen: **passed** both arms (`workload.json` result.passed=true).  
+Compare: `7dtd-apm compare OFF ON` (A=OFF, B=ON).
+
+| Metric | ES ON | ES OFF | Δ ON vs OFF |
+|---|---:|---:|---:|
+| UpdateTick avg ms (proxy ms/tick) | **5.76** | **6.99** | **-17.5%** |
+| UpdateTick p95 ms | 8.41 | 10.65 | **-21.1%** |
+| late_ticks | **27** / 1785 | **84** / 1755 | **-67.9%** |
+| late_tick_share | **1.51%** | **4.79%** | **-68.5%** |
+| tick_stall_ms | **1203** | **2737** | **-56.0%** |
+| STW worst ms | **31.0** | **364.0** | **-91.5%** |
+| STW total ms | **93.3** | **474.0** | **-80.3%** |
+| gross alloc MB/s | 16.13 FAIL | 18.26 FAIL | **-11.7%** (both over 15) |
+| TickEntities p95 | 6.52 | 8.71 | **-25.1%** |
+| UpdateGraphs avg ms | **1.46** (404 calls) | **7.45** (134 calls) | throttle visible |
+| UpdateGraphs total ms | 589 | 998 | **-41%** |
+| entity_tick window ms | 23275 | 28178 | **-17.4%** |
+| health grade | C 59.5 | C 62.9 | ~flat (composite; lag metrics favor ON) |
+
+**Budget:** both arms still **FAIL** absolute forensic budgets (memory_cache,
+gross alloc, sum_layers). Expected under spawn pressure; A/B is relative.
+
+**Interpretation:** On 2026-08-06, shipping ES still pays on V3.1.0 moderate load:
+roughly **1/6 lower UpdateTick avg**, **~2/3 fewer late ticks**, **~half tick
+stall**, and nearly **eliminates megapause-class STW** (364 ms → 31 ms). Graph
+throttle still shows (UpdateGraphs avg 7.45 → 1.46 ms). Aligns with 2026-08-02
+moderate story; STW and late-tick wins remain the headline, not health grade.
+
+**Not measured this run:** Animator CullCompletely human soak; path-admission BM
+session; canonical-heavy 64p.
+
+---
 
 | Knob | Value |
 |---|---|

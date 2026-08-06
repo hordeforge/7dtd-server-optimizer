@@ -355,6 +355,9 @@ and **path admission under BM**, with ops config as the free capacity dial.
 - **2026-08-06:** Consumed research Clone triage (162 sites, skip XUi) and chunk
   encode ownership (SendChunks sole UpdateTick; Setup from SendChunks + RebuildTerrain).
   Rank 6 demoted to optional micro-patches; rank 4 ownership closed; §7 gaps table updated.
+  **Live remeasure** moderate 16p forensic ES ON vs OFF (sessions
+  `155401` / `160357`): UpdateTick avg -17.5%, late_ticks -68%, STW worst -91.5%;
+  see V310_APM_BASELINE.md remeasure section.
 - **2026-07-28:** Initial brief. IL re-check FindPath / GetClosestPlayer /
   EntityActivityUpdate / OnUpdateEntities / updatePlayerList / NetPackageChunk.Setup /
   ItemStack.Clone. Ranked backlog aligned with RESULTS campaign end-state.
