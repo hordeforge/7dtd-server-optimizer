@@ -7,7 +7,8 @@ do next, what is already closed, and which "big wins" are dead ends.
 ([`../../7dtd-research/docs/`](../../7dtd-research/docs/)).
 **Evidence date:** 2026-07-28 brief; APM campaign through 2026-07-21; IL re-check
 of open hot methods same day (dumps under local `/tmp/perf-re/`, regenerable via
-`7dtd-research/tools`).
+`7dtd-research/tools`). **2026-08-06 research follow-up:** Clone call-site triage
+and chunk encode ownership closed in stock RE (see §4.4-4.5).
 
 **Read with:** [RESULTS.md](RESULTS.md) (verdicts), [measured-scaling.md](measured-scaling.md)
 (exponents), [bottlenecks.md](bottlenecks.md) (catalog), [engine-limitations.md](../../7dtd-research/docs/engine-limitations.md)
@@ -23,7 +24,7 @@ of open hot methods same day (dumps under local `/tmp/perf-re/`, regenerable via
 | What sets the 50 ms wall under load? | **TickEntities ~63%** + **OnUpdateEntities ~30%** (+ SendChunks ~5%). |
 | Can more safe Harmony cut the entity wall? | **Mostly no.** Close-combat AI + world-collision physics are fidelity-bound. |
 | Can more safe Harmony cut the player O(N^2) wall? | **Partially already.** Fast send + replication stride + governor. Spatial grid is large/risky. |
-| What still needs research (not more catalog prose)? | **Animator CullCompletely exit**, **path admission under BM**, **chunk encode ownership**, **optional spatial grid design**, **ItemStack.Clone call-site triage**. |
+| What still needs research (not more catalog prose)? | **Animator CullCompletely human soak** (code built), **path admission BM measure** (code built), **chunk blob-cache design** (ownership closed), **optional spatial grid design**. Clone triage **closed** in research. |
 | What should the optimizer *not* re-open? | Serialize-once at build layer (stock already does it), mid-band AI stride as a headline win, parallel EAI, parallel SendPackage, fps as TPS lever. |
 
 ```text
@@ -205,17 +206,49 @@ So every chunk package pays **`Chunk.write` on the sim thread** at Setup time; o
 later byte copy/send is elsewhere. Catalog still lists chunk pipeline as large under
 join/spread loads; at BM ceiling it is ~5% of UpdateTick after entities+replication.
 
+**Ownership (stock RE, 2026-08-06 Xref, closed):**
+
+| Symbol | Callers |
+|---|---|
+| `ChunkManager.SendChunksToClients` | **sole** = `GameManager.UpdateTick` |
+| `NetPackageChunk.Setup` | **4**: two from `SendChunksToClients` (first-load + reload), plus disc/flat `RebuildTerrain` overwrite paths |
+| `NetPackageChunk.write` | **0** direct; body goes through virtual package serialize on the connection writer |
+
+Narrative: [world-chunks.md](../../7dtd-research/docs/world-chunks.md),
+[engine-limitations.md](../../7dtd-research/docs/engine-limitations.md).
+
 **Optimizer use:** blob cache per (chunkKey, version) shared across observers is the
 safe-ish research design; off-thread encode races world mutation. P6 send-batch
 throttle already measured mis-targeted for join lag (gen/load dominates).
+**Ownership is no longer an open research question**; remaining work is design +
+fidelity of a cache, not "who calls Setup".
 
-### 4.5 ItemStack.Clone (alloc rank, not tick rank)
+### 4.5 ItemStack.Clone (alloc rank, not tick rank) - triage closed
 
 **`ItemStack.Clone` IL=15:** always `new ItemStack(itemValue.Clone() or None, count)`.
 Array clones allocate `newarr` then per-element Clone.
 
-**Optimizer use:** only elide clones at call sites proven non-escaping (Lever C).
-Needs call-site inventory from APM alloc attribution + IL, not a global Prefix.
+**Call-site triage (stock RE Xref, 2026-08-06, closed):** **162** sites total.
+
+| Bucket | Sites | Dedi relevance |
+|---|---:|---|
+| Client UI (`XUi*` / `XUiC_*` / `XUiM_*`) | **56** | **None** for headless STW |
+| TE Workstation / Collector / Forge / TEFeatureStorage / traps | ~28 | **High** (server inventory) |
+| TransactionalInventory / Inventory / InventoryOperation / Bag | ~14 | **High** |
+| NetPackagePlayerInventory / ItemDrop Setup | 4 | Medium (wire copy) |
+| Loot / trader / quest / rewards / game events | rest | Medium, event-driven |
+
+Full table: [items.md](../../7dtd-research/docs/items.md) § ItemStack.Clone call-site triage.
+
+**Optimizer use:**
+
+1. Do **not** Harmony XUi Clone for dedicated tick or STW.
+2. Any elision must be per-site with non-escaping proof (TE/inventory/net Setup);
+   global Prefix is wrong.
+3. Prefer APM alloc samples that attribute to TE/inventory under loot/combat soak,
+   not UI-heavy client captures.
+4. Triage itself is **done**; remaining work is optional micro-patches + soak, not
+   more catalog RE.
 
 ### 4.6 Animator headless waste (largest recent RE win, exit unsolved)
 
@@ -243,9 +276,9 @@ Priority = (expected capacity or smoothness gain) x (evidence readiness) /
 | **1** | **Animator `CullCompletely` emergency** | **Built v1.18** (default-off) | Enter/exit + es animoff use CullCompletely | Human `es animstate` dp + heavy A/B still required |
 | **2** | **Path admission (A2)** under synthetic BM | **Built v1.18** (default-off knobs) | Cap + far-drop at FindPath; priority bypass | APM BM session; no stuck near-player AI |
 | **3** | **Ops pack as first-class** | Docs + launch | ViewDistance, MaxSpawnedZombies, `GC_FREE_SPACE_DIVISOR`, `MONO_ENV_OPTIONS=-O=all` already validated | Publish recommended serverconfig matrix |
-| **4** | **Chunk blob cache design** | Research design | Setup always calls `Chunk.write` on sim; multi-observer join | Byte-identical packages; invalidation on block edit |
+| **4** | **Chunk blob cache design** | Design + optional patch | Ownership closed (Setup on sim from SendChunks/RebuildTerrain); multi-observer join still pays N× encode | Byte-identical packages; invalidation on block edit / TE / density |
 | **5** | **Spatial interest + closest-player grid** | Large project | Only structural fix for 450-500p cliff | Client never missing in-range entities; removal correctness |
-| **6** | **ItemStack.Clone call-site triage** | Research + tiny patches | Top churn site after path/net | Inventory/loot soak; no dupe/desync |
+| **6** | **ItemStack.Clone micro-patches (optional)** | Tiny patches only | **Triage closed** (162 sites; skip XUi; TE/inventory/net mass) | Inventory/loot soak; no dupe/desync; no global Prefix |
 | **7** | **Far character-controller stride** | Research only | 54% of per-zombie is world collision | Far zombies must not float/clip into play |
 
 **Explicit non-goals (parked):**
@@ -276,7 +309,8 @@ Stock RE facts for patch targets live in:
 | Frame ownership (gmUpdate vs ConnectionManager vs DynamicMesh) | [loop.md](../../7dtd-research/docs/loop.md) |
 | AI LOD bands / updateTasks | [entity-ai.md](../../7dtd-research/docs/entity-ai.md) |
 | Net interest / package thresholds | [network.md](../../7dtd-research/docs/network.md), [protocol-packages.md](../../7dtd-research/docs/protocol-packages.md) |
-| Chunk stream / SendChunks | [world-chunks.md](../../7dtd-research/docs/world-chunks.md) |
+| Chunk stream / SendChunks ownership | [world-chunks.md](../../7dtd-research/docs/world-chunks.md) |
+| ItemStack.Clone call-site triage | [items.md](../../7dtd-research/docs/items.md) § Clone triage |
 | Hard ceilings | [engine-limitations.md](../../7dtd-research/docs/engine-limitations.md) |
 
 ---
@@ -285,16 +319,14 @@ Stock RE facts for patch targets live in:
 
 These are **not** "continue annotating all catalogued types". They are perf-specific.
 
-1. **`ASPPathFinderThread/<FindPaths>d__* :MoveNext` drain loop** - re-pin the
-   literal **8** and any priority order (for admission design).
-2. **`Chunk.write` version stamp / dirty flags** - what invalidates a cached blob
-   (block edit, TE, density, deco).
-3. **Call graph of `ItemStack.Clone` under heavy load** - top N managed callers from
-   APM + Xref, classify mandatory vs defensive.
-4. **Animator spawn path** - where `cullingMode` and `applyRootMotion` are set on
-   zombie create (for CullCompletely + spawn hook).
-5. **Interest removal path** - exact package when a player leaves an entity's set
-   (spatial grid must not skip removals).
+| # | Gap | Status |
+|---|---|---|
+| 1 | `ASPPathFinderThread` FindPaths drain: re-pin literal **8** + priority order | Still open (admission design polish) |
+| 2 | `Chunk.write` dirty/version stamp for blob-cache invalidation | Still open (design input for rank 4) |
+| 3 | `ItemStack.Clone` call-site triage (Xref + buckets) | **Closed 2026-08-06** in research items.md |
+| 4 | Animator spawn path (`cullingMode` / `applyRootMotion` on create) | Still open (supports CullCompletely + spawn hook) |
+| 5 | Interest removal package when player leaves entity set | Still open (spatial grid) |
+| 6 | Chunk encode ownership (who calls Setup / SendChunks) | **Closed 2026-08-06** in research world-chunks |
 
 Everything else in the managed corpus is either already in RESULTS/bottlenecks or is
 non-IL residual (Unity order, native LiteNet, Boehm internals).
@@ -307,8 +339,8 @@ non-IL residual (Unity order, native LiteNet, Boehm internals).
 |---|---|
 | Better BM at 64p | Keep governor + stride; finish animator CullCompletely; path admission if path backlog shows in APM |
 | Better 128-500p | View distance + FastSend (done); only then spatial interest project |
-| Fewer hitches | Alloc upstream (Clone triage, P4 opt-in long soak); GC headroom env; not more GC cadence knobs |
-| Join less laggy | Chunk gen/load on sim, not P6 send cap; blob cache research |
+| Fewer hitches | Alloc upstream at **TE/inventory** Clone sites (not XUi); P4 opt-in long soak; GC headroom env |
+| Join less laggy | Chunk gen/load on sim, not P6 send cap; blob cache design (ownership known) |
 | Rewrite-scale wins | `zdtd` multi-core sim / different net model - out of EfficientServer scope |
 
 **Bottom line:** stock + APM research already named the walls and exhausted safe
@@ -320,6 +352,9 @@ and **path admission under BM**, with ops config as the free capacity dial.
 
 ## Changelog
 
+- **2026-08-06:** Consumed research Clone triage (162 sites, skip XUi) and chunk
+  encode ownership (SendChunks sole UpdateTick; Setup from SendChunks + RebuildTerrain).
+  Rank 6 demoted to optional micro-patches; rank 4 ownership closed; §7 gaps table updated.
 - **2026-07-28:** Initial brief. IL re-check FindPath / GetClosestPlayer /
   EntityActivityUpdate / OnUpdateEntities / updatePlayerList / NetPackageChunk.Setup /
   ItemStack.Clone. Ranked backlog aligned with RESULTS campaign end-state.

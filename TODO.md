@@ -35,6 +35,20 @@ bridge in `7dtd-apm`.
 - [ ] Reconcile README, architecture, features, and runtime behavior.
 - [ ] Publish supported 7DTD/toolchain versions and troubleshooting.
 
+## Research evidence consumed (2026-08-06)
+
+Stock RE closed two brief gaps without new EfficientServer code:
+
+| Gap | Result | Research |
+|---|---|---|
+| ItemStack.Clone triage | 162 sites; ~56 XUi (ignore for dedi); mass TE+inventory+net Setup | `7dtd-research/docs/items.md` |
+| Chunk encode ownership | SendChunks sole caller UpdateTick; Setup from SendChunks + RebuildTerrain | `7dtd-research/docs/world-chunks.md` |
+
+**Still measure/product:** Animator CullCompletely **human combat soak** before default-on;
+path admission BM APM session; optional Clone micro-patches only with soak.
+
+See `docs/PERF_RESEARCH_BRIEF.md` §4.4-4.5, §5 ranks 1/2/4/6.
+
 ## Open: animator revival wedge (tier-2 exit) - CODE BUILT, MEASURE OPEN
 
 **2026-07-28:** `AnimatorEmergency` rewritten to `cullingMode = CullCompletely` (no `enabled` toggle). `es animoff`/`animon` use the same path.
