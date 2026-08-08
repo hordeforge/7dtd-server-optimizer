@@ -554,13 +554,13 @@ Every Grade A/B row anchors a method on the dedicated loop map ([`../../7dtd-res
 
 | Evidence | Path |
 |---|---|
-| Frame / gmUpdate | `7dtd-research/il/gmUpdate-v3.0.1/` |
-| Entity→AI→path | `7dtd-research/il/deep-v3.0.1/` |
-| EAI/MoveHelper constants | `7dtd-research/il/deeper-v3.0.1/` |
-| Large-method scan | `7dtd-research/docs/inventories/opt-scan.md` + `7dtd-research/il/opt-scan-v3.0.1/*_il.txt` |
-| Timer/AIDirector/net bands | `7dtd-research/il/gaps-v3.0.1/` |
-| MB inventory | `7dtd-research/il/frame-entries-v3.0.1/` |
-| Loop notes | `7dtd-research/docs/inventories/loop-complete.md` + `7dtd-research/il/loop-complete-v3.0.1/` |
+| Frame / gmUpdate | `7dtd-research/il/loop-complete-v3.1.0/` |
+| Entity→AI→path | `7dtd-research/il/deep-v3.1.0/` |
+| EAI/MoveHelper constants | `7dtd-research/il/deeper-v3.1.0/` |
+| Large-method scan | `7dtd-research/docs/inventories/opt-scan.md` + `7dtd-research/il/opt-scan-v3.1.0/*_il.txt` |
+| Timer/AIDirector/net bands | `7dtd-research/il/gaps-v3.1.0/` |
+| MB inventory | `7dtd-research/il/frame-entries-v3.1.0/` |
+| Loop notes | `7dtd-research/docs/inventories/loop-complete.md` + `7dtd-research/il/loop-complete-v3.1.0/` |
 
 Regenerate dumps with the RE tooling in `../../7dtd-research/tools/` (see [`../../7dtd-research/tools/README.md`](../../7dtd-research/tools/README.md)). Optim **narrative** lives only under `7dtd-optimizer/docs/`.
 
@@ -588,6 +588,7 @@ missing spatial index or a serial main-thread stage**. Spatial bucketing + off-t
 
 ## Changelog
 
+- **2026-08-08:** Stale `il/*-v3.0.1/` dump paths updated to current `*-v3.1.0/` dirs.
 - **2026-07-19:** bottleneck audit (42 verified) consolidated into `7dtd-research/docs/bottlenecks.md`; §10 additions (SendPackage entityId-map = top new bang-for-buck, buffer presize+retain, off-sim chunk encode, spatial interest grid). GC megapause measured (479 ms @ 6.9 GB); allocation-reuse research documented.
 - **2026-07-17:** scale ladder (exp8, 99 entities) added; per-entity tick cost measured linear (~0.08 ms), 1000-AI extrapolation and GC-pause-as-lag conclusion recorded.
 - **2026-07-16 (later):** 4b measured-evidence campaign added; experiment order re-ranked (chunk streaming first).

@@ -293,12 +293,12 @@ Prefer growing admission at **TickEntities / Slice / TickEntity** over replacing
 
 Cecil helpers under `tools/` (`DumpGmUpdate.cs`, `Dump*.cs`, `Find*.cs`).
 
-V3.0.1 dumps:
+V3.1.0 dumps (regenerated after the 3.1.0 game update; historical V3.0.1 names noted inline):
 
-- Frame narrative: [`../../7dtd-research/docs/loop-gmupdate.md`](../../7dtd-research/docs/loop-gmupdate.md); dumps: [`../../7dtd-research/il/gmUpdate-v3.0.1/`](../../7dtd-research/il/gmUpdate-v3.0.1/)
-- Entity/AI/path/net/fall: [`../../7dtd-research/docs/entity-ai.md`](../../7dtd-research/docs/entity-ai.md); dumps: [`../../7dtd-research/il/deep-v3.0.1/`](../../7dtd-research/il/deep-v3.0.1/)
-- Optim scan dumps: [`../../7dtd-research/il/opt-scan-v3.0.1/`](../../7dtd-research/il/opt-scan-v3.0.1/) (raw only)
-- Deeper multi-subsystem dumps: [`../../7dtd-research/il/deeper-v3.0.1/`](../../7dtd-research/il/deeper-v3.0.1/)
+- Frame narrative: [`../../7dtd-research/docs/loop-gmupdate.md`](../../7dtd-research/docs/loop-gmupdate.md); dumps: [`../../7dtd-research/il/loop-complete-v3.1.0/`](../../7dtd-research/il/loop-complete-v3.1.0/) (historical `gmUpdate-v3.0.1` name)
+- Entity/AI/path/net/fall: [`../../7dtd-research/docs/entity-ai.md`](../../7dtd-research/docs/entity-ai.md); dumps: [`../../7dtd-research/il/deep-v3.1.0/`](../../7dtd-research/il/deep-v3.1.0/)
+- Optim scan dumps: [`../../7dtd-research/il/opt-scan-v3.1.0/`](../../7dtd-research/il/opt-scan-v3.1.0/) (raw only)
+- Deeper multi-subsystem dumps: [`../../7dtd-research/il/deeper-v3.1.0/`](../../7dtd-research/il/deeper-v3.1.0/)
 
 Do not commit game IL or `Assembly-CSharp.dll`. Regenerate after every game update ([`DEVELOPMENT.md`](DEVELOPMENT.md)).
 
@@ -320,6 +320,7 @@ See [`../../7dtd-research/docs/loop.md`](../../7dtd-research/docs/loop.md) §14.
 
 ## Changelog
 
+- **2026-08-08:** Stale `il/*-v3.0.1/` dump links repointed to current `*-v3.1.0/` dirs (loop-complete, deep, deeper, opt-scan).
 - **2026-07-16:** Optim candidates doc under `docs/OPTIMIZATION_CANDIDATES.md` (not 7dtd-research/il).
 - **2026-07-16:** Gap-close: ticks/sec 20, path→AstarPath, AIDirector component list, net bands.
 - **2026-07-16:** loop complete map link; dual entity paths; open gaps pointer.

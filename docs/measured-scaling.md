@@ -7,7 +7,7 @@
 **Hub:** [`INDEX.md`](../../7dtd-research/docs/INDEX.md).
 
 Empirical complement to the static IL map ([`loop.md`](../../7dtd-research/docs/loop.md), [`network.md`](../../7dtd-research/docs/network.md)).  
-IL surfaces named below are documented under `research/il/gaps-v3.0.1/`, `research/il/gmUpdate-v3.0.1/`, `research/il/dedi-complete-v3.0.1/` (e.g. `ConnectionManager.Update` IL≈215, `NetEntityDistribution.OnUpdateEntities` IL=322).  
+IL surfaces named below are documented under `research/il/gaps-v3.1.0/`, `research/il/loop-complete-v3.1.0/` (historical `gmUpdate-v3.0.1` name), `research/il/dedi-complete-v3.1.0/` (e.g. `ConnectionManager.Update` IL≈215, `NetEntityDistribution.OnUpdateEntities` IL=322).  
 All numbers from live `7dtd-apm` captures against the V3.0.1 dedicated server with the Harmony telemetry bridge
 (DeepMode on), driven by `7dtd-loadgen` bots. Dates 2026-07-17/18.
 
@@ -189,4 +189,5 @@ how-to lives in the repo-root `RUNBOOK.md`; graded candidates in
 
 ## Changelog
 
+- **2026-08-08:** Stale `il/*-v3.0.1/` dump paths updated to current `*-v3.1.0/` dirs (gaps, loop-complete, dedi-complete).
 - **2026-07-19:** Related docs table.
