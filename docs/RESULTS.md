@@ -1034,8 +1034,10 @@ just a perf number. Command: `7dtd-loadgen --self-test-join --actions 6`.
 ## Live animator-emergency + path-admission validation (2026-08-09)
 
 Harness: `scripts/validate_anim_path_admission.py` (loadgen bots + telnet),
-V3.1.0 b14 dedicated, ES 1.17.0. Load: 8 players, ~120-144 spawned endgame
-zombies, gamestage 200. Report: `server/logs/validate_anim_path_20260809_135113.json`.
+V3.1.0 b14 dedicated, ES 1.17.0. Reports in `server/logs/`.
+
+**Run 1 (light, 8 players / ~120-144 zombies / gamestage 200):**
+`validate_anim_path_20260809_135113.json`.
 
 | Verdict | Result |
 |---|---|
@@ -1047,11 +1049,24 @@ zombies, gamestage 200. Report: `server/logs/validate_anim_path_20260809_135113.
 | path_frame | **PASS_or_noise** - frame fixed at 50 ms under this light load |
 | overall | **PASS** |
 
+**Run 2 (heavier, 32 players / ~250 zombies / gamestage 250):**
+`validate_anim_path_20260809_140229.json`. 32/32 bots joined; alive climbed
+132 -> 161 -> 198 -> 224 -> 246 across the phases. Verdicts identical
+(overall **PASS**; animator enter/exit restored 159 rigs with root motion
+intact; path knobs reloaded live with the horde intact). Frame data moved
+off the 50 ms floor once the load built: anim baseline 50.0 -> off 50.0 ->
+restored 58.28 -> path baseline 58.63 -> path-on 66.88 ms. Neither lever
+produced a frame *win* at this load (frame tracks zombie count; consistent
+with the earlier 3t finding that path admission does not help moderate
+loads), and the harness's `anim_frame_win=SKIP_light_load` label is its
+fixed string for the non-win case - read the frame column, not the label.
+
 This is the live counterpart to the static AI-LOD audit: the animator-emergency
 exit path (the combat-fidelity concern) is mechanically validated - every rig it
-disabled was restored, and root motion survived. The frame-win and path-frame
-verdicts are honest skips/noise at light load; the full blood-moon stress claim
-still needs the 64p + 200+z A/B.
+disabled was restored, and root motion survived. Runs 1-2 (8p/144z and
+32p/250z) both pass; the animator-emergency exit path is validated at both
+loads. What remains for a frame-win *claim* (not fidelity): the full 64p +
+300z+ blood-moon stress A/B where the frame is genuinely tick-bound.
 
 ## Related docs
 
