@@ -8,6 +8,7 @@ build-mcs:
 	SEVENDTD_BUILD_BACKEND=mcs $(ROOT)/scripts/build.sh
 test:
 	dotnet run --project $(ROOT)/Source/EfficientServer.Tests -c Release
+	python3 $(ROOT)/scripts/check_config_doc.py
 install:
 	$(ROOT)/scripts/install.sh
 uninstall:
