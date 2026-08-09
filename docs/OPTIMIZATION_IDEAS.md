@@ -1,5 +1,6 @@
 # Optimization idea map (research, not roadmap)
 
+**Hub:** [`README.md`](../README.md).  
 **Owns:** idea backlog (not acceptance).  
 **Not:** candidates with evidence ([OPTIMIZATION_CANDIDATES](OPTIMIZATION_CANDIDATES.md)).
 

@@ -1,5 +1,6 @@
 # Optimization candidates (from dedicated RE)
 
+**Hub:** [`README.md`](../README.md).  
 **Status:** research inventory for EfficientServer, not a commit-to-ship roadmap.
 
 > **2026-07-21 campaign state:** the safe-Harmony space in this inventory is

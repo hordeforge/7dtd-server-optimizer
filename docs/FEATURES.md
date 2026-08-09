@@ -1,5 +1,6 @@
 # EfficientServer features
 
+**Hub:** [`README.md`](../README.md).  
 **Owns:** shipped EfficientServer feature groups and validation notes.  
 **Not:** host topology ([HOST_TUNING](HOST_TUNING.md)), APM evidence ([../../7dtd-apm/docs/APM.md](../../7dtd-apm/docs/APM.md)), candidate backlog ([OPTIMIZATION_CANDIDATES](OPTIMIZATION_CANDIDATES.md)).  
 **Dev process:** [DEVELOPMENT](DEVELOPMENT.md).

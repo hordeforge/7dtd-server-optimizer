@@ -1,5 +1,6 @@
 # EfficientServer development
 
+**Hub:** [`README.md`](../README.md).  
 **Owns:** how to change EfficientServer (build, patch groups, evidence loop).  
 **Not:** feature behavior detail ([FEATURES](FEATURES.md)), host ops ([HOST_TUNING](HOST_TUNING.md)).
 

@@ -1,5 +1,6 @@
 # Speeding up simulation (threading and friends)
 
+**Hub:** [`README.md`](../README.md).  
 **Owns:** sim parallelism research notes.  
 **Not:** stock loop map ([research loop](../../7dtd-research/docs/loop.md)).
 

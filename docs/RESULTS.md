@@ -1,5 +1,6 @@
 # EfficientServer results ledger (minute detail)
 
+**Hub:** [`README.md`](../README.md).  
 **Game pin:** V3.1.0 (b14); campaign measurements below were taken on V3.0.1 unless noted.
 V3.1.0 APM: [V310_APM_BASELINE.md](V310_APM_BASELINE.md) moderate 16p + heavy 48p + canonical 64p (004634/005248 mixed) + animator stress 20260803.
 
@@ -1010,4 +1011,3 @@ Session report: `server/logs/validate_anim_path_20260802_141640.json`.
    some walkers remains - not a full green light for default-on `AnimatorEmergency`.
 3. Path admission knobs reload live and do not collapse the horde at this load.
 4. Stress A/B (64p + 200+z over budget) still needed for a frame-ms prize claim.
-

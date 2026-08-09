@@ -1,5 +1,6 @@
 # 7 Days to Die Dedicated Server - reverse engineering notes
 
+**Hub:** [`README.md`](../README.md).  
 **Owns:** EfficientServer-oriented map of the dedicated hot path (optim context).  
 **Not:** full generic RE narratives ([research loop](../../7dtd-research/docs/loop.md)), feature behavior ([FEATURES](FEATURES.md)), host topology ([HOST_TUNING](HOST_TUNING.md)).
 

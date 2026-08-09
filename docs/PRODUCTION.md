@@ -1,5 +1,6 @@
 # Production deployment runbook
 
+**Hub:** [`README.md`](../README.md).  
 **Owns:** deploying EfficientServer + the APM bridge to a real dedicated server and
 operating them continuously. **Not:** per-option detail ([CONFIG](CONFIG.md)),
 evidence ([RESULTS](RESULTS.md)).

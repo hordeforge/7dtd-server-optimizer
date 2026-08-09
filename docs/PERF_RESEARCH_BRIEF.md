@@ -1,5 +1,6 @@
 # Perf research brief for EfficientServer (V3.1.0)
 
+**Hub:** [`README.md`](../README.md).  
 **Owns:** ranked map from stock RE + measured APM to what the optimizer should
 do next, what is already closed, and which "big wins" are dead ends.
 **Not:** full bottleneck tables ([bottlenecks.md](bottlenecks.md)), A/B ledger

@@ -1,5 +1,6 @@
 # EfficientServer configuration reference (v1.16.1)
 
+**Hub:** [`README.md`](../README.md).  
 **Owns:** every config option in minute detail - exact mechanism, gameplay impact,
 measured performance gain, default + rationale.
 **Not:** the A/B evidence trail (session IDs, curves): [RESULTS](RESULTS.md).

@@ -1,5 +1,6 @@
 # Pathfinding / nav-graph optimization (`AstarManager.UpdateGraphs`)
 
+**Hub:** [`README.md`](../README.md).  
 **Owns:** pathfinding optim notes.  
 **Not:** entity AI full map ([research entity-ai](../../7dtd-research/docs/entity-ai.md)).
 

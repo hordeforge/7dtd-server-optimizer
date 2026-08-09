@@ -1,5 +1,6 @@
 # Dedicated server host tuning (CCD, NUMA, ops)
 
+**Hub:** [`README.md`](../README.md).  
 **Audience:** Linux hosts running `7DaysToDieServer` under load.  
 **Owns:** CCD/NUMA/affinity/IRQ/storage host placement (ops).  
 **Not:** in-process Harmony optim ([FEATURES](FEATURES.md)), game sim map ([ARCHITECTURE](ARCHITECTURE.md)), RealEarth product status.  

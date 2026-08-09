@@ -1,5 +1,6 @@
 # Network / serialization optimization plan
 
+**Hub:** [`README.md`](../README.md).  
 **Status:** research + implementation plan for the player-scale wall. Not yet
 built. Promote each lever only with APM before/after + a desync/fidelity check.
 

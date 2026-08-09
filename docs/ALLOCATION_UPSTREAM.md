@@ -1,5 +1,6 @@
 # Upstream allocation reduction plan
 
+**Hub:** [`README.md`](../README.md).  
 **Owns:** the plan to cut managed allocation at its source (the real GC lever).
 **Not:** GC cadence tuning (that is [`FEATURES.md`](FEATURES.md) GC guard / incremental,
 proven secondary) or network wire design ([`NETWORK_OPTIMIZATION.md`](NETWORK_OPTIMIZATION.md)).

@@ -1,5 +1,6 @@
 # V3.1.0 APM / loadgen evidence (EfficientServer)
 
+**Hub:** [`README.md`](../README.md).  
 **Date:** 2026-08-02 (original); **remeasure 2026-08-06** below  
 **Game:** V 3.1.0 (b14) dedicated Navezgane  
 **Mods:** `0_TFP_Harmony`, `7dtd-apm-bridge` 2.0.0, `EfficientServer` 1.17.0  
