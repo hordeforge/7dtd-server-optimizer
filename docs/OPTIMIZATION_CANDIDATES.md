@@ -569,13 +569,13 @@ Regenerate dumps with the RE tooling in `../../7dtd-research/tools/` (see [`../.
 ## 10. Bottleneck-audit additions (2026-07-19)
 
 Full ranked catalog + bang-for-buck ordering:
-[`../../7dtd-research/docs/bottlenecks.md`](bottlenecks.md) (42 verified
+[`bottlenecks.md`](bottlenecks.md) (42 verified
 findings). New/actionable levers not already graded above, by impact-per-line:
 
 | Lever | Grade | Code | Impact |
 |---|---|---|---|
 | **`ConnectionManager.SendPackage` entityId-map lookup (`FastSendPatch`, v1.6.0)** | **A - SHIPPED + VALIDATED** | done (prefix, `Network.FastSingleTargetSend`) | removes the O(clients) linear `Clients` scan for pure single-target sends via the existing `ForEntityId` map. A/B: correct (60/60, 120/120 stable), ms_per_tick **-1.8%@60p -> -4.2%@128p**, `ConnectionManager.Update` -5.2%@128p; scales toward the 450-500p death-spiral |
-| ~~`PooledExpandableMemoryStream` presize + retain~~ | **downgraded** | n/a | RE correction: `Reset()`=`SetLength(0)` already retains the buffer; not a realloc problem. Serialization churn is a *count* problem -> serialize-once ([`../../7dtd-research/docs/allocation-reuse.md`](allocation-reuse.md)) |
+| ~~`PooledExpandableMemoryStream` presize + retain~~ | **downgraded** | n/a | RE correction: `Reset()`=`SetLength(0)` already retains the buffer; not a realloc problem. Serialization churn is a *count* problem -> serialize-once ([`allocation-reuse.md`](allocation-reuse.md)) |
 | Path admission cap + `ASPPathFinder` reuse | A/B | small | bounds path-request spikes + per-build alloc at `EntityAlive.FindPath` enqueue |
 | Off-sim `Chunk.write` encode / cached chunk blobs | B | moderate (threading) | chunk pipeline is 56-60% of tick; biggest single CPU reclaim |
 | Shared spatial interest grid (chunk-cell uniform grid) | B/C | large (new subsystem) | collapses the O(N^2.26)/O(N^2.27) player walls + E x P products toward linear; reused by `NetEntityDistribution` interest, `GetClosestPlayer` (A4), and the `SendPackage` map |
@@ -589,7 +589,7 @@ missing spatial index or a serial main-thread stage**. Spatial bucketing + off-t
 ## Changelog
 
 - **2026-08-08:** Stale `il/*-v3.0.1/` dump paths updated to current `*-v3.1.0/` dirs.
-- **2026-07-19:** bottleneck audit (42 verified) consolidated into `7dtd-research/docs/bottlenecks.md`; §10 additions (SendPackage entityId-map = top new bang-for-buck, buffer presize+retain, off-sim chunk encode, spatial interest grid). GC megapause measured (479 ms @ 6.9 GB); allocation-reuse research documented.
+- **2026-07-19:** bottleneck audit (42 verified) consolidated into `bottlenecks.md`; §10 additions (SendPackage entityId-map = top new bang-for-buck, buffer presize+retain, off-sim chunk encode, spatial interest grid). GC megapause measured (479 ms @ 6.9 GB); allocation-reuse research documented.
 - **2026-07-17:** scale ladder (exp8, 99 entities) added; per-entity tick cost measured linear (~0.08 ms), 1000-AI extrapolation and GC-pause-as-lag conclusion recorded.
 - **2026-07-16 (later):** 4b measured-evidence campaign added; experiment order re-ranked (chunk streaming first).
 - **2026-07-16:** Moved from `7dtd-research/il/opt-scan-v3.0.1/` into optimizer project; merged deeper/gaps optim findings; IL folders keep dumps only.

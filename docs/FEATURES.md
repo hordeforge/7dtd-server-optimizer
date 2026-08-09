@@ -175,7 +175,7 @@ Why unsafe: it transpiles a **compiler-generated iterator `MoveNext` in the exte
 check** (zombies still path to players; no pathfinding exceptions) before use. Cuts
 the megapause feeder at source (complements the `GC_FREE_SPACE_DIVISOR` env, which
 only cuts collection frequency). Code -> EAC-off. See
-[`../../7dtd-research/docs/aggressive-optimizations.md`](aggressive-optimizations.md) §3.
+[`aggressive-optimizations.md`](aggressive-optimizations.md) §3.
 
 ## Animator LOD (v1.15.0, default off)
 
