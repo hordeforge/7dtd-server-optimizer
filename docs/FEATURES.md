@@ -65,6 +65,26 @@ and jiggle paths. Every optional target reports patch failure without hiding it.
 per-update region-load time, and active-sync limits. Validate saves, region
 streaming, and distant simultaneous players before retaining aggressive values.
 
+**Stock-semantics audit (2026-08-09, vs V3.1.0 IL + dynamic-mesh.md):** the four
+fields the patch writes are real stock statics (verified in the dump -
+`DynamicMeshSettings.{MaxRegionLoadMsPerFrame, OnlyPlayerAreas,
+PlayerAreaChunkBuffer}` and `DynamicMeshServer.MaxActiveSyncs`), so there is no
+API drift. Defaults vs stock:
+- `MaxActiveSyncs` **2 vs stock 10**: the server's sync loop promotes queued
+  `SyncRequests` into `ActiveSyncs` up to this cap (§5 of dynamic-mesh.md).
+  Lowering it throttles concurrent region syncs to distant players - bounded
+  (entries stay queued, never dropped), but mesh delivery to far players is
+  delayed. The "region streaming" risk.
+- `MaxRegionLoadMsPerFrame` **2 ms**: caps mesh-copy work per frame - spreads
+  the build, no loss, just slower.
+- `OnlyPlayerAreas=true` + `PlayerAreaChunkBuffer=2`: mesh work only near
+  players (plus a 2-chunk margin). Distant players see no mesh until they
+  approach - the "separated players" risk.
+No A/B evidence exists for these budgets (RESULTS lists the fields but no
+measurement). Ships as plausible defaults; the residual to validate live is
+multi-player region streaming (distant players + a save + concurrent mesh
+syncs) at these values.
+
 ## GC pause guard (A7)
 
 `GcGuardPatch` transpiles `GameManager.gmUpdate` to reroute its single forced
