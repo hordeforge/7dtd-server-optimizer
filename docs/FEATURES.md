@@ -309,6 +309,7 @@ General modding rules: [`../../MODDING_BEST_PRACTICES.md`](../../MODDING_BEST_PR
 | [DEVELOPMENT.md](DEVELOPMENT.md) | How to change EfficientServer |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Hot path map |
 | [HOST_TUNING.md](HOST_TUNING.md) | Host topology (not Harmony) |
+| [SIM_PARALLELISM.md](SIM_PARALLELISM.md) | Sim threading / extract-off-main |
 | [OPTIMIZATION_CANDIDATES.md](OPTIMIZATION_CANDIDATES.md) | Evidence backlog |
 | [loop.md](../../7dtd-research/docs/loop.md) | Generic frame map |
 | [APM.md](../../7dtd-apm/docs/APM.md) | Evidence |

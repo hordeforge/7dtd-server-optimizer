@@ -182,6 +182,12 @@ how-to lives in the repo-root `RUNBOOK.md`; graded candidates in
 
 | Doc | Role |
 |---|---|
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Hot-path map |
+| [NETWORK_OPTIMIZATION.md](NETWORK_OPTIMIZATION.md) | Player-scale wall plan |
+| [PERF_RESEARCH_BRIEF.md](PERF_RESEARCH_BRIEF.md) | RE + APM to backlog |
+| [SCALE_1000x10000.md](SCALE_1000x10000.md) | Extreme scale extrapolation |
+| [algorithms.md](algorithms.md) | Hot-subsystem algorithms |
+| [bottlenecks.md](bottlenecks.md) | Ranked bottleneck catalog |
 | [loop.md](../../7dtd-research/docs/loop.md) | Static IL map |
 | [network.md](../../7dtd-research/docs/network.md) | Net packages |
 | [HOST_TUNING.md](HOST_TUNING.md) | Host topology |

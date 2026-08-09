@@ -587,6 +587,16 @@ missing spatial index or a serial main-thread stage**. Spatial bucketing + off-t
 
 ---
 
+## Related docs
+
+| Doc | Role |
+|---|---|
+| [DEVELOPMENT.md](DEVELOPMENT.md) | How to ship a candidate |
+| [FEATURES.md](FEATURES.md) | Shipped feature groups |
+| [bottlenecks.md](bottlenecks.md) | Ranked bottleneck catalog this grades |
+| [OPTIMIZATION_IDEAS.md](OPTIMIZATION_IDEAS.md) | Unranked idea backlog |
+| [RESULTS.md](RESULTS.md) | A/B evidence ledger |
+
 ## Changelog
 
 - **2026-08-08:** Stale `il/*-v3.0.1/` dump paths updated to current `*-v3.1.0/` dirs.

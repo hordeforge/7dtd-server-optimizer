@@ -1011,3 +1011,13 @@ Session report: `server/logs/validate_anim_path_20260802_141640.json`.
    some walkers remains - not a full green light for default-on `AnimatorEmergency`.
 3. Path admission knobs reload live and do not collapse the horde at this load.
 4. Stress A/B (64p + 200+z over budget) still needed for a frame-ms prize claim.
+
+## Related docs
+
+| Doc | Role |
+|---|---|
+| [FEATURES.md](FEATURES.md) | Feature groups these results validate |
+| [PRODUCTION.md](PRODUCTION.md) | Deploy + operate |
+| [aggressive-optimizations.md](aggressive-optimizations.md) | Unsafe levers' risk/gain |
+| [CONFIG.md](CONFIG.md) | Per-option reference |
+| [V310_APM_BASELINE.md](V310_APM_BASELINE.md) | V3.1.0 APM evidence |

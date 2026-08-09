@@ -309,8 +309,9 @@ Is the bottleneck a content mod TE/NPC pack?
 
 ---
 
-## Related
+## Related docs
 
+- Development workflow: [`DEVELOPMENT.md`](DEVELOPMENT.md)
 - Graded candidates (authoritative): [`OPTIMIZATION_CANDIDATES.md`](OPTIMIZATION_CANDIDATES.md)
 - Extreme scale data structures (1k players / 10k zombies): [`SCALE_1000x10000.md`](SCALE_1000x10000.md)
 - Extract sim / threading policy / hot-path catalog: [`SIM_PARALLELISM.md`](SIM_PARALLELISM.md) (§5-7)

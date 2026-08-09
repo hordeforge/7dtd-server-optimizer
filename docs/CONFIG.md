@@ -1,4 +1,4 @@
-# EfficientServer configuration reference (v1.16.1)
+# EfficientServer configuration reference (v1.17.0)
 
 **Hub:** [`README.md`](../README.md).  
 **Owns:** every config option in minute detail - exact mechanism, gameplay impact,

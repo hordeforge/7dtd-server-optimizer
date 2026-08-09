@@ -24,7 +24,7 @@ Source is under `Source/EfficientServer`; packaging and server launch helpers
 are under `scripts`. Rebuild and revalidate exact Harmony targets after every
 game update.
 
-## Measured impact (v1.16.x)
+## Measured impact (v1.17.x)
 
 - **Eliminates the GC megapause:** worst stop-the-world **274 ms -> 0**, full
   collections **3 -> 0** in the aggregate A/B window (vanilla lost 5.5 ticks at once

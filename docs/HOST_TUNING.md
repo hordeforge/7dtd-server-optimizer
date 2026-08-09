@@ -355,6 +355,9 @@ Is MaxSpawnedZombies / view distance / mesh / SandboxCode sane?
 
 | Doc | Role |
 |---|---|
+| [OPTIMIZATION_CANDIDATES](OPTIMIZATION_CANDIDATES.md) | Graded candidate backlog |
+| [OPTIMIZATION_IDEAS](OPTIMIZATION_IDEAS.md) | Idea map |
+| [SIM_PARALLELISM](SIM_PARALLELISM.md) | Sim threading / extract-off-main |
 | [ARCHITECTURE](ARCHITECTURE.md) | Single-thread sim hot path |
 | [FEATURES](FEATURES.md) | EfficientServer feature groups |
 | [SCALE_1000x10000](SCALE_1000x10000.md) | Extreme scale design notes |
