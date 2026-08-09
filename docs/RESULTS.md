@@ -1031,6 +1031,33 @@ This is the gameplay-correctness floor for any ES-on regression: if a future
 change breaks this loadgen self-test-join, it broke gameplay replication, not
 just a perf number. Command: `7dtd-loadgen --self-test-join --actions 6`.
 
+## Whole-mod EfficientServer on/off APM (2026-08-09)
+
+Harness: `scripts/measure_es_onoff.py` (loadgen bots + telnet + APM-bridge
+log reads), V3.1.0 b14 dedicated, ES 1.17.0. Report:
+`server/logs/es_onoff_20260809_144736.json`.
+
+Load: 24 players (13 held after bot churn, above the join gate), ~194
+endgame zombies, gamestage 250. Same load sampled with ES `Enabled=true`
+vs `Enabled=false` (config rewrite + `es reload`), using the APM bridge's
+**windowed** gmUpdateAvg/tickAvg (the bridge reports cumulative averages
+since boot, so the per-window delta of the weighted sums is the valid
+metric; window ~35 s each).
+
+| Metric | ES ON | ES OFF | Delta |
+|---|---:|---:|---:|
+| gmUpdateAvg | **9.49 ms** | 11.24 ms | **-1.74 ms (-15%)** |
+| tickAvg | 51.05 ms | 50.90 ms | +0.16 ms (noise) |
+| spikes | 32 | 33 | flat |
+
+Verdict: **ON_faster** on gmUpdate with no tick or spike regression at this
+moderate load. Honest caveat: the OFF window sampled fewer updates (592 vs
+1175 - the load settled), but the direction and magnitude are consistent
+with the measured GC-pause and net-stride wins. This is the live APM
+perf-budget data point for the Phase 2 regression-budget item; a full
+matched-arm 64p canonical comparison (fresh server per arm) remains the
+gold standard.
+
 ## Live animator-emergency + path-admission validation (2026-08-09)
 
 Harness: `scripts/validate_anim_path_admission.py` (loadgen bots + telnet),
