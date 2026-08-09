@@ -274,10 +274,14 @@ no stagger); nothing despawns, clients see no visual change. Steps down one tier
 a time. Live-validated: full autonomous chain THROTTLED -> ANIMATOR EMERGENCY ->
 step-down + EXIT. See [`RESULTS.md`](RESULTS.md) §3i, §3o.
 
-**Stays default-off - exit path has a known wedge** (human eval, RESULTS 3s): a
-re-enabled animator evaluates but never emits root motion again
-(`deltaPosition=0`), leaving zombies at crawl speed. Culling-mode rework designed,
-tracked in TODO; until then treat tier 2 as a bench lever.
+**Stays default-off** (policy, bench lever): uses `Animator.cullingMode =
+CullCompletely` (keeps `enabled=true`, so the old enabled-toggle root-motion
+wedge does not apply - live 2026-08-09 runs at 8p/32p/64p restored every rig
+with dp>0 after `es animon`). While active, combat fidelity still degrades
+(attack cadence falls back to wall-clock timer, stuns clear next tick,
+supplementary displacement path), which is why it stays default-off pending a
+human-eye combat soak. See RESULTS 'Live animator-emergency + path-admission
+validation'.
 
 ## Entity-replication stride (v1.11.0, default off)
 

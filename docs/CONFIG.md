@@ -388,8 +388,10 @@ research only.
 call - no restart needed). Diagnostics (BENCH ONLY, gameplay breaks while active):
 `es animoff` / `es animon [bare]` toggle all enemy Animators (used to measure the
 19.9 ms animator slice; skips corpses; `bare` = enable+pump without Rebind/param
-re-push; NOTE restore is imperfect - RESULTS 3s root-motion wedge, restart to
-fully recover); `es animstate` prints a per-zombie animator truth table
+re-push; restore is verified complete - live 2026-08-09 runs at 8p/32p/64p
+restored every rig with root motion intact, the old RESULTS 3s root-motion wedge
+is refuted by the current restore path); `es animstate` prints a per-zombie
+animator truth table
 (enabled/speed/rootMotion/culling/params/velocity/deltaPosition/state) for
 debugging revival and movement issues; `es rigoff` / `es rigon` toggle the unguarded rig visual
 components (eyelid/gaze/feather/held-light-raycast; measured: no resolvable cost

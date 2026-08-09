@@ -251,14 +251,19 @@ Full table: [items.md](../../7dtd-research/docs/items.md) § ItemStack.Clone cal
 4. Triage itself is **done**; remaining work is optional micro-patches + soak, not
    more catalog RE.
 
-### 4.6 Animator headless waste (largest recent RE win, exit unsolved)
+### 4.6 Animator headless waste (largest recent RE win, exit solved)
 
 Healthy server zombies: `cullingMode = CullUpdateTransforms` (not AlwaysAnimate).
-Toggling `Animator.enabled` kills root-motion forever (`deltaPosition=0`) after restore.
+The old approach (toggling `Animator.enabled`) killed root-motion forever
+(`deltaPosition=0`) after restore - **refuted/superseded**: the shipped
+`AnimatorEmergency` enters via `cullingMode = CullCompletely` (never touches
+`enabled`) and restores the prior mode on exit. Live 2026-08-09 runs at 8p/32p/64p
+restored every rig with dp>0 after `es animon` (see RESULTS 'Live
+animator-emergency + path-admission validation'). Stays default-off pending a
+human-eye combat soak (while active: attack cadence falls back to wall-clock,
+stuns clear next tick, supplementary displacement path).
 
-**Open research/build:** enter emergency via **`cullingMode = CullCompletely`**,
-restore prior mode on exit; never touch `enabled`. Needs:
-
+**Remaining follow-ups:**
 1. Perf re-validation (does it reproduce ~147 -> ~85 ms class win?).
 2. Spawn-hook so new zombies also enter the mode.
 3. Human + `es animstate` dp check on restore.
