@@ -93,14 +93,18 @@ DynamicMeshEnabled=True` active. So the budgets are live; only the
 multi-player streaming A/B (does syncs=2 delay distant players) remains
 unmeasured.
 
-**Why the streaming A/B is blocked by the test harness (2026-08-09):** the
-loadgen prefab server config sets `DynamicMeshEnabled=false`
-(`~/.cache/7dtd-loadgen/serverconfig_prefab.xml`), so every loadgen-based
-run - including all ES measurements - never exercises the dynamic-mesh
-path (`Dynamic mesh disabled on world start` in the server log). A mesh
-streaming A/B therefore needs a harness change (enable DynamicMesh in the
-test world) plus a distant-player observation point, before `syncs=2` vs
-distant players can be measured.
+**Why the streaming A/B is not yet measured (2026-08-09):** the loadgen
+prefab server config previously set `DynamicMeshEnabled=false`, so
+loadgen runs never exercised the mesh path. That is now fixed: the loadgen
+`start_dedicated_prefab.sh` takes `RE_DYNAMIC_MESH=1` to enable DynamicMesh
+in the test world (verified: generates `DynamicMeshEnabled=true`; default
+false preserves non-mesh baselines). The remaining need is the A/B itself:
+a stable bot cohort to (a) trigger mesh regeneration via the endgame
+exploders/demolishers in the spawn mix and (b) provide a distant-player
+observation point for `MaxActiveSyncs=2` vs a higher cap. That cohort is
+currently blocked by the same stock LiteNetLib join flake that blocks the
+blood-moon profile (bots cannot sustain a stable >4-player cohort on this
+host right now).
 
 ## GC pause guard (A7)
 
