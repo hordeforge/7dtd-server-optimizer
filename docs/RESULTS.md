@@ -1012,6 +1012,25 @@ Session report: `server/logs/validate_anim_path_20260802_141640.json`.
 3. Path admission knobs reload live and do not collapse the horde at this load.
 4. Stress A/B (64p + 200+z over budget) still needed for a frame-ms prize claim.
 
+## Gameplay-correctness smoke (V3.1.0 b14, ES 1.17.0, 2026-08-09)
+
+Baseline correctness gate: boot the V3.1.0 dedicated server with EfficientServer
+installed and drive a stock loadgen client through real gameplay actions. The
+mod's wire- and sim-facing patches (FastSend, EntityDistributionStride,
+AiLod, Governor, GcGuard, ChunkSendThrottle) are all live during the run.
+
+- **Join + handshake:** `challengesOk=1`, `logins=1` (pre-auth challenge and
+  login answer both PASS).
+- **Gameplay actions over the wire:** `joined entity=102`, `walks=44`,
+  `jumps=5`, `deaths=2`, `respawns=1` - movement, death, and respawn
+  replication all intact with the optimizer active.
+- **Patch health:** all 18 patch groups IL-matched real V3.1.0 methods,
+  0 `MISSING TARGET`; default-off features correctly `config-disabled`.
+
+This is the gameplay-correctness floor for any ES-on regression: if a future
+change breaks this loadgen self-test-join, it broke gameplay replication, not
+just a perf number. Command: `7dtd-loadgen --self-test-join --actions 6`.
+
 ## Related docs
 
 | Doc | Role |
