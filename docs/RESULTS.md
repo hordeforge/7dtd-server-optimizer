@@ -1032,7 +1032,6 @@ change breaks this loadgen self-test-join, it broke gameplay replication, not
 just a perf number. Command: `7dtd-loadgen --self-test-join --actions 6`.
 
 ## Blood-moon path-admission profile (2026-08-09, partial)
-
 Harness: `scripts/validate_bloodmoon_path.py` + loadgen
 `bloodmoon_profile.spawn_bloodmoon()` (new). V3.1.0 b14, ES 1.17.0.
 Reports in `server/logs/bloodmoon_path_*.json`.
@@ -1099,6 +1098,14 @@ sample each. ON gmUpdateAvg **10.387 ms** vs OFF **10.273 ms** = +0.11 ms
 optimizer has little to win - consistent with the stronger -15% signal at
 24p in the single-session toggle. Verdict on the matched pair:
 **load-dependent, no measurable effect at 12p**.
+
+**Flake confirmation at minimal cohort (2026-08-09):** a 4-bot matched-arm
+attempt confirmed the join flake is now intermittent even at 4 players -
+the ON arm succeeded (`es_onoff_20260809_182910.json`, gmUpdateAvg
+2.965 ms, joined 3) but the OFF arm failed the join gate (1/4,
+`es_onoff_20260809_183324.json`). A reliable matched pair (and the 64p
+canonical) therefore cannot complete on this host until the stock
+LiteNetLib join flake is fixed or a stable host is used.
 
 **Test-infra finding (LiteNetLib join flake):** repeated bot join attempts
 under this harness trigger a stock-game `LiteNetLib.NetManager.CreateEvent:
