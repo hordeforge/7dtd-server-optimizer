@@ -32,7 +32,7 @@ bridge in `7dtd-apm`.
 
 - [ ] Verify clean build, install, upgrade, rollback, and uninstall. (2026-08-09: clean build via scripts/build.sh, install to the live dedicated server (DLL hash-match verified, ModInfo 1.17.0, Config shipped), uninstall, and reinstall all pass. Remaining: live in-game upgrade smoke test on a running server.)
 - [x] Preserve unrelated mods and user configuration during package operations. (install.sh only touches `Mods/EfficientServer`; now backs up an existing `efficientserver.json` and keeps it on reinstall when it differs from the shipped default. Verified: fresh install uses default, user edit survives reinstall, restored-default uses shipped.)
-- [ ] Reconcile README, architecture, features, and runtime behavior.
+- [x] Reconcile README, architecture, features, and runtime behavior. (2026-08-09: FEATURES.md Path-admission + Animator-emergency sections were appended after the Changelog and claimed v1.18 (a release that does not exist). Moved before the changelog and corrected to v1.17.0; same fix in PERF_RESEARCH_BRIEF ("Built v1.18") and CONFIG ("v1.18+ emergency"). No remaining future-version claims.)
 - [x] Publish supported 7DTD/toolchain versions and troubleshooting. (README: game pin V3.1.0 b14 + rebuild-on-update retarget note, toolchain (net48, dotnet SDK w/ mcs fallback, 0_TFP_Harmony, game-managed refs), troubleshooting from mod log lines (MISSING TARGET version-drift, InitMod/patch failures, config restart, EAC).)
 
 ## Research evidence consumed (2026-08-06)

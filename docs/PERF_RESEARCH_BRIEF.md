@@ -274,7 +274,7 @@ Priority = (expected capacity or smoothness gain) x (evidence readiness) /
 
 | Rank | Work | Type | Why now | Fidelity gate |
 |---:|---|---|---|---|
-| **1** | **Animator `CullCompletely` emergency** | **Built v1.18** (default-off) | Enter/exit + es animoff use CullCompletely | Human `es animstate` dp + heavy A/B still required |
+| **1** | **Animator `CullCompletely` emergency** | **Built v1.17.0** (default-off) | Enter/exit + es animoff use CullCompletely | Human `es animstate` dp + heavy A/B still required |
 | **2** | **Path admission (A2)** under synthetic BM | **Built; measured 2026-08-07 default-off** | BM-ish 24p: cap=32+drop@50m **worsened** late ticks / UpdateTick; loadgen still 24/24 | Keep off; only revisit with path-queue telemetry + true BM director |
 | **3** | **Ops pack as first-class** | Docs + launch | ViewDistance, MaxSpawnedZombies, `GC_FREE_SPACE_DIVISOR`, `MONO_ENV_OPTIONS=-O=all` already validated | Publish recommended serverconfig matrix |
 | **4** | **Chunk blob cache design** | Design + optional patch | Ownership closed (Setup on sim from SendChunks/RebuildTerrain); multi-observer join still pays N× encode | Byte-identical packages; invalidation on block edit / TE / density |

@@ -327,7 +327,7 @@ nothing despawns and clients see no visual difference (zombie animation is
 client-local). Steps back down one tier at a time.
 
 **KNOWN DEFECT (human eval, RESULTS 3s): the exit path cannot fully restore.**
-v1.18+ emergency uses `cullingMode = CullCompletely` (keeps `enabled`). Legacy note: after any `Animator.enabled` off->on cycle the rig evaluates but emits zero root
+v1.17.0+ emergency uses `cullingMode = CullCompletely` (keeps `enabled`). Legacy note: after any `Animator.enabled` off->on cycle the rig evaluates but emits zero root
 motion (`deltaPosition=0`), and server zombies are root-motion-driven - restored
 zombies crawl at supplementary-path speed until they die. Keep this `false` until
 the culling-mode rework lands (TODO). Feel WHILE active passed human eval.
