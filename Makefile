@@ -9,6 +9,7 @@ build-mcs:
 test:
 	dotnet run --project $(ROOT)/Source/EfficientServer.Tests -c Release
 	python3 $(ROOT)/scripts/check_config_doc.py
+	python3 $(ROOT)/scripts/check_version.py
 install:
 	$(ROOT)/scripts/install.sh
 uninstall:
