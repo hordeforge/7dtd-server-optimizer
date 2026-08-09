@@ -93,6 +93,15 @@ DynamicMeshEnabled=True` active. So the budgets are live; only the
 multi-player streaming A/B (does syncs=2 delay distant players) remains
 unmeasured.
 
+**Why the streaming A/B is blocked by the test harness (2026-08-09):** the
+loadgen prefab server config sets `DynamicMeshEnabled=false`
+(`~/.cache/7dtd-loadgen/serverconfig_prefab.xml`), so every loadgen-based
+run - including all ES measurements - never exercises the dynamic-mesh
+path (`Dynamic mesh disabled on world start` in the server log). A mesh
+streaming A/B therefore needs a harness change (enable DynamicMesh in the
+test world) plus a distant-player observation point, before `syncs=2` vs
+distant players can be measured.
+
 ## GC pause guard (A7)
 
 `GcGuardPatch` transpiles `GameManager.gmUpdate` to reroute its single forced
