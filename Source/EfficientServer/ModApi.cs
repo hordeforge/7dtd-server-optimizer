@@ -94,39 +94,41 @@ namespace EfficientServer
             ServerPerfConfig c = Config;
             if (c == null) return "";
             bool active = true;
+            string feature = null;
             if (g == typeof(Patches.AiLodPatch) || g == typeof(Patches.UpdateTasksLodPatch))
-                active = c.AiLod != null && c.AiLod.Enabled;
+                feature = "AiLod";
             else if (g == typeof(Patches.GcGuardPatch))
-                active = c.Gc != null && c.Gc.Enabled && c.Gc.SkipForcedCollect;
+                feature = "Gc";
             else if (g == typeof(Patches.AstarGraphThrottlePatch))
-                active = c.Pathfinding != null && c.Pathfinding.GraphUpdateEveryTicks > 1;
+                feature = "GraphThrottle";
             else if (g == typeof(Patches.AstarMoveThresholdPatch))
-                active = c.Pathfinding != null && c.Pathfinding.MoveRescanThresholdSq > 100f;
+                feature = "MoveThreshold";
             else if (g == typeof(Patches.PathAdmissionPatch))
-                active = c.Pathfinding != null && (c.Pathfinding.MaxPathEnqueuesPerTick > 0
-                    || c.Pathfinding.DropPathWhenFarDistSq > 0f);
+                feature = "PathAdmission";
             else if (g == typeof(Patches.FastSendPatch))
-                active = c.Network != null && c.Network.FastSingleTargetSend;
+                feature = "FastSend";
             else if (g == typeof(Patches.InitScanPoolPatch))
-                active = c.Pathfinding != null && c.Pathfinding.PoolInitScanNodes;
+                feature = "InitScanPool";
             else if (g == typeof(Patches.ChunkSendThrottlePatch))
-                active = c.WorldTransfer != null && c.WorldTransfer.ChunkPackagesPerObserverPerTick != 3;
+                feature = "ChunkSendThrottle";
             else if (g == typeof(Patches.ExplosionParticlesPatch))
-                active = c.SkipOnDedicated != null && c.SkipOnDedicated.ExplosionParticles;
+                feature = "ExplosionParticles";
             else if (g == typeof(Patches.EntityDistributionStridePatch))
-                active = c.Network != null && c.Network.EntityDistributionEveryTicks > 1;
+                feature = "EntityDistributionStride";
             else if (g == typeof(Patches.GovernorPatch))
-                active = c.Governor != null && c.Governor.Enabled;
+                feature = "Governor";
             else if (g == typeof(Patches.TickGuardPatch))
-                active = c.TickGuard != null && c.TickGuard.Enabled;
+                feature = "TickGuard";
             else if (g == typeof(Patches.TargetFpsPatch))
-                active = c.Server != null && c.Server.TargetFps > 0;
+                feature = "TargetFps";
             else if (g == typeof(Patches.BenchGodPatch))
-                active = Patches.BenchGodPatch.BenchGod; // console-toggled diagnostic
+                feature = "BenchGod";
             else if (g == typeof(Patches.CrowdCollisionLodPatch))
-                active = c.CrowdCollisionLod != null && c.CrowdCollisionLod.Enabled;
+                feature = "CrowdCollisionLod";
             else if (g == typeof(Patches.AnimatorLodPatch.UpdatePatch) || g == typeof(Patches.AnimatorLodPatch.LateUpdatePatch))
-                active = c.AnimatorLod != null && c.AnimatorLod.Enabled;
+                feature = "AnimatorLod";
+            if (feature != null)
+                active = c.FeatureActive(feature, Patches.BenchGodPatch.BenchGod);
             return active ? "" : " (matched but config-disabled)";
         }
 

@@ -168,6 +168,55 @@ namespace EfficientServer.Tests
             Check(!ServerPerfConfig.ShouldRunFor(true, true, true, false), "dedicatedOnly=true + client -> no run");
             Check(!ServerPerfConfig.ShouldRunFor(true, true, true, null), "dedicatedOnly=true + unknown -> fail closed");
 
+            // Per-feature gating (FeatureActive): off-by-default features are inert.
+            var fa = new ServerPerfConfig();
+            Check(fa.FeatureActive("AiLod"), "default AiLod -> active (Enabled=true default)");
+            Check(!fa.FeatureActive("TickGuard"), "default TickGuard -> inactive (Enabled=false default)");
+            Check(!fa.FeatureActive("BenchGod"), "default BenchGod -> inactive (console flag off)");
+            Check(fa.FeatureActive("BenchGod", true), "BenchGod -> active when console flag on");
+            Check(fa.FeatureActive("FastSend"), "default FastSend -> active (opt-out feature)");
+            Check(fa.FeatureActive("Governor"), "default Governor -> active (inert when healthy)");
+            Check(!fa.FeatureActive("UnknownFeature"), "unknown feature key -> inactive");
+            // Config-driven features flip with their knobs.
+            var faOn = ServerPerfConfig.Load(WriteTemp(
+                "{\"AiLod\":{\"Enabled\":true},\"TickGuard\":{\"Enabled\":true}," +
+                "\"Pathfinding\":{\"GraphUpdateEveryTicks\":8,\"MoveRescanThresholdSq\":400," +
+                "\"MaxPathEnqueuesPerTick\":64,\"PoolInitScanNodes\":true}," +
+                "\"Network\":{\"EntityDistributionEveryTicks\":4}," +
+                "\"WorldTransfer\":{\"ChunkPackagesPerObserverPerTick\":8}," +
+                "\"SkipOnDedicated\":{\"ExplosionParticles\":true}," +
+                "\"Server\":{\"TargetFps\":60}}"));
+            Check(faOn.FeatureActive("AiLod"), "AiLod enabled -> active");
+            Check(faOn.FeatureActive("TickGuard"), "TickGuard enabled -> active");
+            Check(faOn.FeatureActive("GraphThrottle"), "GraphUpdateEveryTicks 8 -> active");
+            Check(faOn.FeatureActive("MoveThreshold"), "MoveRescanThresholdSq 400 -> active");
+            Check(faOn.FeatureActive("PathAdmission"), "MaxPathEnqueuesPerTick 64 -> active");
+            Check(faOn.FeatureActive("InitScanPool"), "PoolInitScanNodes -> active");
+            Check(faOn.FeatureActive("EntityDistributionStride"), "EntityDistributionEveryTicks 4 -> active");
+            Check(faOn.FeatureActive("ChunkSendThrottle"), "ChunkPackagesPerObserverPerTick 8 -> active");
+            Check(faOn.FeatureActive("ExplosionParticles"), "SkipOnDedicated.ExplosionParticles -> active");
+            Check(faOn.FeatureActive("TargetFps"), "TargetFps 60 -> active");
+            // Gc needs both Enabled and SkipForcedCollect.
+            var gcOn = ServerPerfConfig.Load(WriteTemp("{\"Gc\":{\"Enabled\":true,\"SkipForcedCollect\":true}}"));
+            Check(gcOn.FeatureActive("Gc"), "Gc enabled + SkipForcedCollect -> active");
+            var gcHalf = ServerPerfConfig.Load(WriteTemp("{\"Gc\":{\"Enabled\":true,\"SkipForcedCollect\":false}}"));
+            Check(!gcHalf.FeatureActive("Gc"), "Gc enabled but SkipForcedCollect=false -> inactive");
+            // Off values keep features inactive.
+            var faOff = ServerPerfConfig.Load(WriteTemp(
+                "{\"Pathfinding\":{\"GraphUpdateEveryTicks\":1,\"MoveRescanThresholdSq\":100," +
+                "\"MaxPathEnqueuesPerTick\":0,\"PoolInitScanNodes\":false}," +
+                "\"Network\":{\"FastSingleTargetSend\":false,\"EntityDistributionEveryTicks\":1}," +
+                "\"WorldTransfer\":{\"ChunkPackagesPerObserverPerTick\":3}," +
+                "\"Server\":{\"TargetFps\":0}}"));
+            Check(!faOff.FeatureActive("GraphThrottle"), "GraphUpdateEveryTicks 1 -> inactive");
+            Check(!faOff.FeatureActive("MoveThreshold"), "MoveRescanThresholdSq 100 -> inactive");
+            Check(!faOff.FeatureActive("PathAdmission"), "no path admission knobs -> inactive");
+            Check(!faOff.FeatureActive("InitScanPool"), "PoolInitScanNodes false -> inactive");
+            Check(!faOff.FeatureActive("FastSend"), "FastSingleTargetSend false -> inactive");
+            Check(!faOff.FeatureActive("EntityDistributionStride"), "EntityDistributionEveryTicks 1 -> inactive");
+            Check(!faOff.FeatureActive("ChunkSendThrottle"), "ChunkPackagesPerObserverPerTick 3 (vanilla) -> inactive");
+            Check(!faOff.FeatureActive("TargetFps"), "TargetFps 0 -> inactive");
+
             if (_failures == 0)
             {
                 Console.WriteLine("PASS: all Config Load/Normalize checks");

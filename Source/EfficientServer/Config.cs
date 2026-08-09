@@ -399,5 +399,52 @@ namespace EfficientServer
             // server", so an unknown host must not activate server-only patches.
             return isDedicatedServer ?? false;
         }
+
+        /// <summary>
+        /// Pure per-feature config gating (no game types): whether a patch group is
+        /// actually active given this config, not merely IL-matched. Kept in sync with
+        /// ModApi.ConfigNote; `benchGod` is the console-toggled diagnostic flag.
+        /// </summary>
+        public bool FeatureActive(string featureKey, bool benchGod = false)
+        {
+            switch (featureKey)
+            {
+                case "AiLod":
+                    return AiLod != null && AiLod.Enabled;
+                case "Gc":
+                    return Gc != null && Gc.Enabled && Gc.SkipForcedCollect;
+                case "GraphThrottle":
+                    return Pathfinding != null && Pathfinding.GraphUpdateEveryTicks > 1;
+                case "MoveThreshold":
+                    return Pathfinding != null && Pathfinding.MoveRescanThresholdSq > 100f;
+                case "PathAdmission":
+                    return Pathfinding != null
+                        && (Pathfinding.MaxPathEnqueuesPerTick > 0 || Pathfinding.DropPathWhenFarDistSq > 0f);
+                case "FastSend":
+                    return Network != null && Network.FastSingleTargetSend;
+                case "InitScanPool":
+                    return Pathfinding != null && Pathfinding.PoolInitScanNodes;
+                case "ChunkSendThrottle":
+                    return WorldTransfer != null && WorldTransfer.ChunkPackagesPerObserverPerTick != 3;
+                case "ExplosionParticles":
+                    return SkipOnDedicated != null && SkipOnDedicated.ExplosionParticles;
+                case "EntityDistributionStride":
+                    return Network != null && Network.EntityDistributionEveryTicks > 1;
+                case "Governor":
+                    return Governor != null && Governor.Enabled;
+                case "TickGuard":
+                    return TickGuard != null && TickGuard.Enabled;
+                case "TargetFps":
+                    return Server != null && Server.TargetFps > 0;
+                case "BenchGod":
+                    return benchGod;
+                case "CrowdCollisionLod":
+                    return CrowdCollisionLod != null && CrowdCollisionLod.Enabled;
+                case "AnimatorLod":
+                    return AnimatorLod != null && AnimatorLod.Enabled;
+                default:
+                    return false;
+            }
+        }
     }
 }

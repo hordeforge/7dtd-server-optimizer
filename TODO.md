@@ -17,7 +17,7 @@ bridge in `7dtd-apm`.
 - [x] Report exact matched Harmony targets and fail visibly for required missing targets. (ModApi: per-group matched-method log + "MISSING TARGET ... INACTIVE" on zero matches, 2026-07-18.)
 - [x] Record optimizer, game assembly, and configuration versions at startup. (ModApi.LogVersions: mod + Assembly-CSharp + game version + config summary, 2026-07-18.)
 - [x] Add configuration parsing and normalization tests. (Self-contained `EfficientServer.Tests` harness: defaults, clamps, NaN/Inf fallback, hysteresis, round-trips, 500-case fuzz; `dotnet run --project Source/EfficientServer.Tests`.)
-- [ ] Add dedicated-only and per-feature enable/disable tests. (Dedicated-only gate done: pure `ServerPerfConfig.ShouldRunFor` + `ModApi.ShouldRun` rewired to it, fail-closed on unknown host, covered in the harness. Per-feature enable/disable config-gating remains, tied to `ModApi.ConfigNote`.)
+- [x] Add dedicated-only and per-feature enable/disable tests. (Dedicated-only gate: pure `ServerPerfConfig.ShouldRunFor` + `ModApi.ShouldRun` rewired, fail-closed on unknown host. Per-feature: pure `ServerPerfConfig.FeatureActive(featureKey, benchGod)` extracted from `ModApi.ConfigNote`; harness covers defaults, on/off knobs per feature, Gc Enabled+SkipForcedCollect conjunction, and unknown keys. All in `EfficientServer.Tests`.)
 - [ ] Validate AI LOD behavior for alert, combat, sleeper, quest, and distant entities.
 - [ ] Validate dynamic-mesh budgets during saves, region streaming, and separated players.
 
