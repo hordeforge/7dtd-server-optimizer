@@ -57,6 +57,19 @@ make install DS="/path/to/7 Days to Die Dedicated Server"
 
 Rebuild after **every** Steam update. Re-check Harmony targets against `Assembly-CSharp` (see [`ARCHITECTURE.md`](ARCHITECTURE.md)).
 
+### Validation tooling (scripts/)
+
+| Script | Role |
+|---|---|
+| `check_config_doc.py` | Regression gate (in `make test`): every `ServerPerfConfig` field must be documented in CONFIG.md |
+| `check_version.py` | Regression gate (in `make test`): ModInfo (source+dist) == AssemblyVersion, no doc claims a future minor |
+| `validate_anim_path_admission.py` | Live A/B: animator-emergency + path-admission against real bots/zombies (telnet + loadgen); see RESULTS |
+| `measure_es_onoff.py` | Live whole-mod ES on/off APM compare; `ES_ARM=on|off` = matched-arm mode (fresh server per arm) |
+
+Known infra note: >12 loadgen bots can trigger a stock LiteNetLib join flake
+(`Collection was modified` in `CreateEvent`) that drops clients; use small
+cohorts for measurement runs (see RESULTS).
+
 ## Reverse engineering helpers
 
 | Path | Role |
