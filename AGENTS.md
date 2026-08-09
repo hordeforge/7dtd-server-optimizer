@@ -31,6 +31,7 @@ Default config: `DedicatedOnly: true`. Do not turn this into a client overhaul, 
 ## Build / install
 
 ```bash
+make test   # config harness + config-doc coverage + version-consistency gates
 make build
 make install DS="/path/to/7 Days to Die Dedicated Server"
 make run DS="/path/to/7 Days to Die Dedicated Server"
