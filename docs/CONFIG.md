@@ -209,6 +209,24 @@ Opt-in Boehm incremental mode (collection in bounded slices). **Measured: margin
 
 ---
 
+## CrowdCollisionLod - crowd collision resolution rate (v1.17.0)
+
+Soft-push separated crowd resolution for tight groups. Default OFF pending
+human A/B (see RESULTS §3r for the null finding).
+
+### `CrowdCollisionLod.Enabled` (default `false`)
+- **Mechanism:** when on, each zombie resolves entity collision every Nth tick
+  instead of every tick (see `ResolveEveryNTicks`). Default OFF pending the A/B.
+
+### `ResolveEveryNTicks` (default `4`, clamp [1,16])
+- **Mechanism:** each zombie fully resolves entity collision every Nth tick,
+  striped by entityId. `4` = vanilla's own response-stagger cadence family.
+- **Gameplay impact:** lower N is closer to vanilla; higher N trades collision
+  fidelity for CPU. Disabled entirely while `CrowdCollisionLod.Enabled` is
+  `false`.
+
+---
+
 ## WorldTransfer
 
 ### `ChunkPackagesPerObserverPerTick` (default `3` = vanilla, clamp [1,32], EXPERIMENTAL)
