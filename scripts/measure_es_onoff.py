@@ -20,6 +20,12 @@ Env (subset of bloodmoon_profile):
 
 Exit 0 on a completed comparison; the verdict field records whether ES ON
 was faster, slower, or within noise on gmUpdateAvg under the same load.
+
+Matched-arm mode (the canonical comparison): set ES_ARM=on or ES_ARM=off.
+The fresh server boots with that arm's Enabled value (config written before
+start), one sample is taken, and no toggle happens. Run twice (once per
+arm) for a fresh-server-per-arm comparison; the caller owns the config
+between arms (set it explicitly, or reinstall to restore the default).
 """
 from __future__ import annotations
 
@@ -42,6 +48,7 @@ ZOMBIES = int(os.environ.get("BM_ZOMBIES", "250"))
 GAMESTAGE = int(os.environ.get("BM_GAMESTAGE", "250"))
 SAMPLE_S = float(os.environ.get("BM_HOLD_SAMPLE_S", "35"))
 SKIP_START = os.environ.get("SKIP_SERVER_START", "0") == "1"
+ARM = os.environ.get("ES_ARM", "")  # "on" or "off" = matched-arm mode (fresh server per arm)
 OUT_DIR = Path(os.environ.get("VALIDATE_OUT", str(OPT_ROOT / "server" / "logs")))
 DS = Path(
     os.environ.get(
@@ -153,6 +160,15 @@ def set_enabled(on: bool) -> None:
     log(f"ES Enabled={on} written + es reload")
 
 
+def set_enabled_before_boot(on: bool) -> None:
+    """Set Enabled in the installed config BEFORE the server boots (matched-arm
+    mode): the fresh server starts with the arm's setting, no live toggle."""
+    cfg = json.loads(ES_CFG.read_text(encoding="utf-8"))
+    cfg["Enabled"] = on
+    ES_CFG.write_text(json.dumps(cfg, indent=2) + "\n", encoding="utf-8")
+    log(f"ES Enabled={on} set before boot (matched-arm mode)")
+
+
 def main() -> int:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     B.PLAYERS, B.ZOMBIES, B.GAMESTAGE = PLAYERS, ZOMBIES, GAMESTAGE
@@ -162,6 +178,8 @@ def main() -> int:
         if not SKIP_START:
             os.environ["BM_PLAYERS"] = str(PLAYERS)
             os.environ["BM_ZOMBIES"] = str(ZOMBIES)
+            if ARM in ("on", "off"):
+                set_enabled_before_boot(ARM == "on")
             B.start_server()
         ensure_server_ready()
         logf = latest_server_log()
@@ -177,35 +195,48 @@ def main() -> int:
             return 2
         B.telnet(["gamestage", str(GAMESTAGE)], settle=1.0)
 
-        log(f"=== spawn ~{ZOMBIES} endgame (ES ON) ===")
+        log(f"=== spawn ~{ZOMBIES} endgame (ES {'ON' if ARM != 'off' else 'OFF'}) ===")
         spawned = B.spawn_endgame(ZOMBIES)
         report["spawned"] = spawned
 
-        # Phase ON (as installed: Enabled=true)
-        set_enabled(True)
-        on = sample_apm("es_on", logf)
-        report["phases"]["es_on"] = on
-        log(f"  ES ON : {on}")
-
-        # Phase OFF (Enabled=false + reload), same load
-        set_enabled(False)
-        off = sample_apm("es_off", logf)
-        report["phases"]["es_off"] = off
-        log(f"  ES OFF: {off}")
-
-        if on and off:
-            d = on["gmUpdateAvg"] - off["gmUpdateAvg"]
-            verdict = "ON_faster" if d < -0.5 else ("ON_slower" if d > 0.5 else "within_noise")
-            report["gmUpdateAvg_delta_ms"] = round(d, 3)
-            report["verdict"] = verdict
-            log(f"  delta gmUpdateAvg (ON-OFF) = {d:+.3f} ms -> {verdict}")
+        if ARM in ("on", "off"):
+            # Matched-arm mode: fresh server booted with this arm's Enabled,
+            # one sample, no toggle. Two runs (ES_ARM=on / ES_ARM=off) give the
+            # canonical fresh-server-per-arm comparison.
+            report["arm"] = ARM
+            arm_on = ARM == "on"
+            # confirm the booted setting stuck
+            st = B.telnet(["es status"], settle=1.5)
+            report["es_status"] = st[-400:]
+            s = sample_apm("arm_" + ARM, logf)
+            report["phases"]["arm_" + ARM] = s
+            report["verdict"] = "arm_" + ARM
+            log(f"  arm {ARM}: {s}")
+            report["restored"] = False  # caller owns the next arm's config
         else:
-            report["verdict"] = "no_apm_data"
-            log("WARN: APM bridge silent; no numeric verdict (check 7dtd-apm-bridge installed)")
+            # Single-session toggle mode: same load, ES on then off.
+            set_enabled(True)
+            on = sample_apm("es_on", logf)
+            report["phases"]["es_on"] = on
+            log(f"  ES ON : {on}")
 
-        # restore
-        set_enabled(True)
-        report["restored"] = True
+            set_enabled(False)
+            off = sample_apm("es_off", logf)
+            report["phases"]["es_off"] = off
+            log(f"  ES OFF: {off}")
+
+            if on and off:
+                d = on["gmUpdateAvg"] - off["gmUpdateAvg"]
+                verdict = "ON_faster" if d < -0.5 else ("ON_slower" if d > 0.5 else "within_noise")
+                report["gmUpdateAvg_delta_ms"] = round(d, 3)
+                report["verdict"] = verdict
+                log(f"  delta gmUpdateAvg (ON-OFF) = {d:+.3f} ms -> {verdict}")
+            else:
+                report["verdict"] = "no_apm_data"
+                log("WARN: APM bridge silent; no numeric verdict (check 7dtd-apm-bridge installed)")
+
+            set_enabled(True)
+            report["restored"] = True
     except KeyboardInterrupt:
         code = 130
     finally:
