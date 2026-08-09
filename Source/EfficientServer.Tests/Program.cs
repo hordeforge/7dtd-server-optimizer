@@ -85,6 +85,30 @@ namespace EfficientServer.Tests
             var inv = ServerPerfConfig.Load(WriteTemp("{\"AiLod\":{\"FullScale\":0.3,\"MediumScale\":0.9}}"));
             Check(inv.AiLod.MediumScale <= inv.AiLod.FullScale, "MediumScale clamped <= FullScale");
 
+            // Correctness invariant: the AiLod bands are monotonically nested and
+            // the scales monotonically decreasing, so a loaded config can never
+            // produce a broken band ordering (full inside medium inside far).
+            var bands = ServerPerfConfig.Load(WriteTemp(
+                "{\"AiLod\":{\"FullAiDistSq\":999999,\"MediumAiDistSq\":0.1,\"SkipTasksFarDistSq\":0.05," +
+                "\"FullScale\":0.0,\"MediumScale\":1.0,\"FarScale\":0.9}}"));
+            Check(bands.AiLod.FullAiDistSq <= bands.AiLod.MediumAiDistSq,
+                "band invariant: FullAiDistSq <= MediumAiDistSq after normalize");
+            Check(bands.AiLod.MediumAiDistSq <= bands.AiLod.SkipTasksFarDistSq,
+                "band invariant: MediumAiDistSq <= SkipTasksFarDistSq after normalize");
+            Check(bands.AiLod.FullScale >= bands.AiLod.MediumScale,
+                "scale invariant: FullScale >= MediumScale after normalize");
+            Check(bands.AiLod.MediumScale >= bands.AiLod.FarScale,
+                "scale invariant: MediumScale >= FarScale after normalize");
+            var bandsOk = ServerPerfConfig.Load(WriteTemp(
+                "{\"AiLod\":{\"FullAiDistSq\":50,\"MediumAiDistSq\":200,\"SkipTasksFarDistSq\":900," +
+                "\"FullScale\":1.0,\"MediumScale\":0.4,\"FarScale\":0.1}}"));
+            Check(bandsOk.AiLod.FullAiDistSq == 50f && bandsOk.AiLod.MediumAiDistSq == 200f
+                && bandsOk.AiLod.SkipTasksFarDistSq == 900f,
+                "band round-trip: valid nested distances preserved");
+            Check(bandsOk.AiLod.FullScale == 1f && bandsOk.AiLod.MediumScale == 0.4f
+                && bandsOk.AiLod.FarScale == 0.1f,
+                "scale round-trip: valid decreasing scales preserved");
+
             // Normalize: Gc 0-sentinels preserved; garbage clamped.
             var gcSent = ServerPerfConfig.Load(WriteTemp("{\"Gc\":{\"SafetyCollectAboveMB\":0,\"IncrementalPauseTargetMs\":0}}"));
             Check(gcSent.Gc.SafetyCollectAboveMB == 0, "SafetyCollectAboveMB 0 stays 0 (AUTO)");

@@ -25,7 +25,7 @@ bridge in `7dtd-apm`.
 
 - [x] Define small, medium, and high scenarios executed by `7dtd-loadgen`. (Seed-locked tier ladder + heavy canonical standard: `7dtd-apm/plans/profile.{canonical,tiers}.json`; docs LOAD_PROFILE.md, 2026-07-18.)
 - [x] Capture baseline/candidate evidence with `7dtd-apm` and record session IDs. (V3.1.0: moderate 16p 135519/135942; heavy 48p 001826/003006; canonical 64p 004634/005248 mixed; see docs/V310_APM_BASELINE.md)
-- [ ] Add regression budgets including simulation/gameplay correctness checks.
+- [ ] Add regression budgets including simulation/gameplay correctness checks. (2026-08-09: config-level correctness invariants added to the self-contained harness - the AiLod band ordering (FullAiDistSq <= MediumAiDistSq <= SkipTasksFarDistSq) and scale monotonicity (Full >= Medium >= Far) are now regression-checked, including fully-inverted inputs and valid round-trips. Live simulation/gameplay budgets (loadgen + APM thresholds) remain.)
 - [x] Document every configuration field, unit, range, runtime behavior, and tradeoff. (CONFIG.md covers all 51 config fields - added the previously missing CrowdCollisionLod section incl. `ResolveEveryNTicks` clamp [1,16]; automated cross-check source-vs-doc now passes.)
 
 ## Phase 3: packaging and release
