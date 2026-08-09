@@ -30,7 +30,7 @@ bridge in `7dtd-apm`.
 
 ## Phase 3: packaging and release
 
-- [ ] Verify clean build, install, upgrade, rollback, and uninstall.
+- [ ] Verify clean build, install, upgrade, rollback, and uninstall. (2026-08-09: clean build via scripts/build.sh, install to the live dedicated server (DLL hash-match verified, ModInfo 1.17.0, Config shipped), uninstall, and reinstall all pass. Remaining: live in-game upgrade smoke test on a running server.)
 - [ ] Preserve unrelated mods and user configuration during package operations.
 - [ ] Reconcile README, architecture, features, and runtime behavior.
 - [ ] Publish supported 7DTD/toolchain versions and troubleshooting.
