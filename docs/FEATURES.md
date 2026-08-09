@@ -223,6 +223,15 @@ horde during clustered sieges, so this pays only for dispersed roamer population
 see RESULTS 3m-bis for the honest A/B. Server-side animation is client-invisible;
 exemptions exist for combat-timing fidelity.
 
+**Exemption audit (2026-08-09, vs stock RE):** the guarded states match how the
+stock engine itself treats the animator - root motion is what actually drives
+authoritative movement (`SetMoveForwardWithModifiers` after forced root motion),
+the stock stun path disables the animator itself (so the patch must not fight it,
+and it does not - stunned entities are exempt), and stock `updateTasks` re-enables
+the animator on exit from a disabled state, matching the patch's "re-enable + pump
+once on revive". The emergency CullCompletely path correctly owns the rig instead
+(no re-enable/re-pump while active).
+
 ## Ambient light-spectrum skip (v1.14.3, default on)
 
 `SkipOnDedicated.AmbientLightSpectrumUpdates` skips the per-frame ambient-spectrum
