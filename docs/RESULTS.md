@@ -1031,6 +1031,39 @@ This is the gameplay-correctness floor for any ES-on regression: if a future
 change breaks this loadgen self-test-join, it broke gameplay replication, not
 just a perf number. Command: `7dtd-loadgen --self-test-join --actions 6`.
 
+## Blood-moon path-admission profile (2026-08-09, partial)
+
+Harness: `scripts/validate_bloodmoon_path.py` + loadgen
+`bloodmoon_profile.spawn_bloodmoon()` (new). V3.1.0 b14, ES 1.17.0.
+Reports in `server/logs/bloodmoon_path_*.json`.
+
+**Trigger verified working:** there is no `bloodmoon` console command in
+V3.1.0 (RE aidirector.md); the blood moon is driven by GameStats[58]
+BloodMoonDay. `spawn_bloodmoon()` runs `settime <day> 22 0` +
+`setgamestat BloodMoonDay <day>`, and the server log confirms the director
+path engages: `BloodMoon SetDay ... BloodMoon starting for day 1`. The
+AIDirectorBloodMoonComponent is the spawner, not telnet spawns.
+
+**First run (12 bots, GS 250):** join PASS, path A/B completed
+(baseline 50.0 ms / 7 alive -> path-on 50.0 ms / 7 alive, verdict
+`no_win`), but the horde stayed tiny: `Party of 12, GS 1, enemy max 2`
+- the party game stage was 1, not 250, because no `setgamestage` command
+exists (gamestage is read-only) and the old loadgen fallback silently
+no-op'd. Blood-moon horde size scales with party GS + member count.
+
+**Committed fixes:** loadgen `set_gamestage` now uses `givexp <id> 5M`
+(level-derived gameStage, progression.md); the optimizer harness now
+clusters bots via `teleportplayer` so they form ONE party (party join is
+within 80 m) instead of 12 parties of 1.
+
+**Blocker (repeated):** the stock LiteNetLib join flake (Collection was
+modified in CreateEvent, see the whole-mod section) has degraded - later
+runs at 8-12 bots oscillated 0-7 joined and failed the join gate, so the
+clustered party-scaled horde could not be re-observed. The trigger and
+path A/B are verified; the party-GS and clustering fixes are committed
+and ready, but a stable >4-bot cohort is required to measure the
+party-scaled horde, which the current host cannot sustain.
+
 ## Whole-mod EfficientServer on/off APM (2026-08-09)
 
 Harness: `scripts/measure_es_onoff.py` (loadgen bots + telnet + APM-bridge
