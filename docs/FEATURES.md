@@ -38,6 +38,21 @@ near) rather than one-way, so it self-heals on approach instead of leaving cloth
 permanently after one far excursion (visible only on a player host; cosmetic on a
 true dedicated server).
 
+**`aiActiveScale` band audit (2026-08-09, vs stock RE):** stock `EntityActivityUpdate`
+keeps the closest **N = clamp(60/playerCount, 4, 20)** entities at full 1.0 scale
+regardless of distance (the per-player top-N full-AI quota), then 0.3 inside 225
+(15 m) and 0.1 beyond. `AiLodPatch` is purely distance-based (`Full < 100` -> 1.0,
+`< 400` -> 0.2, else 0.05) and does not replicate the top-N quota. Accepted because:
+(1) `aiActiveScale` only gates EAI/`EAIManager.Update` cadence via `aiActiveDelay` -
+per the RE, after the delay gate, path apply + navigation + move + look **always
+run** on every `updateTasks` invocation, so locomotion is never throttled;
+(2) the combat-relevant set is covered by `UpdateTasksLodPatch`'s alerted guard
+(attack target / investigate / alert ticks / active sleeper never strided or
+skipped), which is the patch that would actually strand a charging zombie.
+Residual risk to validate live: a far (20-50 m) **unalerted** zombie that becomes
+aggressive on approach spends a few EAI ticks at 0.05 scale before `GetAlertTicks`
+> 0 restores full cadence - bounded, but confirm under a blood-moon charge.
+
 ## Dedicated-only skips
 
 `DedicatedSkipPatch` avoids selected presentation work that has no dedicated

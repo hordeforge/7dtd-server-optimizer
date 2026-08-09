@@ -18,7 +18,7 @@ bridge in `7dtd-apm`.
 - [x] Record optimizer, game assembly, and configuration versions at startup. (ModApi.LogVersions: mod + Assembly-CSharp + game version + config summary, 2026-07-18.)
 - [x] Add configuration parsing and normalization tests. (Self-contained `EfficientServer.Tests` harness: defaults, clamps, NaN/Inf fallback, hysteresis, round-trips, 500-case fuzz; `dotnet run --project Source/EfficientServer.Tests`.)
 - [x] Add dedicated-only and per-feature enable/disable tests. (Dedicated-only gate: pure `ServerPerfConfig.ShouldRunFor` + `ModApi.ShouldRun` rewired, fail-closed on unknown host. Per-feature: pure `ServerPerfConfig.FeatureActive(featureKey, benchGod)` extracted from `ModApi.ConfigNote`; harness covers defaults, on/off knobs per feature, Gc Enabled+SkipForcedCollect conjunction, and unknown keys. All in `EfficientServer.Tests`.)
-- [ ] Validate AI LOD behavior for alert, combat, sleeper, quest, and distant entities.
+- [ ] Validate AI LOD behavior for alert, combat, sleeper, quest, and distant entities. (2026-08-09 static audit vs stock RE: `UpdateTasksLodPatch` never strides/skips attacking (GetAttackTarget), investigating (HasInvestigatePosition), alerted (GetAlertTicks>0), or active-sleeper entities - the combat/alert/sleeper set is structurally covered; `AiLodPatch`'s `aiActiveScale` only gates EAI cadence (locomotion always runs per RE) and the missing stock top-N quota is documented as accepted in FEATURES.md with a bounded residual. Remaining: live blood-moon charge validation.)
 - [ ] Validate dynamic-mesh budgets during saves, region streaming, and separated players.
 
 ## Phase 2: reproducible evidence
