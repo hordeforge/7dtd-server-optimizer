@@ -160,20 +160,20 @@ namespace EfficientServer
 
         public static bool ShouldRun()
         {
-            if (!Active || Config == null || !Config.Enabled)
-                return false;
-            if (!Config.DedicatedOnly)
-                return true;
-            try
+            bool? isDedicated = null;
+            if (Config != null && Config.Enabled && Config.DedicatedOnly)
             {
-                return GameManager.IsDedicatedServer;
+                try
+                {
+                    isDedicated = GameManager.IsDedicatedServer;
+                }
+                catch
+                {
+                    // Fail closed: unknown host must not activate server-only patches.
+                    isDedicated = false;
+                }
             }
-            catch
-            {
-                // Fail closed: DedicatedOnly means "only on a confirmed dedicated
-                // server", so an unknown host must not activate server-only patches.
-                return false;
-            }
+            return ServerPerfConfig.ShouldRunFor(Active, Config?.Enabled ?? false, Config?.DedicatedOnly ?? false, isDedicated);
         }
 
         public static void Log(string msg)

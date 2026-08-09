@@ -157,6 +157,17 @@ namespace EfficientServer.Tests
                 }
             }
 
+            // Dedicated-only gate (ShouldRunFor): disabled config never runs.
+            Check(!ServerPerfConfig.ShouldRunFor(false, true, true, true), "active=false -> no run");
+            Check(!ServerPerfConfig.ShouldRunFor(true, false, true, true), "enabled=false -> no run");
+            // DedicatedOnly=false runs anywhere.
+            Check(ServerPerfConfig.ShouldRunFor(true, true, false, null), "dedicatedOnly=false -> run (host unknown)");
+            Check(ServerPerfConfig.ShouldRunFor(true, true, false, true), "dedicatedOnly=false -> run (host any)");
+            // DedicatedOnly=true requires a confirmed dedicated host.
+            Check(ServerPerfConfig.ShouldRunFor(true, true, true, true), "dedicatedOnly=true + dedicated -> run");
+            Check(!ServerPerfConfig.ShouldRunFor(true, true, true, false), "dedicatedOnly=true + client -> no run");
+            Check(!ServerPerfConfig.ShouldRunFor(true, true, true, null), "dedicatedOnly=true + unknown -> fail closed");
+
             if (_failures == 0)
             {
                 Console.WriteLine("PASS: all Config Load/Normalize checks");

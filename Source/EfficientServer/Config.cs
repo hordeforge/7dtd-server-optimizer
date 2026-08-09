@@ -383,5 +383,21 @@ namespace EfficientServer
             if (File.Exists(a)) return a;
             return Path.Combine(dir, "efficientserver.json");
         }
+
+        /// <summary>
+        /// Pure dedicated-only gate decision (no game types), so the policy is
+        /// unit-testable: disabled config never runs; DedicatedOnly requires a
+        /// confirmed dedicated host; an unknown host fails closed (false).
+        /// </summary>
+        public static bool ShouldRunFor(bool active, bool enabled, bool dedicatedOnly, bool? isDedicatedServer)
+        {
+            if (!active || !enabled)
+                return false;
+            if (!dedicatedOnly)
+                return true;
+            // Fail closed: DedicatedOnly means "only on a confirmed dedicated
+            // server", so an unknown host must not activate server-only patches.
+            return isDedicatedServer ?? false;
+        }
     }
 }
