@@ -40,7 +40,7 @@ import bloodmoon_profile as B  # noqa: E402
 PLAYERS = int(os.environ.get("BM_PLAYERS", "32"))
 ZOMBIES = int(os.environ.get("BM_ZOMBIES", "250"))
 GAMESTAGE = int(os.environ.get("BM_GAMESTAGE", "250"))
-SAMPLE_S = float(os.environ.get("BM_HOLD_SAMPLE_S", "12"))
+SAMPLE_S = float(os.environ.get("BM_HOLD_SAMPLE_S", "35"))
 SKIP_START = os.environ.get("SKIP_SERVER_START", "0") == "1"
 OUT_DIR = Path(os.environ.get("VALIDATE_OUT", str(OPT_ROOT / "server" / "logs")))
 DS = Path(
@@ -73,49 +73,76 @@ def ensure_server_ready(timeout_s: float = 180.0) -> None:
 
 
 def latest_server_log() -> Path | None:
-    cands = sorted(LOG_GLOB.glob("server_*.txt")) if LOG_GLOB.is_dir() else []
+    # The Unity log is server_prefab_<name>__<timestamp>.txt; the stdout capture
+    # is server_stdout_prefab.txt (no APM lines). Match only the Unity pattern.
+    cands = sorted(LOG_GLOB.glob("server_prefab_*.txt")) if LOG_GLOB.is_dir() else []
     if not cands:
-        cands = sorted(DS.glob("logs/server_*.txt"))
+        cands = sorted(DS.glob("logs/server_prefab_*.txt"))
     return cands[-1] if cands else None
 
 
 def read_apm(logf: Path) -> dict | None:
-    """Parse the most recent [7dtd-apm] health line from the server log."""
+    """Parse the most recent matching [7dtd-apm] health line from the server log.
+
+    Scans backwards: APM health lines append every ~30 s and other [7dtd-apm]
+    lines (session headers) may interleave, so the last *matching* line wins.
+    Returns cumulative counters (updates, gmUpdateAvg, tickAvg, spikes).
+    """
     txt = logf.read_text(encoding="utf-8", errors="replace")
-    lines = [l for l in txt.splitlines() if "[7dtd-apm]" in l]
-    if not lines:
-        return None
-    m = re.search(
-        r"gmUpdateAvg=([0-9.]+)ms tickAvg=([0-9.]+)ms spikes=(\d+)", lines[-1]
-    )
+    m = None
+    for line in reversed(txt.splitlines()):
+        if "[7dtd-apm]" not in line:
+            continue
+        m = re.search(
+            r"APM updates=(\d+) gmUpdateAvg=([0-9.]+)ms tickAvg=([0-9.]+)ms spikes=(\d+)", line
+        )
+        if m:
+            break
     if not m:
         return None
     return {
-        "gmUpdateAvg": float(m.group(1)),
-        "tickAvg": float(m.group(2)),
-        "spikes": int(m.group(3)),
+        "updates": int(m.group(1)),
+        "gmUpdateAvg": float(m.group(2)),
+        "tickAvg": float(m.group(3)),
+        "spikes": int(m.group(4)),
+    }
+
+
+def windowed(a: dict, b: dict) -> dict | None:
+    """Windowed (instantaneous-ish) metrics from two cumulative APM reads.
+
+    gmUpdateAvg / tickAvg are cumulative since boot; the per-window value is
+    the delta of the weighted sums over the updates in between. Returns None
+    when the window covers no new updates (e.g. a quiet server).
+    """
+    du = b["updates"] - a["updates"]
+    if du <= 0:
+        return None
+    return {
+        "gmUpdateAvg": round((b["updates"] * b["gmUpdateAvg"] - a["updates"] * a["gmUpdateAvg"]) / du, 3),
+        "tickAvg": round((b["updates"] * b["tickAvg"] - a["updates"] * a["tickAvg"]) / du, 3),
+        "spikes": b["spikes"],
+        "window_updates": du,
     }
 
 
 def sample_apm(label: str, logf: Path, seconds: float = SAMPLE_S) -> dict | None:
-    """Average APM lines seen over a window; return None if the bridge is silent."""
-    rows = []
-    t0 = time.time()
-    while time.time() - t0 < seconds:
-        r = read_apm(logf)
-        if r and (not rows or r != rows[-1]):
-            rows.append(r)
-        time.sleep(1.0)
-    if not rows:
+    """Sample the windowed APM rate over a window; None if the bridge is silent."""
+    first = read_apm(logf)
+    if first is None:
         return None
-    n = len(rows)
-    return {
-        "label": label,
-        "gmUpdateAvg": round(sum(r["gmUpdateAvg"] for r in rows) / n, 3),
-        "tickAvg": round(sum(r["tickAvg"] for r in rows) / n, 3),
-        "spikes": rows[-1]["spikes"],
-        "samples": n,
-    }
+    t0 = time.time()
+    last = first
+    while time.time() - t0 < seconds:
+        time.sleep(1.0)
+        r = read_apm(logf)
+        if r is not None and r["updates"] > last["updates"]:
+            last = r
+    w = windowed(first, last)
+    if w is None:
+        return None
+    w["label"] = label
+    return w
 
 
 def set_enabled(on: bool) -> None:
