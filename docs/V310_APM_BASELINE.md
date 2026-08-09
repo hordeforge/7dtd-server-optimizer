@@ -296,8 +296,6 @@ At full 64p + demolition chaos, **ES is not a free win on ms_per_tick**.
 
 - **2026-08-03 (later):** Full canonical-heavy-v2 64p ES on/off (mixed; STW win, ms_per_tick not).
 
-## Changelog
-
 - **2026-08-03 (later):** Full canonical-heavy-v2 64p ES on/off (mixed).
 - **2026-08-03:** Heavy 48p ES on/off + animator stress gate.
 - **2026-08-02:** First V3.1.0 matched ES on/off moderate forensic pair.

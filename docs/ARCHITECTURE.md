@@ -327,8 +327,9 @@ See [`../../7dtd-research/docs/loop.md`](../../7dtd-research/docs/loop.md) §14.
 - **2026-07-16:** Link deeper synthesis (path drain ≤8/slice, MoveHelper, EAI rank); RESEARCH_INDEX.
 - **2026-07-16:** Deep entity/AI/path: updateTasks always-on nav; ASPPathFinderThread+coroutine; EAITaskList; link entity-ai.
 - **2026-07-16:** Deep `gmUpdate` / `UpdateTick` / peer Update RE from V3.0.1 Cecil dump; multi-behaviour frame model; entity slice EMA; dedicated GC.Collect; conductor targets.
-## Related docs
+- **2026-07-19:** Ownership/related docs polish.
 
+## Related docs
 | Doc | Role |
 |---|---|
 | [FEATURES.md](FEATURES.md) | Shipped patches |
@@ -337,7 +338,3 @@ See [`../../7dtd-research/docs/loop.md`](../../7dtd-research/docs/loop.md) §14.
 | [engine-limitations.md](../../7dtd-research/docs/engine-limitations.md) | Stock ceilings (sim, net, AI, GC) |
 | [measured-scaling.md](measured-scaling.md) | Live scale |
 | [OPTIMIZATION_CANDIDATES.md](OPTIMIZATION_CANDIDATES.md) | Candidates |
-
-## Changelog
-
-- **2026-07-19:** Ownership/related docs polish.
