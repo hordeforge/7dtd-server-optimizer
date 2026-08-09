@@ -82,3 +82,37 @@ Docs:
 - Dedicated game loop RE map: [`../7dtd-research/docs/loop.md`](../7dtd-research/docs/loop.md)
 - RE dump index: [`../7dtd-research/docs/INDEX.md`](../7dtd-research/docs/INDEX.md)
 - Backlog: [`TODO.md`](TODO.md)
+
+## Supported versions and troubleshooting
+
+**Game pin:** 7 Days to Die **V3.1.0 (b14)** dedicated. Built against the live
+`Assembly-CSharp.dll` at build time (dedicated `7DaysToDieServer_Data/Managed`
+first, client fallback), so a Steam update that changes the assembly is a
+supported retarget: rebuild with `make build` and reinstall.
+
+**Toolchain:**
+- .NET SDK (any modern version; the repo's `build.sh` prefers `DOTNET_ROOT` or
+  `~/.cache/dotnet-sdk`), target framework `net48`
+- Fallback backend `SEVENDTD_BUILD_BACKEND=mcs` (Mono `mcs`) when no SDK is present
+- Requires `0_TFP_Harmony` installed in the game's `Mods/` (the Harmony runtime
+  the patches load through)
+- Game refs (Assembly-CSharp, UnityEngine.*, 0Harmony, Newtonsoft.Json,
+  LogLibrary, MemoryPack, AstarPathfindingProject) resolve from the installed
+  game; a missing managed DLL fails the build with a clear reference error
+
+**Troubleshooting (from the mod's own log lines):**
+- `MISSING TARGET: <Patch> matched no game method (version drift?) - this
+  optimization is INACTIVE` - the patch could not IL-match its target. Almost
+  always a game update moved/renamed the method: rebuild against the current
+  `Assembly-CSharp.dll`, and if it persists, open an issue with the patch name.
+- `InitMod failed:` / `patch <name> failed: <ex>` - an exception during mod init
+  or Harmony patching. Check the full stack in the server log; common causes are
+  a missing Harmony install or a partial game update.
+- Config edits not taking effect - the file is read at startup. Reinstall now
+  preserves a user-edited `efficientserver.json` across upgrades (differs from
+  the shipped default), so edits survive; a server restart is still required
+  after changing it.
+- EAC: C# mods (and therefore this one) need EAC disabled on the server.
+
+See [`docs/PRODUCTION.md`](docs/PRODUCTION.md) for the full deploy/operate
+runbook and [`docs/CONFIG.md`](docs/CONFIG.md) for every option.
