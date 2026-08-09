@@ -85,6 +85,14 @@ measurement). Ships as plausible defaults; the residual to validate live is
 multi-player region streaming (distant players + a save + concurrent mesh
 syncs) at these values.
 
+**Live application verified (2026-08-09):** booting V3.1.0 b14 with ES 1.17.0,
+the server log shows `[EfficientServer] mesh budgets: OnlyPlayerAreas=True
+buf=2 loadMs=2 syncs=2` - the patch applies the exact configured values
+in-game (no drift, no `mesh budget apply failed`), with `GamePref
+DynamicMeshEnabled=True` active. So the budgets are live; only the
+multi-player streaming A/B (does syncs=2 delay distant players) remains
+unmeasured.
+
 ## GC pause guard (A7)
 
 `GcGuardPatch` transpiles `GameManager.gmUpdate` to reroute its single forced
