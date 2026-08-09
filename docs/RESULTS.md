@@ -1058,6 +1058,24 @@ perf-budget data point for the Phase 2 regression-budget item; a full
 matched-arm 64p canonical comparison (fresh server per arm) remains the
 gold standard.
 
+**Matched-arm runs (2026-08-09, `ES_ARM=on|off`, 12 bots / ~150-170
+zombies):** `es_onoff_20260809_150804.json` (ON) and
+`es_onoff_20260809_151828.json` (OFF). Fresh server per arm, one windowed
+sample each. ON gmUpdateAvg **10.387 ms** vs OFF **10.273 ms** = +0.11 ms
+(**within noise**). At 12 bots the server is far from tick-bound, so the
+optimizer has little to win - consistent with the stronger -15% signal at
+24p in the single-session toggle. Verdict on the matched pair:
+**load-dependent, no measurable effect at 12p**.
+
+**Test-infra finding (LiteNetLib join flake):** repeated bot join attempts
+under this harness trigger a stock-game `LiteNetLib.NetManager.CreateEvent:
+Collection was modified` exception in the socket-receive thread, dropping
+connected clients (`RemoteConnectionClose`). It affects all loadgen-based
+testing on this machine (3 failed runs at 24-32 bots); a 12-bot cohort
+gets through. Not an EfficientServer defect - the mod loads and patches
+fine in every run; the flake is in vanilla LiteNetLib under connect
+churn. Workaround: small bot cohorts (<=12) or a longer join settle.
+
 ## Live animator-emergency + path-admission validation (2026-08-09)
 
 Harness: `scripts/validate_anim_path_admission.py` (loadgen bots + telnet),
