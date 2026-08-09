@@ -1031,6 +1031,28 @@ This is the gameplay-correctness floor for any ES-on regression: if a future
 change breaks this loadgen self-test-join, it broke gameplay replication, not
 just a perf number. Command: `7dtd-loadgen --self-test-join --actions 6`.
 
+## Live animator-emergency + path-admission validation (2026-08-09)
+
+Harness: `scripts/validate_anim_path_admission.py` (loadgen bots + telnet),
+V3.1.0 b14 dedicated, ES 1.17.0. Load: 8 players, ~120-144 spawned endgame
+zombies, gamestage 200. Report: `server/logs/validate_anim_path_20260809_135113.json`.
+
+| Verdict | Result |
+|---|---|
+| join | **PASS** (8/8 bots) |
+| anim_cull_mode | **PASS** - `es animoff` entered CullCompletely on 123 rigs, `es animon` restored all 123 (no stranded rigs) |
+| anim_root_motion | **PASS** - moving zombies report `dp>0` after restore (root motion intact) |
+| anim_frame_win | **SKIP_light_load** - at 8 players the frame is fixed at 50 ms (not tick-bound), so no frame win is claimable; honest skip |
+| path_fidelity | **PASS** - cap=64 / dropFarSq=2500 reloaded live, horde intact (alive grew 141->144, no collapse) |
+| path_frame | **PASS_or_noise** - frame fixed at 50 ms under this light load |
+| overall | **PASS** |
+
+This is the live counterpart to the static AI-LOD audit: the animator-emergency
+exit path (the combat-fidelity concern) is mechanically validated - every rig it
+disabled was restored, and root motion survived. The frame-win and path-frame
+verdicts are honest skips/noise at light load; the full blood-moon stress claim
+still needs the 64p + 200+z A/B.
+
 ## Related docs
 
 | Doc | Role |
