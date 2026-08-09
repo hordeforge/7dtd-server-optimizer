@@ -100,6 +100,21 @@ def write_path_config(max_cap: int, drop_far: float) -> None:
     ES_CFG.write_text(json.dumps(cfg, indent=2) + "\n", encoding="utf-8")
 
 
+def cluster_players() -> list[int]:
+    """Teleport all joined bots onto the first bot so they form ONE blood-moon
+    party (party join is within 80 m, RE aidirector.md AddPlayerToParty).
+    Scattered bots each make a Party of 1 -> enemy max 2 -> tiny horde."""
+    ids = B.player_ids()
+    if len(ids) < 2:
+        return ids
+    anchor = ids[0]
+    for pid in ids[1:]:
+        B.telnet([f"teleportplayer {pid} {anchor}"], settle=0.4)
+    log(f"clustered {len(ids)} bots onto {anchor}")
+    time.sleep(5)
+    return ids
+
+
 def main() -> int:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     B.PLAYERS, B.GAMESTAGE = PLAYERS, GAMESTAGE
@@ -126,6 +141,10 @@ def main() -> int:
             return 2
         report["verdicts"]["join"] = "PASS"
         B.set_gamestage(GAMESTAGE)
+
+        # Cluster bots into one party so the blood-moon horde scales (party GS +
+        # member count drive the spawn budget).
+        cluster_players()
 
         log("=== trigger genuine blood moon ===")
         bm_day = B.spawn_bloodmoon()
