@@ -1061,12 +1061,23 @@ with the earlier 3t finding that path admission does not help moderate
 loads), and the harness's `anim_frame_win=SKIP_light_load` label is its
 fixed string for the non-win case - read the frame column, not the label.
 
+**Run 3 (stress, 64 players / ~300-450 zombies / gamestage 250):**
+`validate_anim_path_20260809_141235.json`. 64/64 bots joined; alive climbed
+319 -> 337 -> 378 -> 412 -> 447 across the phases. **First measured frame-win
+for the animator emergency:** baseline **117.61 ms** (tick-bound, over the
+harness's 55 ms verdict threshold) -> animoff **99.53 ms** = **-15.4% frame**
+(`anim_frame_win=PASS`, below the 95% bar); `animon` restored to 114.66 ms
+with root motion intact (reversible, no strand). Path admission at this load:
+154.03 -> 168.48 ms but alive grew 412 -> 447 (load imbalance; verdict
+`PASS_or_noise` honest - consistent with 3t that path knobs do not help).
+
 This is the live counterpart to the static AI-LOD audit: the animator-emergency
 exit path (the combat-fidelity concern) is mechanically validated - every rig it
-disabled was restored, and root motion survived. Runs 1-2 (8p/144z and
-32p/250z) both pass; the animator-emergency exit path is validated at both
-loads. What remains for a frame-win *claim* (not fidelity): the full 64p +
-300z+ blood-moon stress A/B where the frame is genuinely tick-bound.
+disabled was restored, and root motion survived. Runs 1-3 (8p/144z, 32p/250z,
+64p/300-450z) all pass, and Run 3 delivers the first measured frame-win claim
+for the animator emergency at tick-bound load (-15.4% frame, reversible).
+Path admission shows no win at any load (consistent with 3t), so it stays a
+default-off candidate pending a blood-moon-specific horde profile.
 
 ## Related docs
 
