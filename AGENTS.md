@@ -87,7 +87,7 @@ Human synthesis belongs in `../7dtd-research/docs/` or `docs/`, never as optim p
 |---|---|
 | `../7dtd-apm` | Host + bridge measurement, compare, budget |
 | `../7dtd-loadgen` | LiteNetLib bots and dedicated start helpers |
-| `../7days-realworld` | RealEarth terrain (unrelated optim product surface) |
+| `../7dtd-realworld` | RealEarth terrain (unrelated optim product surface) |
 
 Do not silently install, edit, or couple into siblings. Public runner/API only.
 
