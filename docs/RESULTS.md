@@ -1176,6 +1176,29 @@ for the animator emergency at tick-bound load (-15.4% frame, reversible).
 Path admission shows no win at any load (consistent with 3t), so it stays a
 default-off candidate pending a blood-moon-specific horde profile.
 
+## DynamicMesh-enabled stock server observation (2026-08-11)
+
+Attempted the streaming A/B (TODO Phase 1 dynamic-mesh item) on a stock
+V3.1.0 b14 dedicated server with DynamicMesh enabled.
+
+- **Bug found + fixed first:** `7dtd-loadgen/scripts/start_dedicated_prefab.sh`
+  wrote `DynamicMeshEnabled` with the raw `RE_DYNAMIC_MESH` value, so
+  `RE_DYNAMIC_MESH=1` produced `value="1"`, which stock V3.1.0
+  `GamePrefs.ParseBool` rejects (`EXC Value is not equivalent to either
+  TrueString or FalseString`) and the server aborted at startup. The script now
+  normalizes truthy inputs (1/yes/on/true) to `"true"` (loadgen 06ddc9b).
+- **Live (fixed script, 4k RWG seed=botpoi4k):** server boots with
+  `DynamicMeshEnabled=true`; `DynamicMeshManager.Update` ticks on the headless
+  server (ScriptOrder stamps, ~3 s cadence); `Started thread ChunkRegeneration`
+  fires; loadgen demolition bots join and throw dynamite (`dynamite=3` per
+  bot) before the join churn cuts them off.
+- **Still blocked:** the stable-cohort streaming A/B (mesh regen at a distant
+  player) needs bots to stay connected; the stock join churn
+  (`server_disconnect`, network.md 4.0 root cause) hit even a 6-bot cohort
+  with a 3 s ramp (rejoin attempts 8-9, bot life ~1.3 s). Consistent with the
+  documented residual; not closable on this host without the ramp mitigation
+  holding at full cohort.
+
 ## Related docs
 
 | Doc | Role |
