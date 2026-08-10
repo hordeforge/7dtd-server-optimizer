@@ -41,7 +41,8 @@ Change **one group at a time**, then re-measure.
 
 ```text
 0. make test - config harness (normalize/clamps/invariants/fuzz), config-doc
-   coverage gate, version-consistency gate (ModInfo == Assembly == docs)
+   coverage gate, version-consistency gate (ModInfo == Assembly == docs);
+   also runs in CI on every push/PR (.github/workflows/ci.yml)
 1. Baseline: 7dtd-loadgen workload + 7dtd-apm capture
 2. Edit one feature group (config and/or patch code)
 3. Rebuild and install against current dedicated Managed
