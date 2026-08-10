@@ -97,8 +97,11 @@ unmeasured.
 prefab server config previously set `DynamicMeshEnabled=false`, so
 loadgen runs never exercised the mesh path. That is now fixed: the loadgen
 `start_dedicated_prefab.sh` takes `RE_DYNAMIC_MESH=1` to enable DynamicMesh
-in the test world (verified: generates `DynamicMeshEnabled=true`; default
-false preserves non-mesh baselines). The remaining need is the A/B itself:
+in the test world (generates `DynamicMeshEnabled=true`; default
+false preserves non-mesh baselines; 2026-08-11 the raw `1` was normalized to
+`True` because stock V3.1.0 `GamePrefs.ParseBool` rejects `value="1"` and
+aborts startup - see RESULTS 'DynamicMesh-enabled stock server observation').
+The remaining need is the A/B itself:
 a stable bot cohort to (a) trigger mesh regeneration via the endgame
 exploders/demolishers in the spawn mix and (b) provide a distant-player
 observation point for `MaxActiveSyncs=2` vs a higher cap. That cohort is
