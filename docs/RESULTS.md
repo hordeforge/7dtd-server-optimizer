@@ -1063,6 +1063,18 @@ path A/B are verified; the party-GS and clustering fixes are committed
 and ready, but a stable >4-bot cohort is required to measure the
 party-scaled horde, which the current host cannot sustain.
 
+**Re-observation COMPLETED (2026-08-10):** the join flake root cause was
+closed in 7dtd-research (`docs/network.md` §4.0: receive-thread
+`ConnectionRequestCheck` races `Clients.List`; `--ramp-ms` pacing avoids it).
+`validate_bloodmoon_path.py` (12 bots, GS 250, ramp) then completed:
+join **PASS** (12/12), genuine blood moon triggered (`BloodMoon starting for
+day 1`), path A/B: baseline 50.0 ms / 7 alive -> path-on 50.0 ms / 5 alive,
+verdict **no_win** (consistent with the 3-tick path-admission finding).
+Report: `server/logs/bloodmoon_path_20260810_213824.json`. Caveat: the
+party-scaled horde still stayed small (5-7 alive) - the `givexp` gamestage
+fix and bot clustering were active, but horde build-up toward a siege needs
+a longer hold or higher party GS; the A/B itself is valid and reproducible.
+
 ## Whole-mod EfficientServer on/off APM (2026-08-09)
 
 Harness: `scripts/measure_es_onoff.py` (loadgen bots + telnet + APM-bridge
