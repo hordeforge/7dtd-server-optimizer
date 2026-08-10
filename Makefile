@@ -1,6 +1,16 @@
 ROOT := $(CURDIR)
 DS ?= $(HOME)/.local/share/Steam/steamapps/common/7 Days to Die Dedicated Server
 
+# Prefer a local SDK if present (cache or ~/.dotnet), like 7dtd-loadgen
+DOTNET_ROOT ?= $(firstword \
+	$(wildcard $(HOME)/.cache/dotnet-sdk) \
+	$(wildcard $(HOME)/.dotnet) \
+	)
+ifneq ($(DOTNET_ROOT),)
+  export DOTNET_ROOT
+  export PATH := $(DOTNET_ROOT):$(PATH)
+endif
+
 .PHONY: build build-mcs test install uninstall run clean
 build:
 	$(ROOT)/scripts/build.sh
