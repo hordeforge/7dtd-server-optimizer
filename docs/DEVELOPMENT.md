@@ -68,7 +68,15 @@ Rebuild after **every** Steam update. Re-check Harmony targets against `Assembly
 
 Known infra note: >12 loadgen bots can trigger a stock LiteNetLib join flake
 (`Collection was modified` in `CreateEvent`) that drops clients; use small
-cohorts for measurement runs (see RESULTS).
+cohorts for measurement runs (see RESULTS). **Root cause closed 2026-08-10
+(7dtd-research):** a managed race - `LiteNetLibAuthWrapperServer.
+ConnectionRequestCheck` enumerates `ConnectionManager.Clients.List` on the
+socket-receive thread (`UnsyncedEvents=true` from `NetworkCommonLiteNetLib.
+InitConfig`) while the main thread mutates it. Fix direction: run the
+duplicate-IP scan on the main thread or copy the IP set under lock. Full
+evidence: `7dtd-research/docs/network.md` §4.0; a second churn bug
+(`NetPackageMinEventFire.write` NRE on null itemValue) is in
+`7dtd-research/docs/protocol-packages.md` §6.23.
 
 ## Reverse engineering helpers
 
