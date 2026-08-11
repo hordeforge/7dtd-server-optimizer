@@ -21,6 +21,13 @@ steady-churn site** - so pathfinding is both the top CPU section and the top
 allocator, making P1 the highest impact-to-effort lever. Graded B12 in
 [`OPTIMIZATION_CANDIDATES.md`](OPTIMIZATION_CANDIDATES.md).
 
+> **Grid magnitude (RE-pinned 2026-08-11):** the scan allocates a
+> `76 x 76` cell grid at height **320** (`AstarVoxelGrid.cGridXZSize` /
+> `cGridHeight`, [`7dtd-research/docs/raycast-pathing.md`](../../7dtd-research/docs/raycast-pathing.md))
+> = ~1.85M voxel cells per grid per scan; `cConnectionPoolMax` **16** per node.
+> The RE constants are machine-pinned by `7dtd-research`'s
+> `test_tuned_constants.py`.
+
 > **APM note (2026-07-18):** the alloc-attribution earlier reported noise
 > (`GameTimer.Reset`, `String.Split`) because `_alloc_block_sites` read
 > bpftrace's *ascending* ustack map top-down and stopped after 3, grabbing the
