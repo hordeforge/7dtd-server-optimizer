@@ -382,6 +382,13 @@ namespace EfficientServer
             Gc.SafetyCollectAboveMB = IntRange("Gc.SafetyCollectAboveMB", Gc.SafetyCollectAboveMB, 0, 1048576);
             Gc.SafetyCollectRamFraction = FiniteRange("Gc.SafetyCollectRamFraction", Gc.SafetyCollectRamFraction, 0f, 0.95f, 0.5f);
             Gc.IncrementalPauseTargetMs = IntRange("Gc.IncrementalPauseTargetMs", Gc.IncrementalPauseTargetMs, 0, 10000);
+            // Diagnostics seconds feed Thread.Sleep(WarmupSeconds * 1000) and bound the
+            // grow loop, so they must be clamped like every other knob: an unclamped
+            // fat-finger above ~2.1M makes `seconds * 1000` wrap negative (Sleep throws,
+            // probe dies with a misleading log), and a huge GrowSeconds runs the grow
+            // loop for months. Caps: 1 h warmup, 2 h grow.
+            Diagnostics.WarmupSeconds = IntRange("Diagnostics.WarmupSeconds", Diagnostics.WarmupSeconds, 0, 3600);
+            Diagnostics.GrowSeconds = IntRange("Diagnostics.GrowSeconds", Diagnostics.GrowSeconds, 1, 7200);
         }
 
         static float FiniteRange(string name, float value, float min, float max, float fallback)

@@ -47,7 +47,8 @@ namespace EfficientServer
         {
             try
             {
-                Thread.Sleep(Math.Max(0, cfg.WarmupSeconds) * 1000);
+                // long math: seconds -> ms must not wrap int before Sleep sees it.
+                Thread.Sleep((int)Math.Min(int.MaxValue, Math.Max(0, cfg.WarmupSeconds) * 1000L));
                 ulong heap0 = HeapBytes();
                 GC_disable();
                 ModApi.Log("GC MEGAPAUSE: collector DISABLED at heap=" + Gb(heap0) + "; growing under load...");

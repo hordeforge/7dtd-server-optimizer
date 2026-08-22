@@ -117,6 +117,20 @@ namespace EfficientServer.Tests
             Check(gcBad.Gc.SafetyCollectAboveMB == 0, "SafetyCollectAboveMB -100 -> 0");
             Check(gcBad.Gc.SafetyCollectRamFraction <= 0.95f, "SafetyCollectRamFraction 5.0 -> <=0.95");
 
+            // Diagnostics seconds: WarmupSeconds feeds Sleep(seconds * 1000), so a
+            // value above ~2.1M would wrap the int product negative (Sleep throws);
+            // GrowSeconds bounds the grow loop. Both must clamp like every other knob.
+            var diagBig = ServerPerfConfig.Load(WriteTemp(
+                "{\"Diagnostics\":{\"WarmupSeconds\":2500000,\"GrowSeconds\":2000000000}}"));
+            Check(diagBig.Diagnostics.WarmupSeconds == 3600, "WarmupSeconds 2500000 -> 3600 (ms overflow guard)");
+            Check(diagBig.Diagnostics.GrowSeconds == 7200, "GrowSeconds 2000000000 -> 7200 (grow-loop bound)");
+            var diagNeg = ServerPerfConfig.Load(WriteTemp("{\"Diagnostics\":{\"WarmupSeconds\":-1,\"GrowSeconds\":-50}}"));
+            Check(diagNeg.Diagnostics.WarmupSeconds == 0, "WarmupSeconds -1 -> 0");
+            Check(diagNeg.Diagnostics.GrowSeconds == 1, "GrowSeconds -50 -> 1");
+            var diagOk = ServerPerfConfig.Load(WriteTemp("{\"Diagnostics\":{\"WarmupSeconds\":30,\"GrowSeconds\":120}}"));
+            Check(diagOk.Diagnostics.WarmupSeconds == 30 && diagOk.Diagnostics.GrowSeconds == 120,
+                "valid Diagnostics seconds round-trip");
+
             // v1.7.0 fields: MidTickStride clamp, Network + Diagnostics defaults.
             var d2 = new ServerPerfConfig();
             Check(d2.AiLod.MidTickStride == 1, "default MidTickStride=1 (off)");

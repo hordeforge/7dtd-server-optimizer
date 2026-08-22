@@ -363,7 +363,9 @@ shed; bounded batch and a keep-floor so a bad config cannot wipe the horde.
 ### `GcMegapauseTest` (false) + `WarmupSeconds` (60) + `GrowSeconds` (240)
 Disables Boehm, grows the heap under load, then times one forced full collect to
 measure the worst-case freeze (measured 479 ms at 6.9 GB). A destructive probe for
-research only.
+research only. `WarmupSeconds` clamps to [0, 3600] and `GrowSeconds` to [1, 7200]:
+the warmup feeds `Thread.Sleep(seconds * 1000)`, so an unclamped value above ~2.1M
+would wrap the millisecond product negative and kill the probe.
 
 ---
 
