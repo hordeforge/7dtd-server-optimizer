@@ -6,6 +6,9 @@ measured performance gain, default + rationale.
 **Not:** the A/B evidence trail (session IDs, curves): [RESULTS](RESULTS.md).
 File: `Config/efficientserver.json` beside the mod DLL. Every lever is individually
 toggleable; a matched-but-disabled patch logs `(matched but config-disabled)` at init.
+Unknown keys are NAMED and ignored at load (`config unknown key 'X' ignored ...`),
+so a typo cannot silently leave a knob at its default; missing keys keep their
+built-in defaults.
 
 **Defaults policy:** ON when a lever improves performance with **no gameplay
 impact** (provable equivalence or headless-only work). OFF when it changes anything
@@ -379,8 +382,13 @@ would wrap the millisecond product negative and kill the probe.
 | `GC_NPROCS` | `nproc` | Parallel GC marking threads. Marginal but free. |
 | `MONO_ENV_OPTIONS` | `-O=all` | Mono JIT full optimization: ~5% section-avg win, direction-consistent across all timed sections (single A/B pair). |
 | `GC_INITIAL_HEAP_SIZE` | unset | Optional heap preallocation (e.g. `8G`) to avoid startup collection bursts. |
+| `GC_USE_ENTIRE_HEAP` | unset | Set `1` to collect only when the whole heap is full (fewer collects; see the heap-size caveat in run_server.sh). |
+| `SEVENDTD_GC_INCREMENTAL` | unset | Opt-in incremental GC: sets `GC_ENABLE_INCREMENTAL=1`; pair with `GC_PAUSE_TIME_TARGET` (ms) to cap each pause. |
 | (`settargetfps` console cmd) | 20 | Tick rate = frame rate (see `Server.TargetFps` above for the persistent mod knob). |
 | `SEVENDTD_CPU_AFFINITY` | unset | **Leave off.** Naive pinning measured a LOSS (+122% jitter): it defeats Ryzen CPPC preferred-core boost (HOST_TUNING). |
+| `SEVENDTD_CONFIG` | auto | Path of the serverconfig XML passed as `-configfile`. Default: `server/serverconfig.optimized.xml` if present, else the repo-root one. |
+| `SEVENDTD_LOGDIR` | `server/logs` | Where run_server.sh writes timestamped server logs. |
+| `SEVENDTD_DS_DIR` | Steam default | Dedicated install root used by build/install/run scripts (same var as `make ... DS=`). |
 
 
 ---

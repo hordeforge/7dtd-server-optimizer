@@ -1,7 +1,9 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace EfficientServer
 {
@@ -301,6 +303,11 @@ namespace EfficientServer
             try
             {
                 string json = File.ReadAllText(path);
+                // A misspelled key binds to nothing and silently keeps the built-in
+                // default, so name every ignored key at load (fail-soft per group;
+                // unknown keys are still ignored, just not silently).
+                foreach (string key in FindUnknownKeys(json))
+                    ModApi.Log("config unknown key '" + key + "' ignored (no such option; check spelling)");
                 var loaded = JsonConvert.DeserializeObject<ServerPerfConfig>(json);
                 if (loaded == null) return new ServerPerfConfig();
                 if (loaded.AiLod == null) loaded.AiLod = new AiLodConfig();
@@ -323,6 +330,41 @@ namespace EfficientServer
             {
                 ModApi.Log("Config load failed, using defaults: " + ex.Message);
                 return new ServerPerfConfig();
+            }
+        }
+
+        /// <summary>
+        /// Dotted paths of JSON keys that match no config property (typo guard).
+        /// Mirrors Newtonsoft's case-insensitive property binding, so a case variant
+        /// of a real key is NOT reported (it binds). Never throws: malformed or
+        /// non-object JSON yields an empty list and Load reports the parse error.
+        /// </summary>
+        public static List<string> FindUnknownKeys(string json)
+        {
+            var unknown = new List<string>();
+            if (string.IsNullOrEmpty(json)) return unknown;
+            JObject root;
+            try { root = JObject.Parse(json); }
+            catch { return unknown; }
+            CollectUnknown(root, typeof(ServerPerfConfig), "", unknown);
+            return unknown;
+        }
+
+        static void CollectUnknown(JObject obj, Type schema, string prefix, List<string> unknown)
+        {
+            foreach (JProperty prop in obj.Properties())
+            {
+                PropertyInfo known = schema.GetProperty(prop.Name,
+                    BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+                if (known == null)
+                {
+                    unknown.Add(prefix.Length == 0 ? prop.Name : prefix + "." + prop.Name);
+                    continue;
+                }
+                Type t = known.PropertyType;
+                bool nestedConfig = t.IsClass && t != typeof(string) && t.Namespace == typeof(ServerPerfConfig).Namespace;
+                if (nestedConfig && prop.Value.Type == JTokenType.Object)
+                    CollectUnknown((JObject)prop.Value, t, prefix.Length == 0 ? prop.Name : prefix + "." + prop.Name, unknown);
             }
         }
 

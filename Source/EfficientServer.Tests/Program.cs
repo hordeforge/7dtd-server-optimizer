@@ -59,6 +59,29 @@ namespace EfficientServer.Tests
             Check(ok.Pathfinding.GraphUpdateEveryTicks == 8, "round-trip GraphUpdateEveryTicks=8");
             Check(ok.Pathfinding.MoveRescanThresholdSq == 400f, "round-trip MoveRescanThresholdSq=400");
 
+            // Unknown-key guard: a misspelled knob must be named at load instead of
+            // silently keeping its default (Newtonsoft binds case-insensitively, so
+            // case variants of real keys are NOT unknown - they bind).
+            Check(ServerPerfConfig.FindUnknownKeys("{\"Pathfinding\":{\"GraphUpdateEveryTicks\":4}}").Count == 0,
+                "FindUnknownKeys: valid keys -> none");
+            Check(ServerPerfConfig.FindUnknownKeys("{\"notAKey\":1}")[0] == "notAKey",
+                "FindUnknownKeys: top-level typo reported");
+            var unk = ServerPerfConfig.FindUnknownKeys("{\"Pathfinding\":{\"GraphUpdateEveryTick\":8}}");
+            Check(unk.Count == 1 && unk[0] == "Pathfinding.GraphUpdateEveryTick",
+                "FindUnknownKeys: nested typo reported with dotted path");
+            Check(ServerPerfConfig.FindUnknownKeys("{\"AiLod\":{\"ENABLED\":true}}").Count == 0,
+                "FindUnknownKeys: case-variant of real key binds, not reported");
+            Check(ServerPerfConfig.FindUnknownKeys("{ this is not json ][").Count == 0,
+                "FindUnknownKeys: malformed json -> empty, no throw");
+            Check(ServerPerfConfig.FindUnknownKeys("").Count == 0,
+                "FindUnknownKeys: empty input -> empty");
+            var typo = ServerPerfConfig.Load(WriteTemp("{\"Pathfinding\":{\"GraphUpdateEveryTick\":8}}"));
+            Check(typo != null && typo.Pathfinding.GraphUpdateEveryTicks == 4,
+                "typo'd knob keeps default (and is logged), other fields unaffected");
+            var caseBind = ServerPerfConfig.Load(WriteTemp("{\"ailod\":{\"enabled\":false}}"));
+            Check(caseBind.AiLod.Enabled == false,
+                "case-variant key binds like Newtonsoft (value applied)");
+
             // Normalize: GraphUpdateEveryTicks clamps [1,200].
             var big = ServerPerfConfig.Load(WriteTemp("{\"Pathfinding\":{\"GraphUpdateEveryTicks\":1000000}}"));
             Check(big.Pathfinding.GraphUpdateEveryTicks == 200, "GraphUpdateEveryTicks 1e6 -> 200");

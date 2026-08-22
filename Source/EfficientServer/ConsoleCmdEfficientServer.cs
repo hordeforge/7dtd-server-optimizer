@@ -32,13 +32,27 @@ namespace EfficientServer
                 ServerPerfConfig c = ModApi.Config;
                 if (c == null) { SdtdConsole.Instance.Output("[EfficientServer] no config"); return; }
                 SdtdConsole.Instance.Output(
-                    $"[EfficientServer] enabled={c.Enabled} | targetFps={c.Server.TargetFps} jobWorkers={c.Server.JobWorkerCount} | graphEvery={c.Pathfinding.GraphUpdateEveryTicks} "
-                    + $"rescanSq={c.Pathfinding.MoveRescanThresholdSq} poolInitScan={c.Pathfinding.PoolInitScanNodes} "
-                    + $"pathCap={c.Pathfinding.MaxPathEnqueuesPerTick} pathDropFarSq={c.Pathfinding.DropPathWhenFarDistSq} | "
-                    + $"fastSend={c.Network.FastSingleTargetSend} stride={c.Network.EntityDistributionEveryTicks} | "
-                    + $"chunkBatch={c.WorldTransfer.ChunkPackagesPerObserverPerTick} | "
-                    + $"governor={c.Governor.Enabled} tickGuard={c.TickGuard.Enabled} | "
-                    + $"gcGuard={c.Gc.SkipForcedCollect} explosionParticlesSkip={c.SkipOnDedicated.ExplosionParticles}");
+                    $"[EfficientServer] enabled={c.Enabled} dedicatedOnly={c.DedicatedOnly} | "
+                    + $"aiLod={c.AiLod.Enabled}(midStride={c.AiLod.MidTickStride}) | "
+                    + $"graphEvery={c.Pathfinding.GraphUpdateEveryTicks} rescanSq={c.Pathfinding.MoveRescanThresholdSq} "
+                    + $"poolInitScan={c.Pathfinding.PoolInitScanNodes} "
+                    + $"pathCap={c.Pathfinding.MaxPathEnqueuesPerTick} pathDropFarSq={c.Pathfinding.DropPathWhenFarDistSq}");
+                SdtdConsole.Instance.Output(
+                    $"[EfficientServer] fastSend={c.Network.FastSingleTargetSend} stride={c.Network.EntityDistributionEveryTicks} "
+                    + $"chunkBatch={c.WorldTransfer.ChunkPackagesPerObserverPerTick} "
+                    + $"dynamicMesh={c.DynamicMesh.Enabled}(buffer={c.DynamicMesh.PlayerAreaChunkBuffer} regionMs={c.DynamicMesh.MaxRegionLoadMsPerFrame}) | "
+                    + $"targetFps={c.Server.TargetFps} jobWorkers={c.Server.JobWorkerCount}");
+                SdtdConsole.Instance.Output(
+                    $"[EfficientServer] governor={c.Governor.Enabled}(overMs={c.Governor.OverBudgetMs} healthyMs={c.Governor.HealthyMs} animEmergency={c.Governor.AnimatorEmergency}) "
+                    + $"tickGuard={c.TickGuard.Enabled}(shedAboveMs={c.TickGuard.ShedAboveMs} batch={c.TickGuard.ShedBatch} minKept={c.TickGuard.MinEnemiesKept})");
+                SdtdConsole.Instance.Output(
+                    $"[EfficientServer] gcGuard={c.Gc.SkipForcedCollect}(ceilingMB={c.Gc.SafetyCollectAboveMB} incremental={c.Gc.Incremental}) | "
+                    + $"animatorLod={c.AnimatorLod.Enabled}(farStride={c.AnimatorLod.FarStride}) "
+                    + $"crowdCollision={c.CrowdCollisionLod.Enabled}(every={c.CrowdCollisionLod.ResolveEveryNTicks}) | "
+                    + $"skip(music={c.SkipOnDedicated.DynamicMusicSystem} waterSplash={c.SkipOnDedicated.WaterSplashParticles} "
+                    + $"envAudio={c.SkipOnDedicated.EnvironmentAudioUpdates} cloth={c.SkipOnDedicated.ClothAndJiggleBoneSimulation} "
+                    + $"lightSpectrum={c.SkipOnDedicated.AmbientLightSpectrumUpdates} explosionFx={c.SkipOnDedicated.ExplosionParticles}) | "
+                    + $"diagGcMegapauseProbe={c.Diagnostics.GcMegapauseTest}");
             }
             else if (sub == "animoff" || sub == "animon")
             {
