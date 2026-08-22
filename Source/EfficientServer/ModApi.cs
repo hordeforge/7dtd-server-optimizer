@@ -89,6 +89,9 @@ namespace EfficientServer
 
         // A patch can IL-match yet be inert because its config toggle is off. Say so
         // in the init summary so an operator can tell "matched" from "active".
+        // Feature keys are the shared ServerPerfConfig.Key* constants, so this map
+        // and FeatureActive cannot drift apart by typo; a new patch group adds one
+        // constant plus one entry here and one case there.
         static string ConfigNote(Type g)
         {
             ServerPerfConfig c = Config;
@@ -96,37 +99,37 @@ namespace EfficientServer
             bool active = true;
             string feature = null;
             if (g == typeof(Patches.AiLodPatch) || g == typeof(Patches.UpdateTasksLodPatch))
-                feature = "AiLod";
+                feature = ServerPerfConfig.KeyAiLod;
             else if (g == typeof(Patches.GcGuardPatch))
-                feature = "Gc";
+                feature = ServerPerfConfig.KeyGc;
             else if (g == typeof(Patches.AstarGraphThrottlePatch))
-                feature = "GraphThrottle";
+                feature = ServerPerfConfig.KeyGraphThrottle;
             else if (g == typeof(Patches.AstarMoveThresholdPatch))
-                feature = "MoveThreshold";
+                feature = ServerPerfConfig.KeyMoveThreshold;
             else if (g == typeof(Patches.PathAdmissionPatch))
-                feature = "PathAdmission";
+                feature = ServerPerfConfig.KeyPathAdmission;
             else if (g == typeof(Patches.FastSendPatch))
-                feature = "FastSend";
+                feature = ServerPerfConfig.KeyFastSend;
             else if (g == typeof(Patches.InitScanPoolPatch))
-                feature = "InitScanPool";
+                feature = ServerPerfConfig.KeyInitScanPool;
             else if (g == typeof(Patches.ChunkSendThrottlePatch))
-                feature = "ChunkSendThrottle";
+                feature = ServerPerfConfig.KeyChunkSendThrottle;
             else if (g == typeof(Patches.ExplosionParticlesPatch))
-                feature = "ExplosionParticles";
+                feature = ServerPerfConfig.KeyExplosionParticles;
             else if (g == typeof(Patches.EntityDistributionStridePatch))
-                feature = "EntityDistributionStride";
+                feature = ServerPerfConfig.KeyEntityDistributionStride;
             else if (g == typeof(Patches.GovernorPatch))
-                feature = "Governor";
+                feature = ServerPerfConfig.KeyGovernor;
             else if (g == typeof(Patches.TickGuardPatch))
-                feature = "TickGuard";
+                feature = ServerPerfConfig.KeyTickGuard;
             else if (g == typeof(Patches.TargetFpsPatch))
-                feature = "TargetFps";
+                feature = ServerPerfConfig.KeyTargetFps;
             else if (g == typeof(Patches.BenchGodPatch))
-                feature = "BenchGod";
+                feature = ServerPerfConfig.KeyBenchGod;
             else if (g == typeof(Patches.CrowdCollisionLodPatch))
-                feature = "CrowdCollisionLod";
+                feature = ServerPerfConfig.KeyCrowdCollisionLod;
             else if (g == typeof(Patches.AnimatorLodPatch.UpdatePatch) || g == typeof(Patches.AnimatorLodPatch.LateUpdatePatch))
-                feature = "AnimatorLod";
+                feature = ServerPerfConfig.KeyAnimatorLod;
             if (feature != null)
                 active = c.FeatureActive(feature, Patches.BenchGodPatch.BenchGod);
             return active ? "" : " (matched but config-disabled)";

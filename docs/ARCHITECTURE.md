@@ -292,7 +292,8 @@ Prefer growing admission at **TickEntities / Slice / TickEntity** over replacing
 
 ## Type index / dumps
 
-Cecil helpers under `tools/` (`DumpGmUpdate.cs`, `Dump*.cs`, `Find*.cs`).
+Stock-game RE tooling lives in the sibling [`../../7dtd-research/tools/`](../../7dtd-research/tools/)
+(general dumpers in `src/`, legacy per-family dumpers in `legacy/`), not in this repo.
 
 V3.1.0 dumps (regenerated after the 3.1.0 game update; historical V3.0.1 names noted inline):
 
@@ -304,8 +305,8 @@ V3.1.0 dumps (regenerated after the 3.1.0 game update; historical V3.0.1 names n
 Do not commit game IL or `Assembly-CSharp.dll`. Regenerate after every game update ([`DEVELOPMENT.md`](DEVELOPMENT.md)).
 
 ```bash
-cd tools && mcs -r:Mono.Cecil.dll -out:DumpGmUpdate.exe DumpGmUpdate.cs
-mono DumpGmUpdate.exe "/path/to/7DaysToDieServer_Data/Managed/Assembly-CSharp.dll" ../7dtd-research/il/gmUpdate-VERSION
+cd ../7dtd-research/tools && ./build.sh
+mono bin/legacy/DumpGmUpdate.exe "$DS/7DaysToDieServer_Data/Managed/Assembly-CSharp.dll" ../il/gmUpdate-VERSION
 ```
 
 ## Legal / distribution
@@ -321,6 +322,7 @@ See [`../../7dtd-research/docs/loop.md`](../../7dtd-research/docs/loop.md) §14.
 
 ## Changelog
 
+- **2026-08-23:** Stale in-repo `tools/` dump-helper references repointed to `../7dtd-research/tools/`.
 - **2026-08-08:** Stale `il/*-v3.0.1/` dump links repointed to current `*-v3.1.0/` dirs (loop-complete, deep, deeper, opt-scan).
 - **2026-07-16:** Optim candidates doc under `docs/OPTIMIZATION_CANDIDATES.md` (not 7dtd-research/il).
 - **2026-07-16:** Gap-close: ticks/sec 20, path→AstarPath, AIDirector component list, net bands.

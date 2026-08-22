@@ -253,6 +253,28 @@ namespace EfficientServer
 
     public sealed class ServerPerfConfig
     {
+        // Feature keys name one patch group to the init log and gate its activity.
+        // Single source of truth for the ModApi <-> config vocabulary: ModApi.ConfigNote
+        // maps patch types to these constants and FeatureActive switches on them, so
+        // the two sides cannot drift by typo. A new patch group adds one constant plus
+        // one entry in each place; not serialized to JSON (internal vocabulary only).
+        public const string KeyAiLod = "AiLod";
+        public const string KeyGc = "Gc";
+        public const string KeyGraphThrottle = "GraphThrottle";
+        public const string KeyMoveThreshold = "MoveThreshold";
+        public const string KeyPathAdmission = "PathAdmission";
+        public const string KeyFastSend = "FastSend";
+        public const string KeyInitScanPool = "InitScanPool";
+        public const string KeyChunkSendThrottle = "ChunkSendThrottle";
+        public const string KeyExplosionParticles = "ExplosionParticles";
+        public const string KeyEntityDistributionStride = "EntityDistributionStride";
+        public const string KeyGovernor = "Governor";
+        public const string KeyTickGuard = "TickGuard";
+        public const string KeyTargetFps = "TargetFps";
+        public const string KeyBenchGod = "BenchGod";
+        public const string KeyCrowdCollisionLod = "CrowdCollisionLod";
+        public const string KeyAnimatorLod = "AnimatorLod";
+
         public bool Enabled { get; set; } = true;
         public bool DedicatedOnly { get; set; } = true;
         public AiLodConfig AiLod { get; set; } = new AiLodConfig();
@@ -402,45 +424,46 @@ namespace EfficientServer
 
         /// <summary>
         /// Pure per-feature config gating (no game types): whether a patch group is
-        /// actually active given this config, not merely IL-matched. Kept in sync with
-        /// ModApi.ConfigNote; `benchGod` is the console-toggled diagnostic flag.
+        /// actually active given this config, not merely IL-matched. Keys are the
+        /// Key* constants above, shared with ModApi.ConfigNote; `KeyBenchGod` is the
+        /// console-toggled diagnostic flag.
         /// </summary>
         public bool FeatureActive(string featureKey, bool benchGod = false)
         {
             switch (featureKey)
             {
-                case "AiLod":
+                case KeyAiLod:
                     return AiLod != null && AiLod.Enabled;
-                case "Gc":
+                case KeyGc:
                     return Gc != null && Gc.Enabled && Gc.SkipForcedCollect;
-                case "GraphThrottle":
+                case KeyGraphThrottle:
                     return Pathfinding != null && Pathfinding.GraphUpdateEveryTicks > 1;
-                case "MoveThreshold":
+                case KeyMoveThreshold:
                     return Pathfinding != null && Pathfinding.MoveRescanThresholdSq > 100f;
-                case "PathAdmission":
+                case KeyPathAdmission:
                     return Pathfinding != null
                         && (Pathfinding.MaxPathEnqueuesPerTick > 0 || Pathfinding.DropPathWhenFarDistSq > 0f);
-                case "FastSend":
+                case KeyFastSend:
                     return Network != null && Network.FastSingleTargetSend;
-                case "InitScanPool":
+                case KeyInitScanPool:
                     return Pathfinding != null && Pathfinding.PoolInitScanNodes;
-                case "ChunkSendThrottle":
+                case KeyChunkSendThrottle:
                     return WorldTransfer != null && WorldTransfer.ChunkPackagesPerObserverPerTick != 3;
-                case "ExplosionParticles":
+                case KeyExplosionParticles:
                     return SkipOnDedicated != null && SkipOnDedicated.ExplosionParticles;
-                case "EntityDistributionStride":
+                case KeyEntityDistributionStride:
                     return Network != null && Network.EntityDistributionEveryTicks > 1;
-                case "Governor":
+                case KeyGovernor:
                     return Governor != null && Governor.Enabled;
-                case "TickGuard":
+                case KeyTickGuard:
                     return TickGuard != null && TickGuard.Enabled;
-                case "TargetFps":
+                case KeyTargetFps:
                     return Server != null && Server.TargetFps > 0;
-                case "BenchGod":
+                case KeyBenchGod:
                     return benchGod;
-                case "CrowdCollisionLod":
+                case KeyCrowdCollisionLod:
                     return CrowdCollisionLod != null && CrowdCollisionLod.Enabled;
-                case "AnimatorLod":
+                case KeyAnimatorLod:
                     return AnimatorLod != null && AnimatorLod.Enabled;
                 default:
                     return false;
