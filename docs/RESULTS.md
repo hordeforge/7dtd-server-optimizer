@@ -111,7 +111,8 @@ write-barrier tax.
 ### #1 - single-target fast send (v1.6.0)
 - **Target:** `ConnectionManager.SendPackage(NetPackage, bool, int, int, int,
   Nullable<Vector3>, int, bool)`. Harmony **prefix**.
-- **Config:** `Network.FastSingleTargetSend` (default false).
+- **Config:** `Network.FastSingleTargetSend` (default false at ship; flipped to
+  **true** in v1.13.0 under the defaults policy - see 3j).
 - **RE:** vanilla linear-scans the whole `Clients` list filtering by `entityId`;
   `SendToPlayers` calls it once per tracked player, `updatePlayerList` calls
   `SendToPlayers` ~7x/entity/tick -> fan-out O(entities x players x clients). The

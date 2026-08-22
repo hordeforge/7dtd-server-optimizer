@@ -10,7 +10,7 @@ namespace EfficientServer.Patches
     /// of a ~147 ms saturated frame (~40%). Disabling evaluation recovered
     /// ~147 -> ~85 ms.
     ///
-    /// Mechanism (v1.18+): set <see cref="Animator.cullingMode"/> to
+    /// Mechanism (v1.17.0+): set <see cref="Animator.cullingMode"/> to
     /// <see cref="AnimatorCullingMode.CullCompletely"/> while leaving
     /// <c>enabled = true</c>. A headless dedicated server has no visible
     /// renderers, so CullCompletely stops evaluation without tearing down the

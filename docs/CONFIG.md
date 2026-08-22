@@ -326,11 +326,13 @@ degrades (timer-only attack cadence, no stagger, supplementary movement path) bu
 nothing despawns and clients see no visual difference (zombie animation is
 client-local). Steps back down one tier at a time.
 
-**KNOWN DEFECT (human eval, RESULTS 3s): the exit path cannot fully restore.**
-v1.17.0+ emergency uses `cullingMode = CullCompletely` (keeps `enabled`). Legacy note: after any `Animator.enabled` off->on cycle the rig evaluates but emits zero root
-motion (`deltaPosition=0`), and server zombies are root-motion-driven - restored
-zombies crawl at supplementary-path speed until they die. Keep this `false` until
-the culling-mode rework lands (TODO). Feel WHILE active passed human eval.
+**Why still default-off (RESULTS 3s + 3t):** the original `Animator.enabled`
+toggle could not be undone - after an off->on cycle the rig evaluates but emits
+zero root motion (`deltaPosition=0`), so restored zombies crawl until death
+(3s). Since v1.17.0 the emergency instead sets `cullingMode = CullCompletely`
+(keeps `enabled`), which preserves the root-motion binding: live restore now
+shows non-zero dp on moving rigs (3t). Residual dp=0 on some walkers plus a
+missing saturation stress A/B keep it opt-in; feel WHILE active passed human eval.
 
 ---
 

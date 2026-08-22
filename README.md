@@ -4,8 +4,9 @@
 
 EfficientServer is a focused Harmony optimization mod for 7 Days to Die
 dedicated servers. It owns only reviewed runtime changes: AI level-of-detail,
-distant task throttling, dedicated-only work suppression, and bounded dynamic
-mesh behavior.
+distant task throttling, dedicated-only work suppression, bounded dynamic mesh
+behavior, pathfinding and network throttles, and an adaptive overload governor
+with opt-in emergency shedding.
 
 > **Workspace context:** this repo is part of a private `7dtd` workspace.
 > Docs link to sibling repos (`7dtd-research`, `7dtd-apm`, `7dtd-loadgen`)

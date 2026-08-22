@@ -144,9 +144,9 @@ collect including the churn-driven ones.
 Server frame rate is NOT the tick rate: `UpdateTick` runs per frame, but the full
 entity-sim/replication tick is gated at ~20 Hz regardless of fps (measured, RESULTS
 3k). `settargetfps <N>` sets the frame rate live but does not persist;
-`Server.TargetFps` (v1.14.0) applies it at every game start. Higher fps buys
-steadier delivery/lower jitter of the same 20 Hz data - a polish, not a TPS or
-capacity change.
+`Server.TargetFps` (v1.14.0) applies it at every game start. Measured: higher fps
+buys nothing - send timing and tick cadence are identical at fps 20 vs 60; the only
+effect is per-frame loop overhead (RESULTS 3k).
 
 ## GC megapause diagnostic (opt-in, never ship enabled)
 
@@ -205,7 +205,8 @@ exactly one client, giving the identical send-queue refcount (one
 `RegisterSendQueue` + one `AddToSendQueue`). Every other filter mode (all-but,
 in-range, only-attached/not-attached) falls through to vanilla untouched.
 
-Config: `Network.FastSingleTargetSend` (default **false**). Independent toggle,
+Config: `Network.FastSingleTargetSend` (default **true**: the send is provably
+equivalent to vanilla, so the defaults policy puts it ON). Independent toggle,
 own config section. Server-internal, no wire change (vanilla client connects);
 code -> EAC-off.
 
@@ -260,6 +261,27 @@ once on revive". The emergency CullCompletely path correctly owns the rig instea
 
 `SkipOnDedicated.AmbientLightSpectrumUpdates` skips the per-frame ambient-spectrum
 lerp whose only outputs are RenderSettings colors nothing headless reads (RESULTS 3n).
+
+## Crowd-collision LOD (v1.17.0, default off)
+
+`CrowdCollisionLodPatch` staggers zombie entity-vs-entity collision QUERIES at the
+broadphase: on a zombie's off-ticks (`ResolveEveryNTicks`, striped by entityId) the
+alive-entity physics layer is stripped from its motor's `CollidableLayers` for the
+duration of `ccEntityCollision`, so overlap queries / depenetration never see
+neighbor capsules. Vanilla already staggers only the response, not the query cost.
+Block/world collision is untouched; the soft-push separation force still runs every
+tick; zombies only (players and vehicles are naturally excluded); a finalizer
+restores the mask so a leaked strip cannot ghost a zombie. Default OFF - the A/B was
+a null result at the standard load because movement cost there is world-collision,
+not crowd collision (RESULTS §3r).
+
+## BenchGod bench diagnostic (console only)
+
+`es benchgod on|off` makes all players damage-immune server-side
+(`BenchGodPatch` on `EntityPlayer.DamageEntity`). Purpose: synthetic bench bots are
+level-1 and die to endgame zombies in seconds, which collapses the horde's target
+anchors into a spawn-equilibrium plateau (RESULTS 3q). With it on, bots survive and
+the load stays an active siege. Not config-persisted; never enable on a real server.
 
 ## TickGuard emergency load-shedding (v1.13.0, default off)
 

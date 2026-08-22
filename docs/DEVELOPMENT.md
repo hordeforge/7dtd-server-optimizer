@@ -29,10 +29,22 @@ See [`FEATURES.md`](FEATURES.md) for behavior and validation notes. Groups are a
 |---|---|---|
 | AI LOD | `AiLod` | Distant AI scale / distance bands |
 | Task skip | (with AI LOD) | Distant non-alert `updateTasks` throttling |
-| Dedicated skips | `SkipOnDedicated` | Presentation paths useless on headless |
+| Dedicated skips | `SkipOnDedicated` | Presentation paths useless on headless (incl. `ExplosionParticles`, ambient spectrum) |
 | Dynamic mesh | `DynamicMesh` | Player-area / time budgets |
 | GC pause guard | `Gc` | Skip forced periodic `GC.Collect`; host-aware safety collect; opt-in incremental mode |
-| Pathfinding graph throttle | `Pathfinding` | Rate-limit `AstarManager.UpdateGraphs` via `GraphUpdateEveryTicks` |
+| Pathfinding graph throttle | `Pathfinding.GraphUpdateEveryTicks` | Rate-limit `AstarManager.UpdateGraphs` |
+| Move rescan threshold | `Pathfinding.MoveRescanThresholdSq` | Widen the grid rescan dead-zone (fewer `InitScan`) |
+| Path admission | `Pathfinding.MaxPathEnqueuesPerTick` / `DropPathWhenFarDistSq` | Cap / drop far non-priority path enqueues |
+| InitScan node pool | `Pathfinding.PoolInitScanNodes` | UNSAFE: reuse nav node array across scans |
+| Fast single-target send | `Network.FastSingleTargetSend` | O(1) recipient lookup in `SendPackage` |
+| Replication stride | `Network.EntityDistributionEveryTicks` | Run the replication pass every Nth tick |
+| Chunk-send throttle | `WorldTransfer.ChunkPackagesPerObserverPerTick` | Cap chunk packages per observer per tick |
+| Target FPS | `Server.TargetFps` | Persistent frame-rate set at game start |
+| Animator LOD | `AnimatorLod` | Reduced-rate animation for calm distant zombies |
+| Crowd-collision LOD | `CrowdCollisionLod` | Stagger zombie entity-collision queries |
+| Governor | `Governor` | Adaptive engagement of the throttle levers under overload (+ opt-in tier 2) |
+| TickGuard | `TickGuard` | Last-resort emergency load shedding |
+| BenchGod | console `es benchgod` | BENCH ONLY diagnostic (player damage immunity) |
 | Game start reapply | (lifecycle) | Re-apply mesh settings after start |
 
 Change **one group at a time**, then re-measure.
@@ -65,15 +77,17 @@ All optional; scripts fall back to defaults. The Makefile routes its documented
 |---|---|---|---|
 | `SEVENDTD_DS_DIR` / make `DS=` | build.sh, install.sh, run_server.sh | `~/.local/share/Steam/steamapps/common/7 Days to Die Dedicated Server` | Dedicated install: game DLL refs, mod install target, launch dir |
 | `SEVENDTD_GAME_DIR` | build.sh | client install path | Client fallback for game DLL refs |
-| `SEVENDTD_BUILD_BACKEND` | build.sh (`make build-mcs`) | auto (dotnet if SDK present) | Force the `mcs` fallback compiler |
+| `SEVENDTD_BUILD_BACKEND` | build.sh (`make build-mcs`) | auto (dotnet if SDK present) | `mcs` forces the Mono fallback compiler; `dotnet` forces the SDK path and fails hard without one |
 | `SEVENDTD_CONFIG` | run_server.sh | local `server/serverconfig.optimized.xml`, else tracked root `serverconfig.optimized.xml` | Dedicated server config XML |
 | `SEVENDTD_LOGDIR` | run_server.sh | `server/logs` | Server log directory |
-| `SEVENDTD_CPU_AFFINITY` | run_server.sh | unset (no pinning) | `taskset -c` mask for the whole process; see HOST_TUNING.md (measured loss on naive pinning) |
+| `SEVENDTD_CPU_AFFINITY` | run_server.sh | unset (no pinning) | `taskset -c` mask for the whole process; silently skipped when `taskset` is absent; see HOST_TUNING.md (measured loss on naive pinning) |
 | `SEVENDTD_GC_INCREMENTAL` | run_server.sh | unset | Opt-in incremental GC (sets `GC_ENABLE_INCREMENTAL=1`) |
-| `DOTNET_ROOT` | build.sh, Makefile | first of `~/.cache/dotnet-sdk`, `~/.dotnet` | Local SDK location prepended to PATH |
+| `DOTNET_ROOT` | build.sh, Makefile | Makefile picks the first existing of `~/.cache/dotnet-sdk`, `~/.dotnet`; direct build.sh runs fall back to `~/.cache/dotnet-sdk` only (and export it) | Local SDK location prepended to PATH |
 | `SOURCE_DATE_EPOCH` | package.sh | last commit time | Zip mtime epoch for reproducible packaging |
+| `VERSION` | package.sh | `git describe --tags --always` | Override for the zip version suffix (`EfficientServer-<VERSION>.zip`) |
 | `GC_FREE_SPACE_DIVISOR`, `GC_NPROCS`, `MONO_ENV_OPTIONS`, `MALLOC_ARENA_MAX` | run_server.sh | see script header | Boehm GC / Mono JIT tuning with A/B-measured defaults |
-| `GC_INITIAL_HEAP_SIZE`, `GC_USE_ENTIRE_HEAP`, `GC_PAUSE_TIME_TARGET` | run_server.sh | unset | Optional GC headroom knobs (see script comments) |
+| `GC_INITIAL_HEAP_SIZE`, `GC_USE_ENTIRE_HEAP` | run_server.sh | unset | Optional GC headroom knobs (see script comments) |
+| `GC_PAUSE_TIME_TARGET` | run_server.sh | unset | Forwarded ONLY together with `SEVENDTD_GC_INCREMENTAL`; ignored otherwise |
 
 Rebuild after **every** Steam update. Re-check Harmony targets against `Assembly-CSharp` (see [`ARCHITECTURE.md`](ARCHITECTURE.md)).
 

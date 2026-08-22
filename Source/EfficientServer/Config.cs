@@ -112,7 +112,9 @@ namespace EfficientServer
         public float DropPathWhenFarDistSq { get; set; } = 0f;
     }
 
-    // Each network lever is an independent toggle (default off = vanilla).
+    // Each network lever is an independent toggle. FastSingleTargetSend ships ON
+    // (provably equivalent to vanilla); EntityDistributionEveryTicks ships at
+    // 1 = vanilla cadence.
     public sealed class NetworkConfig
     {
         // Bang-for-buck #1: single-target SendPackage resolves the recipient via the
@@ -193,7 +195,7 @@ namespace EfficientServer
         public int JobWorkerCount { get; set; } = 0;
     }
 
-    // Adaptive load governor (default off): moves the proven throttle levers
+    // Adaptive load governor (default on): moves the proven throttle levers
     // (replication stride, graph-update cadence) between vanilla and throttled
     // based on the measured tick interval. Hysteresis via the OverBudgetMs /
     // HealthyMs gap + CooldownTicks. See GovernorPatch.
@@ -212,7 +214,7 @@ namespace EfficientServer
         public float HealthyMs { get; set; } = 52f;
         // Tier 2 (opt-in, gameplay-affecting): when throttling has not recovered the
         // tick and the EMA is past this, put all zombie animators into CullCompletely
-        // (v1.18+; keeps enabled so root-motion can restore). Measured ~40% of the
+        // (v1.17.0+; keeps enabled so root-motion can restore). Measured ~40% of the
         // saturated 64-player frame (RESULTS 3o). Combat timing degrades
         // (timer-only attack cadence, no stagger) but nothing despawns and clients
         // see no visual change. Steps back down through tier 1 on recovery.
