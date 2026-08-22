@@ -1,10 +1,17 @@
 name: ci
 on: [push, pull_request]
+concurrency:
+  # Superseded runs on the same branch/PR are obsolete; cancel instead of queueing.
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   optimizer:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
-        with: { dotnet-version: 8.0.x }
+      # Actions pinned to the commit the mutable v4 tag currently names;
+      # floating major tags are a supply-chain risk (reproducibility).
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        # SDK pinned by global.json (rollForward latestFeature); setup-dotnet
+        # reads it when dotnet-version is omitted.
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
       - run: make test

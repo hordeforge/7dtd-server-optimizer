@@ -56,6 +56,25 @@ make install DS="/path/to/7 Days to Die Dedicated Server"
 # or: ./scripts/install.sh
 ```
 
+## Environment variables (scripts)
+
+All optional; scripts fall back to defaults. The Makefile routes its documented
+`DS=...` argument through `SEVENDTD_DS_DIR`, so both spellings stay in sync.
+
+| Variable | Read by | Default | Meaning |
+|---|---|---|---|
+| `SEVENDTD_DS_DIR` / make `DS=` | build.sh, install.sh, run_server.sh | `~/.local/share/Steam/steamapps/common/7 Days to Die Dedicated Server` | Dedicated install: game DLL refs, mod install target, launch dir |
+| `SEVENDTD_GAME_DIR` | build.sh | client install path | Client fallback for game DLL refs |
+| `SEVENDTD_BUILD_BACKEND` | build.sh (`make build-mcs`) | auto (dotnet if SDK present) | Force the `mcs` fallback compiler |
+| `SEVENDTD_CONFIG` | run_server.sh | local `server/serverconfig.optimized.xml`, else tracked root `serverconfig.optimized.xml` | Dedicated server config XML |
+| `SEVENDTD_LOGDIR` | run_server.sh | `server/logs` | Server log directory |
+| `SEVENDTD_CPU_AFFINITY` | run_server.sh | unset (no pinning) | `taskset -c` mask for the whole process; see HOST_TUNING.md (measured loss on naive pinning) |
+| `SEVENDTD_GC_INCREMENTAL` | run_server.sh | unset | Opt-in incremental GC (sets `GC_ENABLE_INCREMENTAL=1`) |
+| `DOTNET_ROOT` | build.sh, Makefile | first of `~/.cache/dotnet-sdk`, `~/.dotnet` | Local SDK location prepended to PATH |
+| `SOURCE_DATE_EPOCH` | package.sh | last commit time | Zip mtime epoch for reproducible packaging |
+| `GC_FREE_SPACE_DIVISOR`, `GC_NPROCS`, `MONO_ENV_OPTIONS`, `MALLOC_ARENA_MAX` | run_server.sh | see script header | Boehm GC / Mono JIT tuning with A/B-measured defaults |
+| `GC_INITIAL_HEAP_SIZE`, `GC_USE_ENTIRE_HEAP`, `GC_PAUSE_TIME_TARGET` | run_server.sh | unset | Optional GC headroom knobs (see script comments) |
+
 Rebuild after **every** Steam update. Re-check Harmony targets against `Assembly-CSharp` (see [`ARCHITECTURE.md`](ARCHITECTURE.md)).
 
 ### Releases
@@ -73,7 +92,9 @@ gh release create v0.1.0 dist/EfficientServer-0.1.0.zip --title "EfficientServer
 `make package` must run on a machine with the game installed: `build.sh`
 compiles against the shipped `Assembly-CSharp.dll`, which the repo does not
 redistribute (AGENTS.md rule 6). GitHub Actions therefore runs the test gate
-but not the package build.
+but not the package build. The zip is reproducible (sorted entries,
+SOURCE_DATE_EPOCH-normalized mtimes, stripped owner data); verify with
+two `make package` runs and `sha256sum dist/EfficientServer-*.zip`.
 
 ### Validation tooling (scripts/)
 

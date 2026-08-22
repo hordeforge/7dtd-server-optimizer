@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# Pin locale/timezone so compiler diagnostics and file ordering do not vary
+# with the build host's environment.
+export LC_ALL=C TZ=UTC
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 # Prefer local SDK installs (not /tmp)
 if [[ -x "${DOTNET_ROOT:-}/dotnet" ]]; then
@@ -8,8 +11,8 @@ elif [[ -x "$HOME/.cache/dotnet-sdk/dotnet" ]]; then
   export DOTNET_ROOT="$HOME/.cache/dotnet-sdk"
   export PATH="$DOTNET_ROOT:$PATH"
 fi
-SRV="${SEVENDTD_DS_DIR:-/home/maci/.local/share/Steam/steamapps/common/7 Days to Die Dedicated Server}"
-CLIENT="${SEVENDTD_GAME_DIR:-/home/maci/.local/share/Steam/steamapps/common/7 Days To Die}"
+SRV="${SEVENDTD_DS_DIR:-$HOME/.local/share/Steam/steamapps/common/7 Days to Die Dedicated Server}"
+CLIENT="${SEVENDTD_GAME_DIR:-$HOME/.local/share/Steam/steamapps/common/7 Days To Die}"
 if [[ -f "$SRV/7DaysToDieServer_Data/Managed/Assembly-CSharp.dll" ]]; then
   MANAGED="$SRV/7DaysToDieServer_Data/Managed"
   HARMONY="$SRV/Mods/0_TFP_Harmony/0Harmony.dll"
@@ -23,6 +26,9 @@ fi
 
 OUT="$ROOT/dist/EfficientServer"
 SRC="$ROOT/Source/EfficientServer"
+# Output dir, not an incremental cache: wipe so files removed upstream (or a
+# leftover .pdb from an older build) cannot leak into the packaged mod.
+rm -rf "$OUT"
 mkdir -p "$OUT/Config"
 
 # Prefer official .NET SDK; SEVENDTD_BUILD_BACKEND=mcs verifies the fallback.
@@ -55,14 +61,18 @@ refs=(
   -r:"$MANAGED/System.Runtime.dll"
   -r:"$MANAGED/Assembly-CSharp.dll"
   -r:"$MANAGED/UnityEngine.CoreModule.dll"
+  -r:"$MANAGED/UnityEngine.AnimationModule.dll"
   -r:"$MANAGED/UnityEngine.dll"
   -r:"$HARMONY"
   -r:"$MANAGED/Newtonsoft.Json.dll"
   -r:"$MANAGED/LogLibrary.dll"
   -r:"$MANAGED/MemoryPack.dll"
+  -r:"$MANAGED/AstarPathfindingProject.dll"
 )
 
-mapfile -d '' sources < <(find "$SRC" -type f -name '*.cs' -print0)
+# Sort explicitly: find order is readdir order, and source order changes the
+# emitted metadata layout of the DLL.
+mapfile -d '' sources < <(find "$SRC" -type f -name '*.cs' -print0 | LC_ALL=C sort -z)
 mcs -nostdlib -sdk:4.7.2 -target:library -optimize+ -langversion:7.2 \
   -out:"$OUT/EfficientServer.dll" \
   "${refs[@]}" \

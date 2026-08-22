@@ -9,6 +9,10 @@
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <OutputPath>$(EfficientServerOutput)</OutputPath>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <!-- Keep the DLL byte-identical across rebuilds: no embedded timestamps or
+         absolute build paths in metadata. -->
+    <Deterministic>true</Deterministic>
+    <DebugType Condition="'$(Configuration)' == 'Release'">none</DebugType>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="Assembly-CSharp">

@@ -2,8 +2,17 @@
 # Efficient dedicated server launcher: CPU affinity optional, mono GC friendly env, config override.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-SRV="${SEVENDTD_DS_DIR:-/home/maci/.local/share/Steam/steamapps/common/7 Days to Die Dedicated Server}"
-CFG="${SEVENDTD_CONFIG:-$ROOT/server/serverconfig.optimized.xml}"
+SRV="${SEVENDTD_DS_DIR:-$HOME/.local/share/Steam/steamapps/common/7 Days to Die Dedicated Server}"
+# Config override, then a local launch copy under server/ (gitignored), then
+# the tracked root config so a fresh clone can launch without extra setup.
+CFG="${SEVENDTD_CONFIG:-}"
+if [[ -z "$CFG" ]]; then
+  if [[ -f "$ROOT/server/serverconfig.optimized.xml" ]]; then
+    CFG="$ROOT/server/serverconfig.optimized.xml"
+  else
+    CFG="$ROOT/serverconfig.optimized.xml"
+  fi
+fi
 LOGDIR="${SEVENDTD_LOGDIR:-$ROOT/server/logs}"
 mkdir -p "$LOGDIR"
 
@@ -56,9 +65,9 @@ fi
 # boost + adds cross-CCD latency; the OS scheduler wins. Only set this with a
 # CPPC-aware / single-CCD mask, see docs/HOST_TUNING.md). SEVENDTD_CPU_AFFINITY="0-7,16-23"
 # -> taskset -c on the whole process. Requires taskset.
-AFFINITY=""
+WRAP=()
 if [[ -n "${SEVENDTD_CPU_AFFINITY:-}" ]] && command -v taskset >/dev/null 2>&1; then
-  AFFINITY="taskset -c ${SEVENDTD_CPU_AFFINITY}"
+  WRAP=(taskset -c "$SEVENDTD_CPU_AFFINITY")
 fi
 
 cd "$SRV"
@@ -74,8 +83,8 @@ if [[ "$(readlink -f "$(dirname "$CFG")")" != "$(readlink -f "$SRV")" ]]; then
   cp -f "$CFG" "$SRV/$CFG_ARG"
 fi
 
-echo "  GC: FREE_SPACE_DIVISOR=$GC_FREE_SPACE_DIVISOR NPROCS=$GC_NPROCS${GC_INITIAL_HEAP_SIZE:+ INITIAL_HEAP=$GC_INITIAL_HEAP_SIZE}${GC_USE_ENTIRE_HEAP:+ USE_ENTIRE_HEAP=$GC_USE_ENTIRE_HEAP}${AFFINITY:+ affinity=$SEVENDTD_CPU_AFFINITY}"
-exec $AFFINITY ./7DaysToDieServer.x86_64 \
+echo "  GC: FREE_SPACE_DIVISOR=$GC_FREE_SPACE_DIVISOR NPROCS=$GC_NPROCS${GC_INITIAL_HEAP_SIZE:+ INITIAL_HEAP=$GC_INITIAL_HEAP_SIZE}${GC_USE_ENTIRE_HEAP:+ USE_ENTIRE_HEAP=$GC_USE_ENTIRE_HEAP}${WRAP[*]:+ affinity=$SEVENDTD_CPU_AFFINITY}"
+exec "${WRAP[@]}" ./7DaysToDieServer.x86_64 \
   -logfile "$LOG" \
   -quit -batchmode -nographics -dedicated \
   -configfile="$CFG_ARG" \

@@ -32,7 +32,10 @@ are under `scripts`. Rebuild and revalidate exact Harmony targets after every
 game update.
 
 Packaged builds are attached to GitHub releases (see the Releases page;
-`make package` produces `dist/EfficientServer-<tag>.zip`). CI runs `make test`
+`make package` produces `dist/EfficientServer-<tag>.zip`). Packaging is
+reproducible: sorted entries, normalized mtimes/permissions, no owner data;
+timestamps honor `SOURCE_DATE_EPOCH` (falling back to the last commit time),
+so two builds of the same tree zip byte-identically. CI runs `make test`
 on every push and PR.
 
 ## Measured impact (v1.17.x)
@@ -103,9 +106,12 @@ first, client fallback), so a Steam update that changes the assembly is a
 supported retarget: rebuild with `make build` and reinstall.
 
 **Toolchain:**
-- .NET SDK (any modern version; the repo's `build.sh` prefers `DOTNET_ROOT` or
-  `~/.cache/dotnet-sdk`), target framework `net48`
+- .NET SDK pinned by [`global.json`](global.json) (8.0.4xx band,
+  `rollForward: latestFeature`; CI installs exactly that), target framework
+  `net48`; `build.sh` prefers `DOTNET_ROOT` or `~/.cache/dotnet-sdk`
 - Fallback backend `SEVENDTD_BUILD_BACKEND=mcs` (Mono `mcs`) when no SDK is present
+- `make test` additionally needs `shellcheck` and Python 3 (both preinstalled on
+  GitHub runners; the SDK comes from `global.json`)
 - Requires `0_TFP_Harmony` installed in the game's `Mods/` (the Harmony runtime
   the patches load through)
 - Game refs (Assembly-CSharp, UnityEngine.*, 0Harmony, Newtonsoft.Json,

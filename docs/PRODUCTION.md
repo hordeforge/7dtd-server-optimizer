@@ -7,7 +7,7 @@ evidence ([RESULTS](RESULTS.md)).
 
 ## 0. Prerequisites and the one hard trade
 
-- 7 Days to Die dedicated V3.0.1 (b4). After ANY game update, rebuild and check the
+- 7 Days to Die dedicated V3.1.0 (b14). After ANY game update, rebuild and check the
   init log for `MISSING TARGET` lines before going live (section 5).
 - **EAC must be off** (any C# mod requires it). Clients must also launch EAC-off.
 - Host with RAM headroom: the GC configuration trades RAM for fewer collections
