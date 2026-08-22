@@ -32,7 +32,8 @@ are under `scripts`. Rebuild and revalidate exact Harmony targets after every
 game update.
 
 Packaged builds are attached to GitHub releases (see the Releases page;
-`make package` produces `dist/EfficientServer-<tag>.zip`). Packaging is
+`make package` produces `dist/EfficientServer-<tag>.zip`; what changed per
+release: [`CHANGELOG.md`](CHANGELOG.md)). Packaging is
 reproducible: sorted entries, normalized mtimes/permissions, no owner data;
 timestamps honor `SOURCE_DATE_EPOCH` (falling back to the last commit time),
 so two builds of the same tree zip byte-identically. CI runs `make test`

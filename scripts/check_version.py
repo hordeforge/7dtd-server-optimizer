@@ -8,6 +8,8 @@ Checks that:
    Assembly "1.17.0.0", trailing ".0" parts ignored).
 3. docs/ claim no version newer than the shipped one (catches the v1.18
    drift class where docs referenced a release that never shipped).
+4. CHANGELOG.md exists and mentions the shipped mod version, so a release
+   cannot tag without its changelog entry.
 
 Run: python3 scripts/check_version.py   (wired into `make test`)
 """
@@ -21,6 +23,7 @@ ROOT = Path(__file__).resolve().parent.parent
 MODINFO = ROOT / "Source" / "EfficientServer" / "ModInfo.xml"
 DIST_MODINFO = ROOT / "dist" / "EfficientServer" / "ModInfo.xml"
 ASSEMBLY = ROOT / "Source" / "EfficientServer" / "AssemblyInfo.cs"
+CHANGELOG = ROOT / "CHANGELOG.md"
 DOCS = ROOT / "docs"
 
 
@@ -62,6 +65,9 @@ def main() -> int:
                 minor = int(m.group(1))
                 if minor > shipped[1]:
                     fails.append(f"{f.name}: claims v1.{minor} > shipped {mi}")
+
+    if mi and (CHANGELOG.exists() is False or mi not in CHANGELOG.read_text(encoding="utf-8")):
+        fails.append(f"CHANGELOG.md missing or has no entry for shipped mod version {mi}")
 
     if fails:
         print("FAIL:")

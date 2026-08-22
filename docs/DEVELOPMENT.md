@@ -81,7 +81,11 @@ Rebuild after **every** Steam update. Re-check Harmony targets against `Assembly
 
 The GitHub release tag numbers the repo release (first cut: `v0.1.0`). The
 mod's own version (`ModInfo.xml`, pinned by `check_version.py` in `make test`)
-tracks the target game baseline and is independent of the release tag.
+tracks the target game baseline and is independent of the release tag. The
+mapping and per-release changes are recorded in
+[`CHANGELOG.md`](../CHANGELOG.md): move `[Unreleased]` items under the new
+version before tagging (`check_version.py` fails if the shipped mod version has
+no changelog entry).
 
 ```bash
 make test        # CI gate; also runs on every push/PR via .github/workflows/ci.yml
