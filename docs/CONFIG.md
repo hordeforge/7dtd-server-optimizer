@@ -357,9 +357,11 @@ missing saturation stress A/B keep it opt-in; feel WHILE active passed human eva
   (~147 endgame zombies at 64 players, RESULTS §3h) and prefer degradation over
   collapse.
 
-### `ShedAboveMs` (70, floor 60) / `WindowTicks` (60) / `ShedBatch` (15, max 100) / `CooldownTicks` (100) / `MinEnemiesKept` (60)
-Last-resort threshold well above the governor band; ~3 s of sustained overload per
-shed; bounded batch and a keep-floor so a bad config cannot wipe the horde.
+### `ShedAboveMs` (70, floor max(60, `OverBudgetMs` + 5)) / `WindowTicks` (60) / `ShedBatch` (15, max 100) / `CooldownTicks` (100) / `MinEnemiesKept` (60)
+Last-resort threshold well above the governor band (the floor scales with a tuned
+`OverBudgetMs`, so shedding can never fire before throttling); ~3 s of sustained
+overload per shed; bounded batch and a keep-floor so a bad config cannot wipe the
+horde.
 
 ---
 

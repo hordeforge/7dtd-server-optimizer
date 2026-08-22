@@ -190,6 +190,27 @@ namespace EfficientServer.Tests
             var govLow = ServerPerfConfig.Load(WriteTemp("{\"Governor\":{\"HealthyMs\":20,\"OverBudgetMs\":30}}"));
             Check(govLow.Governor.HealthyMs == 20f && govLow.Governor.OverBudgetMs == 30f,
                 "high-fps governor tune 30/20 accepted");
+            // NaN/Infinity take the FiniteRange fallback, and the fallback itself must
+            // land inside the (possibly sibling-shifted) clamps: an unclamped fallback
+            // would re-violate the very invariant Normalize enforces.
+            var nanHyst = ServerPerfConfig.Load(WriteTemp("{\"Governor\":{\"OverBudgetMs\":20,\"HealthyMs\":NaN}}"));
+            Check(nanHyst.Governor.HealthyMs <= nanHyst.Governor.OverBudgetMs - 5f,
+                "NaN HealthyMs fallback clamped into OverBudgetMs-5 hysteresis");
+            var infHyst = ServerPerfConfig.Load(WriteTemp("{\"Governor\":{\"OverBudgetMs\":20,\"HealthyMs\":Infinity}}"));
+            Check(infHyst.Governor.HealthyMs <= infHyst.Governor.OverBudgetMs - 5f,
+                "Infinity HealthyMs fallback clamped into OverBudgetMs-5 hysteresis");
+            var nanEmerg = ServerPerfConfig.Load(WriteTemp("{\"Governor\":{\"OverBudgetMs\":500,\"EmergencyOverMs\":NaN}}"));
+            Check(nanEmerg.Governor.EmergencyOverMs >= nanEmerg.Governor.OverBudgetMs + 5f,
+                "NaN EmergencyOverMs fallback clamped above OverBudgetMs+5");
+            var nanScale = ServerPerfConfig.Load(WriteTemp("{\"AiLod\":{\"FullScale\":0.1,\"MediumScale\":NaN}}"));
+            Check(nanScale.AiLod.MediumScale <= nanScale.AiLod.FullScale,
+                "NaN MediumScale fallback clamped below FullScale");
+            // Shed threshold must sit ABOVE the governor band even when the governor
+            // is tuned high (shedding is the last resort, past throttling).
+            var shedBand = ServerPerfConfig.Load(WriteTemp(
+                "{\"Governor\":{\"OverBudgetMs\":200},\"TickGuard\":{\"ShedAboveMs\":61}}"));
+            Check(shedBand.TickGuard.ShedAboveMs > shedBand.Governor.OverBudgetMs,
+                "ShedAboveMs floored above the tuned governor band");
             Check(new ServerPerfConfig().Server.TargetFps == 0, "default Server.TargetFps=0 (leave vanilla)");
             var fps = ServerPerfConfig.Load(WriteTemp("{\"Server\":{\"TargetFps\":999}}"));
             Check(fps.Server.TargetFps == 120, "Server.TargetFps 999 -> 120 (clamp)");

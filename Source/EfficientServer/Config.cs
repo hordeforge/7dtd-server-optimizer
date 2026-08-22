@@ -412,9 +412,11 @@ namespace EfficientServer
             Governor.EmergencyOverMs = FiniteRange("Governor.EmergencyOverMs", Governor.EmergencyOverMs, Governor.OverBudgetMs + 5f, 1000f, 80f);
             Governor.WindowTicks = IntRange("Governor.WindowTicks", Governor.WindowTicks, 20, 6000);
             Governor.CooldownTicks = IntRange("Governor.CooldownTicks", Governor.CooldownTicks, 0, 36000);
-            // TickGuard: shed threshold must sit above the governor band (last resort),
-            // batch and floor bounded so a bad config cannot wipe the horde.
-            TickGuard.ShedAboveMs = FiniteRange("TickGuard.ShedAboveMs", TickGuard.ShedAboveMs, 60f, 1000f, 70f);
+            // TickGuard: shed threshold must sit above the governor band (last resort,
+            // hence the dynamic floor over the already-normalized OverBudgetMs), batch
+            // and keep-floor bounded so a bad config cannot wipe the horde.
+            TickGuard.ShedAboveMs = FiniteRange("TickGuard.ShedAboveMs", TickGuard.ShedAboveMs,
+                Math.Max(60f, Governor.OverBudgetMs + 5f), 1000f, 70f);
             TickGuard.WindowTicks = IntRange("TickGuard.WindowTicks", TickGuard.WindowTicks, 20, 6000);
             TickGuard.ShedBatch = IntRange("TickGuard.ShedBatch", TickGuard.ShedBatch, 1, 100);
             TickGuard.CooldownTicks = IntRange("TickGuard.CooldownTicks", TickGuard.CooldownTicks, 20, 36000);
@@ -437,7 +439,11 @@ namespace EfficientServer
 
         static float FiniteRange(string name, float value, float min, float max, float fallback)
         {
-            float normalized = float.IsNaN(value) || float.IsInfinity(value) ? fallback : Math.Max(min, Math.Min(max, value));
+            // NaN/Inf take the fallback, and the fallback itself is clamped: ranges
+            // can shift with sibling knobs (e.g. HealthyMs max = OverBudgetMs - 5), so
+            // an unclamped fallback could re-violate the invariant Normalize enforces.
+            float chosen = float.IsNaN(value) || float.IsInfinity(value) ? fallback : value;
+            float normalized = Math.Max(min, Math.Min(max, chosen));
             if (normalized != value) ModApi.Log("config corrected " + name + ": " + value + " -> " + normalized);
             return normalized;
         }

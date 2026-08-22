@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using System.Reflection.Emit;
 using HarmonyLib;
 
@@ -28,9 +29,7 @@ namespace EfficientServer.Patches
     {
         static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
         {
-            float threshold = ModApi.Config != null && ModApi.Config.Pathfinding != null
-                ? ModApi.Config.Pathfinding.MoveRescanThresholdSq
-                : 100f;
+            MethodInfo threshold = AccessTools.Method(typeof(AstarMoveThresholdPatch), nameof(Threshold));
             int swapped = 0;
             foreach (CodeInstruction ins in instructions)
             {
@@ -40,7 +39,10 @@ namespace EfficientServer.Patches
                     && ins.operand is float f && f == 100f)
                 {
                     swapped++;
-                    yield return new CodeInstruction(OpCodes.Ldc_R4, threshold)
+                    // Route through the live getter (same pattern as
+                    // ChunkSendThrottlePatch.BatchCap) so `es reload` retunes it
+                    // without a restart, instead of freezing the init-time value.
+                    yield return new CodeInstruction(OpCodes.Call, threshold)
                     { labels = ins.labels, blocks = ins.blocks };
                 }
                 else
@@ -48,14 +50,24 @@ namespace EfficientServer.Patches
                     yield return ins;
                 }
             }
-            ModApi.Log("AstarMoveThresholdPatch: rescan dead-zone "
-                + (swapped > 0 ? "100 -> " + threshold : "NOT FOUND"));
+            ModApi.Log("AstarMoveThresholdPatch: rescan dead-zone rerouted to live config");
             // Matched-but-untransformed is a silent failure; fail loudly on drift so
             // it surfaces as MISSING rather than pretending the threshold is applied.
             if (swapped == 0)
                 throw new InvalidOperationException(
                     "AstarMoveThresholdPatch: ldc.r4 100 rescan threshold not found in "
                     + "UpdateGraphPos; target drifted - patch inactive.");
+        }
+
+        // Replaces the vanilla constant in the comparison; returns the vanilla 100
+        // whenever the mod is inactive or the config absent, so the default path is
+        // byte-equivalent to stock.
+        public static float Threshold()
+        {
+            PathfindingConfig cfg = ModApi.Config != null ? ModApi.Config.Pathfinding : null;
+            if (!ModApi.ShouldRun() || cfg == null)
+                return 100f;
+            return cfg.MoveRescanThresholdSq;
         }
     }
 }

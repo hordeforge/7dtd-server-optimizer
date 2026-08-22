@@ -5,7 +5,7 @@ using HarmonyLib;
 namespace EfficientServer.Patches
 {
     /// <summary>
-    /// Adaptive load governor (default off). Watches the real tick interval and moves
+    /// Adaptive load governor (default on). Watches the real tick interval and moves
     /// the two proven throttle levers between their vanilla and throttled settings:
     ///
     ///   - Network.EntityDistributionEveryTicks: 1 (20 Hz) <-> 2 (10 Hz, -45% on the

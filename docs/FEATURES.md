@@ -188,7 +188,9 @@ the #1 allocator) only after drifting more cells, cutting scan CPU and allocatio
 from the frequency side. It multiplies with the cadence throttle: P1 lowers how
 often maintenance runs, P2 lowers the per-visit rescan probability. Strands nothing
 (a below-threshold grid is re-tested next visit; fresh grids bypass the gate via
-`IsFullUpdateNeeded`). Fails visibly (MISSING) if the `100` constant drifts.
+`IsFullUpdateNeeded`). Fails visibly (MISSING) if the `100` constant drifts. Like
+`ChunkSendThrottlePatch`, the transpiled constant routes through a live config
+getter, so `es reload` retunes the dead-zone without a restart.
 
 ## Network: single-target fast send (bang-for-buck #1)
 
@@ -281,7 +283,9 @@ not crowd collision (RESULTS §3r).
 (`BenchGodPatch` on `EntityPlayer.DamageEntity`). Purpose: synthetic bench bots are
 level-1 and die to endgame zombies in seconds, which collapses the horde's target
 anchors into a spawn-equilibrium plateau (RESULTS 3q). With it on, bots survive and
-the load stays an active siege. Not config-persisted; never enable on a real server.
+the load stays an active siege. Not config-persisted; gated by the same
+dedicated-only check as every patch (a client host cannot toggle itself immune);
+never enable on a real dedicated server.
 
 ## TickGuard emergency load-shedding (v1.13.0, default off)
 

@@ -18,7 +18,9 @@ namespace EfficientServer.Patches
 
         static bool Prefix(ref int __result)
         {
-            if (!BenchGod) return true;
+            // Same gate as every other patch: DedicatedOnly must hold even for the
+            // bench flag, so a client host cannot toggle itself damage-immune.
+            if (!ModApi.ShouldRun() || !BenchGod) return true;
             __result = 0;
             return false;
         }
