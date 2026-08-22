@@ -1,7 +1,7 @@
 # Runtime tuning surfaces (V 3.0.1 dedicated)
 
 **Owns:** process-level knobs (Boehm GC symbols/env, `GC.Collect` gate, `settargetfps`, ModEvents lifecycle).  
-**Scaling context:** [`measured-scaling.md`](measured-scaling.md). **Hub:** [`INDEX.md`](../../7dtd-research/docs/INDEX.md).
+**Scaling context:** [`measured-scaling.md`](measured-scaling.md). **Hub:** [`INDEX.md`](INDEX.md).
 
 Reverse-engineered runtime knobs found while building the GC / lifecycle work.
 These are process-level surfaces (GC, frame rate, lifecycle hooks), distinct from

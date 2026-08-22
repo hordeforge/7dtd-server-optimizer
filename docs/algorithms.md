@@ -1,7 +1,7 @@
 # Dedicated server algorithms & data structures (V3.0.1)
 
 **Owns:** the algorithm + data-structure used by each hot subsystem - what runs, in
-what complexity, on what structure. **Hub:** [`INDEX.md`](../../7dtd-research/docs/INDEX.md). Deep dives:
+what complexity, on what structure. **Hub:** [`INDEX.md`](INDEX.md). Deep dives:
 loop [`loop.md`](../../7dtd-research/docs/loop.md); AI/path [`entity-ai.md`](../../7dtd-research/docs/entity-ai.md); net
 [`network.md`](../../7dtd-research/docs/network.md); world [`world-chunks.md`](../../7dtd-research/docs/world-chunks.md); scaling
 [`measured-scaling.md`](measured-scaling.md); bottleneck ranking

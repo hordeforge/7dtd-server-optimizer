@@ -3,7 +3,7 @@
 **Owns:** the consolidated, ranked catalog of tick bottlenecks - super-linear
 scaling, inefficient data structures, and serial single-thread stages.
 **Method:** IL RE + live APM scaling (`apm scaling`), 42 findings verified against
-IL and measured exponents (adversarial audit, 2026-07-19). **Hub:** [`INDEX.md`](../../7dtd-research/docs/INDEX.md).
+IL and measured exponents (adversarial audit, 2026-07-19). **Hub:** [`INDEX.md`](INDEX.md).
 **Companion docs:** optimizer-facing summary [`PERF_RESEARCH_BRIEF.md`](PERF_RESEARCH_BRIEF.md); scaling laws [`measured-scaling.md`](measured-scaling.md); unsafe levers [`aggressive-optimizations.md`](aggressive-optimizations.md); algorithm cost anatomy [`algorithms.md`](algorithms.md); allocation
 [`allocation-reuse.md`](allocation-reuse.md) + [`../../7dtd-optimizer/docs/ALLOCATION_UPSTREAM.md`](ALLOCATION_UPSTREAM.md);
 graded levers [`../../7dtd-optimizer/docs/OPTIMIZATION_CANDIDATES.md`](OPTIMIZATION_CANDIDATES.md).

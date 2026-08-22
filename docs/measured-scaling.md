@@ -4,7 +4,7 @@
 **Not:** host CCD/NUMA ops ([HOST_TUNING](HOST_TUNING.md)), product RealEarth status.  
 **Loop/net context:** [`loop.md`](../../7dtd-research/docs/loop.md), [`network.md`](../../7dtd-research/docs/network.md).  
 **Ceiling map (static):** [`engine-limitations.md`](../../7dtd-research/docs/engine-limitations.md).  
-**Hub:** [`INDEX.md`](../../7dtd-research/docs/INDEX.md).
+**Hub:** [`INDEX.md`](INDEX.md).
 
 Empirical complement to the static IL map ([`loop.md`](../../7dtd-research/docs/loop.md), [`network.md`](../../7dtd-research/docs/network.md)).  
 IL surfaces named below are documented under `research/il/gaps-v3.1.0/`, `research/il/loop-complete-v3.1.0/` (historical `gmUpdate-v3.0.1` name), `research/il/dedi-complete-v3.1.0/` (e.g. `ConnectionManager.Update` IL≈215, `NetEntityDistribution.OnUpdateEntities` IL=322).  

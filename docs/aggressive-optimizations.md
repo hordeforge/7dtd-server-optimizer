@@ -4,7 +4,7 @@
 correctness, fidelity, stability, or maintainability for performance, and exactly
 what risk each takes. Written after the safe Harmony space was exhausted + proven
 ([`../../7dtd-optimizer/docs/RESULTS.md`](RESULTS.md) §3b).
-**Hub:** [`INDEX.md`](../../7dtd-research/docs/INDEX.md). **Costs to beat:** [`bottlenecks.md`](bottlenecks.md).
+**Hub:** [`INDEX.md`](INDEX.md). **Costs to beat:** [`bottlenecks.md`](bottlenecks.md).
 **Algorithms:** [`algorithms.md`](algorithms.md).
 
 **Policy:** research only. None of these are shipped. Each names its risk class so a

@@ -1,9 +1,16 @@
 # 7dtd-optimizer
 
+![CI](https://github.com/maci0/7dtd-optimizer/actions/workflows/ci.yml/badge.svg)
+
 EfficientServer is a focused Harmony optimization mod for 7 Days to Die
 dedicated servers. It owns only reviewed runtime changes: AI level-of-detail,
 distant task throttling, dedicated-only work suppression, and bounded dynamic
 mesh behavior.
+
+> **Workspace context:** this repo is part of a private `7dtd` workspace.
+> Docs link to sibling repos (`7dtd-research`, `7dtd-apm`, `7dtd-loadgen`)
+> and workspace files that are not public. Those links resolve only inside
+> the workspace; on the public GitHub page they 404.
 
 It intentionally contains no profiler and no load generator. Install the
 standalone bridge from sibling `7dtd-apm` for managed instrumentation, and use
@@ -59,6 +66,7 @@ reference: [`docs/CONFIG.md`](docs/CONFIG.md). Deploying:
 
 Docs:
 
+- Local docs hub: [`docs/INDEX.md`](docs/INDEX.md)
 - Workspace modding guide: [`../MODDING_BEST_PRACTICES.md`](../MODDING_BEST_PRACTICES.md)
 - EfficientServer workflow: [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md)
 - Hot path RE: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)

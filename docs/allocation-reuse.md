@@ -4,7 +4,7 @@
 the Boehm "use more RAM, collect less" knobs.
 **Context:** Unity Mono/Boehm (`libmonobdwgc-2.0`), non-moving conservative STW GC,
 single-threaded 20 TPS. Host has **128 GB RAM** - memory is not the constraint, GC
-pause is. **Hub:** [`INDEX.md`](../../7dtd-research/docs/INDEX.md). **Pairs with:** process-level GC knobs
+pause is. **Hub:** [`INDEX.md`](INDEX.md). **Pairs with:** process-level GC knobs
 [`runtime-tuning.md`](runtime-tuning.md); concrete optimizer levers
 [`../../7dtd-optimizer/docs/ALLOCATION_UPSTREAM.md`](ALLOCATION_UPSTREAM.md).
 
