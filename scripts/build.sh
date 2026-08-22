@@ -66,7 +66,6 @@ refs=(
   -r:"$HARMONY"
   -r:"$MANAGED/Newtonsoft.Json.dll"
   -r:"$MANAGED/LogLibrary.dll"
-  -r:"$MANAGED/MemoryPack.dll"
   -r:"$MANAGED/AstarPathfindingProject.dll"
 )
 

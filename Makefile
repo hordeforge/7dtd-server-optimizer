@@ -23,7 +23,10 @@ build-mcs:
 	SEVENDTD_BUILD_BACKEND=mcs $(ROOT)/scripts/build.sh
 test:
 	shellcheck $(wildcard $(ROOT)/scripts/*.sh)
-	dotnet run --project $(ROOT)/Source/EfficientServer.Tests -c Release
+# Locked restore: fails when a PackageReference changed without regenerating
+# packages.lock.json, instead of silently floating to newer versions.
+	dotnet restore --locked-mode $(ROOT)/Source/EfficientServer.Tests
+	dotnet run --project $(ROOT)/Source/EfficientServer.Tests -c Release --no-restore
 	python3 $(ROOT)/scripts/check_config_doc.py
 	python3 $(ROOT)/scripts/check_version.py
 install:

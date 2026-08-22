@@ -117,8 +117,10 @@ supported retarget: rebuild with `make build` and reinstall.
 - Requires `0_TFP_Harmony` installed in the game's `Mods/` (the Harmony runtime
   the patches load through)
 - Game refs (Assembly-CSharp, UnityEngine.*, 0Harmony, Newtonsoft.Json,
-  LogLibrary, MemoryPack, AstarPathfindingProject) resolve from the installed
-  game; a missing managed DLL fails the build with a clear reference error
+  LogLibrary, AstarPathfindingProject) resolve from the installed game; a
+  missing managed DLL fails the build with a clear reference error
+- The test project's one NuGet dependency is hash-pinned in the committed
+  `packages.lock.json` and restored in locked mode by `make test`
 
 **Troubleshooting (from the mod's own log lines):**
 - `MISSING TARGET: <Patch> matched no game method (version drift?) - this

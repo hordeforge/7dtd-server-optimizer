@@ -107,6 +107,12 @@ make package     # builds dist/EfficientServer and zips it (needs a game install
 gh release create v0.1.0 dist/EfficientServer-0.1.0.zip --title "EfficientServer 0.1.0" --notes "..."
 ```
 
+NuGet dependencies are hash-pinned by the committed
+`Source/EfficientServer.Tests/packages.lock.json`; `make test` restores in
+locked mode, so bumping a `PackageReference` requires regenerating that file
+with `dotnet restore Source/EfficientServer.Tests` (plain, not locked) and
+committing it together with the version change.
+
 `make package` must run on a machine with the game installed: `build.sh`
 compiles against the shipped `Assembly-CSharp.dll`, which the repo does not
 redistribute (AGENTS.md rule 6). GitHub Actions therefore runs the test gate

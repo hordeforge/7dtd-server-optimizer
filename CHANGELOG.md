@@ -37,6 +37,10 @@ So `EfficientServer-0.1.0.zip` logging `mod=1.17.0` is correct, not drift.
   tail-reads APM logs instead of rescanning whole files. Nothing here changes
   the shipped DLL surface.
 - Removed the vendored `scripts/dotnet-install.sh` bootstrap.
+- Dependency audit: dropped the unused `MemoryPack` game-DLL reference (no
+  source usage, compile-verified against both build backends); the test
+  project's `Newtonsoft.Json` dependency is now hash-pinned in a committed
+  `packages.lock.json` that `make test` restores in locked mode.
 
 ## [0.1.0] - 2026-08-22
 

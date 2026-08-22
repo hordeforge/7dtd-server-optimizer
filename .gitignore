@@ -9,3 +9,5 @@ tools/tests/_out/
 # Local dedi launch drop (not package source)
 /server/
 /server/logs/
+# Python bytecode from ad-hoc script runs
+__pycache__/
