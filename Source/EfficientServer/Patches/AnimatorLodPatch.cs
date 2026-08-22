@@ -57,7 +57,17 @@ namespace EfficientServer.Patches
 
             AnimatorLodConfig cfg = ModApi.Config != null ? ModApi.Config.AnimatorLod : null;
             if (!ModApi.ShouldRun() || cfg == null || !cfg.Enabled)
+            {
+                // LOD off (config reload / mod disable / host change): release any rig
+                // this patch left strided-disabled, else its animator never evaluates
+                // again and server-side root motion stays frozen forever.
+                if (!anim.enabled)
+                {
+                    anim.enabled = true;
+                    anim.Update(0f);
+                }
                 return true;
+            }
 
             bool exempt =
                 entity.aiClosestPlayerDistSq < cfg.FullRateDistSq

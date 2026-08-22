@@ -34,9 +34,20 @@ namespace EfficientServer
 
         static string Gb(ulong bytes) => (bytes / (1024.0 * 1024.0 * 1024.0)).ToString("F2") + " GB";
 
+        static bool _started;
+
         public static void StartMegapauseTest(DiagnosticsConfig cfg)
         {
             if (cfg == null || !cfg.GcMegapauseTest) return;
+            // One shot per process: GameStartDone fires again if the world restarts
+            // in-process, and overlapping megapause threads would interleave
+            // GC_disable/GC_enable refcounts against the single collector.
+            if (_started)
+            {
+                ModApi.Log("GC MEGAPAUSE diagnostic already armed this process; not re-arming");
+                return;
+            }
+            _started = true;
             var t = new Thread(() => RunMegapause(cfg)) { IsBackground = true, Name = "es-gc-megapause" };
             t.Start();
             ModApi.Log("GC MEGAPAUSE diagnostic armed (DIAGNOSTIC ONLY): warmup="

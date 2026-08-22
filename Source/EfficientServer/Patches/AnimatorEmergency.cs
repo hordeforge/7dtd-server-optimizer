@@ -30,6 +30,9 @@ namespace EfficientServer.Patches
         // dictionary key after destroy; instance IDs stay stable for the GO lifetime.
         static readonly Dictionary<int, AnimatorCullingMode> SavedModes =
             new Dictionary<int, AnimatorCullingMode>();
+        // Reusable sweep scratch: ids seen this pass, ids to drop afterwards.
+        static readonly HashSet<int> SweepIds = new HashSet<int>();
+        static readonly List<int> StaleIds = new List<int>();
 
         public static bool Active { get; private set; }
 
@@ -42,6 +45,7 @@ namespace EfficientServer.Patches
             World world = GameManager.Instance != null ? GameManager.Instance.World : null;
             if (world == null) return;
             int swept = 0;
+            SweepIds.Clear();
             List<Entity> entities = world.Entities.list;
             for (int i = 0; i < entities.Count; i++)
             {
@@ -52,19 +56,40 @@ namespace EfficientServer.Patches
                 {
                     Animator anim = anims[a];
                     if (anim == null) continue;
+                    int id = anim.GetInstanceID();
+                    // Record BEFORE the culling check so an already-culled rig's
+                    // existing saved entry is not mistaken for a despawned one.
+                    SweepIds.Add(id);
                     // Never touch enabled. Only change cullingMode.
                     if (anim.cullingMode == AnimatorCullingMode.CullCompletely)
                         continue;
-                    int id = anim.GetInstanceID();
                     if (!SavedModes.ContainsKey(id))
                         SavedModes[id] = anim.cullingMode;
                     anim.cullingMode = AnimatorCullingMode.CullCompletely;
                     swept++;
                 }
             }
+            PruneDespawnedSavedModes();
             if (!Active || swept > 0)
                 ModApi.Log($"Governor: animator emergency {(Active ? "sweep" : "ENTER")} - CullCompletely on {swept} rigs (saved={SavedModes.Count})");
             Active = true;
+        }
+
+        // Saved entries whose animator no longer enumerates as a living enemy rig
+        // (corpse despawned mid-emergency) can never be restored: Restore walks
+        // exactly the set this sweep enumerated. Drop them each sweep so a long
+        // tier-2 session does not accumulate one entry per spawn/despawn until Exit.
+        static void PruneDespawnedSavedModes()
+        {
+            if (SavedModes.Count == 0) return;
+            StaleIds.Clear();
+            foreach (KeyValuePair<int, AnimatorCullingMode> kv in SavedModes)
+                if (!SweepIds.Contains(kv.Key)) StaleIds.Add(kv.Key);
+            if (StaleIds.Count == 0) return;
+            for (int i = 0; i < StaleIds.Count; i++)
+                SavedModes.Remove(StaleIds[i]);
+            ModApi.Log("Governor: animator emergency pruned " + StaleIds.Count
+                + " saved mode(s) for despawned rigs (saved=" + SavedModes.Count + ")");
         }
 
         public static void Exit()
