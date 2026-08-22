@@ -31,6 +31,42 @@ That is years of work for a team. Client lag on a dedicated host is almost alway
 
 **Practical path:** keep the official binary, reverse its frame loop, and cut work that does not matter on headless multiplayer.
 
+## Concurrency model (audit-pinned V3.1.0)
+
+Every EfficientServer patch surface runs on the Unity main thread; the mod takes
+no locks anywhere. The confinement rules below are the invariant new patches
+must preserve:
+
+- **Main-thread confined:** `GameManager.UpdateTick` / `gmUpdate` / `LateUpdate`
+  postfixes (Governor, TickGuard, TargetFps), `World.EntityActivityUpdate`,
+  `EntityAlive.updateTasks`, every `EntityAlive.FindPath` caller (all EAI/UAI
+  task leaves), `NetEntityDistribution.OnUpdateEntities` (from LateUpdate),
+  `ChunkManager.SendChunksToClients`, `Entity.ccEntityCollision`,
+  `AvatarZombieController.Update/LateUpdate`, and `AstarManager.UpdateGraphs`
+  (driven by the `Start` coroutine). Path COMPUTE is also main-thread here:
+  `ASPPathFinderThread.FindPaths` is a Unity coroutine (`StartCoroutine`), not
+  an OS thread.
+- **Console commands** (`es ...`) execute on the main thread too: telnet/stdin/web
+  go through `SdtdConsole.ExecuteAsync` (Monitor-locked queue drained one command
+  per frame by `SdtdConsole.Update`), and the game-connection path
+  (`ServerConsoleCommand` -> `ExecuteSync`) runs where packages are processed,
+  i.e. the main-thread `ConnectionManager.Update` pump. So config reload and
+  governor transitions can interleave only at main-thread frame boundaries.
+- **The one mod-owned background thread:** `GcDiagnostics`' opt-in megapause
+  probe (default off). It touches nothing shared except P/Invoke into Boehm and
+  `Log.Out`; it is one-shot per process (`_started`, set on the sequential
+  main-thread GameStartDone).
+- **Cross-thread reads are reference/int atomic only:** patches snapshot
+  `ModApi.Config` per call; `ReloadConfig` swaps the whole object rather than
+  mutating fields, so readers see one consistent snapshot (no torn state).
+  State the governor derives from that object is re-based explicitly via
+  `GovernorPatch.OnConfigReloaded()` inside `ReloadConfig`.
+- **Rule for new patches:** static mutable fields are only safe if the patched
+  method is proven main-thread (trace callers in the game IL first); anything
+  reached from A* workers, DynamicMesh threads, LiteNet reader/writer threads,
+  or Unity job workers needs its own synchronization. `AstarGraphThrottlePatch`
+  uses `Interlocked` defensively even though its caller is main-thread today.
+
 ## Process model
 
 ```
@@ -322,6 +358,7 @@ See [`../../7dtd-research/docs/loop.md`](../../7dtd-research/docs/loop.md) §14.
 
 ## Changelog
 
+- **2026-08-23:** Concurrency model section added (main-thread confinement audit: patch surfaces, console drain, the one background thread, reload re-basing rule).
 - **2026-08-23:** Stale in-repo `tools/` dump-helper references repointed to `../7dtd-research/tools/`.
 - **2026-08-08:** Stale `il/*-v3.0.1/` dump links repointed to current `*-v3.1.0/` dirs (loop-complete, deep, deeper, opt-scan).
 - **2026-07-16:** Optim candidates doc under `docs/OPTIMIZATION_CANDIDATES.md` (not 7dtd-research/il).

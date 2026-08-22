@@ -84,6 +84,15 @@ namespace EfficientServer
         public static void ReloadConfig()
         {
             Config = ServerPerfConfig.Load(ServerPerfConfig.DefaultPathBesideAssembly());
+            // The governor holds state derived from the PREVIOUS config object
+            // (cached vanilla base + in-place throttle levers); re-base it before
+            // anything reads the new object mid-tier.
+            Patches.GovernorPatch.OnConfigReloaded();
+            // Re-run the apply-once knobs so "reload takes effect immediately" holds
+            // for them too (idempotent; they log only real changes).
+            Patches.DynamicMeshBudgetPatch.ApplyBudgets();
+            Patches.GameStartPatch.ApplyTargetFps();
+            Patches.GameStartPatch.ApplyJobWorkers();
             Log("config reloaded; enabled=" + Config.Enabled);
         }
 

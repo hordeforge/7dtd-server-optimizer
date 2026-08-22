@@ -21,9 +21,9 @@ namespace EfficientServer
             string sub = _params.Count > 0 ? _params[0].ToLowerInvariant() : "status";
             if (sub == "reload")
             {
+                // ReloadConfig re-bases the governor and re-applies the start-time
+                // knobs (mesh budgets, target fps, job workers) - single choke point.
                 ModApi.ReloadConfig();
-                Patches.GameStartPatch.ApplyTargetFps();
-                Patches.GameStartPatch.ApplyJobWorkers();
                 SdtdConsole.Instance.Output("[EfficientServer] config reloaded");
                 sub = "status";
             }

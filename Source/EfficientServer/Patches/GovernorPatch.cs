@@ -95,6 +95,8 @@ namespace EfficientServer.Patches
             _cooldown = cfg.CooldownTicks;
             if (level == 2)
             {
+                // Tier 2 keeps the tier-1 throttles active (early return below),
+                // so a mid-tier-2 reload must re-apply those tier-1 values too.
                 ModApi.Log($"Governor: tick EMA {_emaMs:F1}ms > {cfg.EmergencyOverMs}ms despite throttles "
                     + "- ANIMATOR EMERGENCY CullCompletely (combat timing degrades; clients see no visual change)");
                 AnimatorEmergency.Enter();
@@ -118,6 +120,50 @@ namespace EfficientServer.Patches
                 ModApi.Log($"Governor: tick EMA {_emaMs:F1}ms < {cfg.HealthyMs}ms - restored vanilla "
                     + $"(replication 20 Hz, graph updates /{_baseGraphEvery})");
             }
+        }
+
+        /// <summary>
+        /// Re-base the governor after <see cref="ModApi.ReloadConfig"/> swaps the
+        /// config object. The governor mutates Pathfinding.GraphUpdateEveryTicks and
+        /// Network.EntityDistributionEveryTicks IN PLACE as its throttle channel, so
+        /// a reload would otherwise desync it: the cached _baseGraphEvery still held
+        /// the previous object's value and the next step-down would clobber the
+        /// operator's reloaded GraphUpdateEveryTicks with it, while a reload mid-tier
+        /// silently dropped the applied throttles (fresh object carries operator
+        /// values) until the next transition. Main-thread only (console/telnet/web
+        /// commands queue through SdtdConsole's main-thread drain, same thread as the
+        /// UpdateTick postfix), so plain field writes suffice.
+        /// </summary>
+        public static void OnConfigReloaded()
+        {
+            _baseGraphEvery = -1;
+            if (_level <= 0)
+                return; // vanilla tier: the fresh object is already correct
+
+            GovernorConfig cfg = ModApi.Config != null ? ModApi.Config.Governor : null;
+            if (cfg == null || !cfg.Enabled)
+            {
+                // Governor removed/disabled mid-tier: stand the levers down on the
+                // new object; exit an active tier-2 emergency so rigs cannot stay
+                // CullCompletely with no governor left to recover them.
+                if (_level >= 2)
+                    AnimatorEmergency.Exit();
+                _level = 0;
+                ModApi.Log("config reloaded: governor disabled - levers left at reloaded (vanilla) values");
+                return;
+            }
+
+            // Active tier (1 or 2): re-apply the tier-1 throttle values onto the new
+            // object so throttling stays coherent across the swap. Tier 2 keeps those
+            // same lever values (SetLevel(2) never touches them). Tick-health windows
+            // and cooldown describe recent tick history, not config state - keep them.
+            PathfindingConfig path = ModApi.Config.Pathfinding;
+            NetworkConfig net = ModApi.Config.Network;
+            _baseGraphEvery = path.GraphUpdateEveryTicks;
+            net.EntityDistributionEveryTicks = 2;
+            path.GraphUpdateEveryTicks = Math.Min(200, _baseGraphEvery * 2);
+            ModApi.Log($"config reloaded: governor tier {_level} re-applied to new config "
+                + $"(replication 10 Hz, graph updates /{path.GraphUpdateEveryTicks})");
         }
     }
 }
