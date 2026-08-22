@@ -54,8 +54,9 @@ def log(msg: str) -> None:
 
 
 def ensure_server_ready(timeout_s: float = 180.0) -> None:
-    deadline = time.time() + timeout_s
-    while time.time() < deadline:
+    # Monotonic deadline: immune to NTP steps / manual clock changes mid-wait.
+    deadline = time.monotonic() + timeout_s
+    while time.monotonic() < deadline:
         try:
             r = B.telnet(["version"], settle=1.0)
             if r and "error" not in r.lower()[:40]:
@@ -69,8 +70,9 @@ def ensure_server_ready(timeout_s: float = 180.0) -> None:
 
 def sample_health(label: str, seconds: float = SAMPLE_S) -> dict:
     frames, ticks = [], []
-    t0 = time.time()
-    while time.time() - t0 < seconds:
+    # Monotonic window so a wall-clock step cannot truncate the sample period.
+    t0 = time.monotonic()
+    while time.monotonic() - t0 < seconds:
         h = B.health()
         if h.get("frameMs") is not None:
             frames.append(float(h["frameMs"]))

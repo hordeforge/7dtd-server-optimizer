@@ -202,8 +202,9 @@ def fast_spawn(target: int) -> int:
 
 def ensure_server_ready(timeout_s: float = 180.0) -> None:
 
-    deadline = time.time() + timeout_s
-    while time.time() < deadline:
+    # Monotonic deadline: immune to NTP steps / manual clock changes mid-wait.
+    deadline = time.monotonic() + timeout_s
+    while time.monotonic() < deadline:
         try:
             r = B.telnet(["version"], settle=1.0)
             if r and "error" not in r.lower()[:40]:

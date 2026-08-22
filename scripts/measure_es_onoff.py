@@ -66,8 +66,9 @@ def log(msg: str) -> None:
 
 
 def ensure_server_ready(timeout_s: float = 180.0) -> None:
-    deadline = time.time() + timeout_s
-    while time.time() < deadline:
+    # Monotonic deadline: immune to NTP steps / manual clock changes mid-wait.
+    deadline = time.monotonic() + timeout_s
+    while time.monotonic() < deadline:
         try:
             r = B.telnet(["version"], settle=1.0)
             if r and "error" not in r.lower()[:40]:
@@ -82,9 +83,15 @@ def ensure_server_ready(timeout_s: float = 180.0) -> None:
 def latest_server_log() -> Path | None:
     # The Unity log is server_prefab_<name>__<timestamp>.txt; the stdout capture
     # is server_stdout_prefab.txt (no APM lines). Match only the Unity pattern.
-    cands = sorted(LOG_GLOB.glob("server_prefab_*.txt")) if LOG_GLOB.is_dir() else []
+    # Pick newest by mtime, not name sort: the zero-padded timestamp sorts
+    # chronologically only within one world-name prefix, so logs from different
+    # world names interleaved in the same dir would misorder by name.
+    def newest(paths: list[Path]) -> list[Path]:
+        return sorted(paths, key=lambda p: p.stat().st_mtime)
+
+    cands = newest(LOG_GLOB.glob("server_prefab_*.txt")) if LOG_GLOB.is_dir() else []
     if not cands:
-        cands = sorted(DS.glob("logs/server_prefab_*.txt"))
+        cands = newest(DS.glob("logs/server_prefab_*.txt"))
     return cands[-1] if cands else None
 
 
@@ -166,9 +173,10 @@ def sample_apm(label: str, logf: Path, seconds: float = SAMPLE_S) -> dict | None
     first = read_apm(logf)
     if first is None:
         return None
-    t0 = time.time()
+    # Monotonic window so a wall-clock step cannot truncate the sample period.
+    t0 = time.monotonic()
     last = first
-    while time.time() - t0 < seconds:
+    while time.monotonic() - t0 < seconds:
         time.sleep(1.0)
         r = read_apm(logf)
         if r is not None and r["updates"] > last["updates"]:
