@@ -11,9 +11,11 @@ ifneq ($(DOTNET_ROOT),)
   export PATH := $(DOTNET_ROOT):$(PATH)
 endif
 
-.PHONY: build build-mcs test install uninstall run clean
+.PHONY: build build-mcs test install uninstall run clean package
 build:
 	$(ROOT)/scripts/build.sh
+package:
+	$(ROOT)/scripts/package.sh
 build-mcs:
 	SEVENDTD_BUILD_BACKEND=mcs $(ROOT)/scripts/build.sh
 test:

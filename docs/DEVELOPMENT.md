@@ -58,6 +58,23 @@ make install DS="/path/to/7 Days to Die Dedicated Server"
 
 Rebuild after **every** Steam update. Re-check Harmony targets against `Assembly-CSharp` (see [`ARCHITECTURE.md`](ARCHITECTURE.md)).
 
+### Releases
+
+The GitHub release tag numbers the repo release (first cut: `v0.1.0`). The
+mod's own version (`ModInfo.xml`, pinned by `check_version.py` in `make test`)
+tracks the target game baseline and is independent of the release tag.
+
+```bash
+make test        # CI gate; also runs on every push/PR via .github/workflows/ci.yml
+make package     # builds dist/EfficientServer and zips it (needs a game install)
+gh release create v0.1.0 dist/EfficientServer-0.1.0.zip --title "EfficientServer 0.1.0" --notes "..."
+```
+
+`make package` must run on a machine with the game installed: `build.sh`
+compiles against the shipped `Assembly-CSharp.dll`, which the repo does not
+redistribute (AGENTS.md rule 6). GitHub Actions therefore runs the test gate
+but not the package build.
+
 ### Validation tooling (scripts/)
 
 | Script | Role |
