@@ -31,7 +31,6 @@ from __future__ import annotations
 import json
 import os
 import re
-import shutil
 import subprocess
 import sys
 import time
@@ -41,6 +40,7 @@ OPT_ROOT = Path(__file__).resolve().parent.parent
 LOADGEN_ROOT = OPT_ROOT.parent / "7dtd-loadgen"
 sys.path.insert(0, str(LOADGEN_ROOT / "scripts"))
 import bloodmoon_profile as B  # noqa: E402
+from es_cfg_guard import ConfigSwap  # noqa: E402
 
 PLAYERS = int(os.environ.get("BM_PLAYERS", "16"))
 ZOMBIES = int(os.environ.get("BM_ZOMBIES", "200"))
@@ -57,11 +57,23 @@ DS = Path(
     )
 )
 ES_CFG = DS / "Mods/EfficientServer/Config/efficientserver.json"
-ES_CFG_BAK = ES_CFG.with_suffix(".json.validate-bak")
 
 
 def log(msg: str) -> None:
     print(f"[{time.strftime('%H:%M:%S')}] {msg}", flush=True)
+
+
+# Knobs this harness toggles. The guard restores exactly these on any exit
+# path (crash-safe: a backup left by a killed run is finished or quarantined
+# by the NEXT run instead of blindly clobbering operator edits).
+CFG_SWAP = ConfigSwap(
+    ES_CFG,
+    [
+        ("Pathfinding", "MaxPathEnqueuesPerTick"),
+        ("Pathfinding", "DropPathWhenFarDistSq"),
+    ],
+    log=log,
+)
 
 
 def sample_health(label: str, seconds: float = SAMPLE_S) -> dict:
@@ -152,8 +164,8 @@ def write_path_config(max_cap: int, drop_far: float) -> dict:
     """Rewrite EfficientServer path knobs on disk; return prior values."""
     if not ES_CFG.is_file():
         raise FileNotFoundError(f"missing {ES_CFG}")
-    if not ES_CFG_BAK.is_file():
-        shutil.copy2(ES_CFG, ES_CFG_BAK)
+    # Snapshot once per run (idempotent); restore happens in main()'s finally.
+    CFG_SWAP.begin()
     cfg = json.loads(ES_CFG.read_text())
     pf = cfg.setdefault("Pathfinding", {})
     prior = {
@@ -164,12 +176,6 @@ def write_path_config(max_cap: int, drop_far: float) -> dict:
     pf["DropPathWhenFarDistSq"] = drop_far
     ES_CFG.write_text(json.dumps(cfg, indent=2) + "\n")
     return prior
-
-
-def restore_path_config() -> None:
-    if ES_CFG_BAK.is_file():
-        shutil.copy2(ES_CFG_BAK, ES_CFG)
-        ES_CFG_BAK.unlink(missing_ok=True)
 
 
 def fast_spawn(target: int) -> int:
@@ -233,6 +239,10 @@ def main() -> int:
     bots = None
     code = 0
     try:
+        # Snapshot before anything can mutate the installed config; on any
+        # exit path (including a kill mid-run, recovered by the next run)
+        # only these harness-owned knobs are reverted.
+        CFG_SWAP.begin()
         if not SKIP_START:
             log(f"=== start server (players={PLAYERS} zombies={ZOMBIES}) ===")
             # bloodmoon start_server ignores BM_* for env; set env then call
@@ -381,7 +391,7 @@ def main() -> int:
         code = 4
     finally:
         try:
-            restore_path_config()
+            CFG_SWAP.restore()
             B.telnet(["es reload", "es animon", "kickall"], settle=1.0)
         except Exception:
             pass

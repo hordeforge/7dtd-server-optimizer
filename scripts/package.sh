@@ -39,6 +39,9 @@ find "$STAGE" -type d -exec chmod 755 {} +
 find "$STAGE/EfficientServer" -type f -exec chmod 644 {} +
 find "$STAGE" -print0 | xargs -0 touch -d "@$EPOCH"
 
+# Recreate from scratch: zip otherwise UPDATES an existing archive, so files
+# dropped upstream would survive a same-version repack as stale entries.
+rm -f "$OUT"
 (
   cd "$STAGE"
   # File entries only (dirs are implicit on extract), sorted, no extra fields.

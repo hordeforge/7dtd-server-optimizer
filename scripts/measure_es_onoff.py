@@ -32,7 +32,6 @@ from __future__ import annotations
 import json
 import os
 import re
-import shutil
 import subprocess
 import sys
 import time
@@ -42,6 +41,7 @@ OPT_ROOT = Path(__file__).resolve().parent.parent
 LOADGEN_ROOT = OPT_ROOT.parent / "7dtd-loadgen"
 sys.path.insert(0, str(LOADGEN_ROOT / "scripts"))
 import bloodmoon_profile as B  # noqa: E402
+from es_cfg_guard import ConfigSwap  # noqa: E402
 
 PLAYERS = int(os.environ.get("BM_PLAYERS", "32"))
 ZOMBIES = int(os.environ.get("BM_ZOMBIES", "250"))
@@ -57,12 +57,18 @@ DS = Path(
     )
 )
 ES_CFG = DS / "Mods/EfficientServer/Config/efficientserver.json"
-ES_CFG_BAK = ES_CFG.with_suffix(".json.esab-bak")
-LOG_GLOB = Path(os.environ.get("SEVENDTD_LOGDIR", str(Path.home() / ".cache" / "7dtd-loadgen")))
 
 
 def log(msg: str) -> None:
     print(f"[{time.strftime('%H:%M:%S')}] {msg}", flush=True)
+
+
+# Toggle-mode crash safety: Enabled is snapshotted before the first rewrite
+# and put back on any exit path. A backup left by a killed run is finished or
+# quarantined by the NEXT run (es_cfg_guard) instead of clobbering later edits.
+# Matched-arm mode never snapshots: the caller owns the config between arms.
+ES_SWAP = ConfigSwap(ES_CFG, [("Enabled",)], log=log)
+LOG_GLOB = Path(os.environ.get("SEVENDTD_LOGDIR", str(Path.home() / ".cache" / "7dtd-loadgen")))
 
 
 def ensure_server_ready(timeout_s: float = 180.0) -> None:
@@ -211,6 +217,13 @@ def main() -> int:
     report = {"players": PLAYERS, "zombies": ZOMBIES, "gamestage": GAMESTAGE, "phases": {}}
     code = 0
     try:
+        # Toggle mode: snapshot Enabled before anything rewrites it. Arm mode
+        # leaves the config to the caller, but still resolves any backup a
+        # killed earlier run left behind so it cannot fire much later.
+        if ARM in ("on", "off"):
+            ES_SWAP.recover()
+        else:
+            ES_SWAP.begin()
         if not SKIP_START:
             os.environ["BM_PLAYERS"] = str(PLAYERS)
             os.environ["BM_ZOMBIES"] = str(ZOMBIES)
@@ -248,9 +261,10 @@ def main() -> int:
             report["phases"]["arm_" + ARM] = s
             report["verdict"] = "arm_" + ARM
             log(f"  arm {ARM}: {s}")
-            report["restored"] = False  # caller owns the next arm's config
+            # caller owns the next arm's config
         else:
-            # Single-session toggle mode: same load, ES on then off.
+            # Single-session toggle mode: same load, ES on then off. The
+            # pre-run Enabled value goes back in main()'s finally.
             set_enabled(True)
             on = sample_apm("es_on", logf)
             report["phases"]["es_on"] = on
@@ -270,15 +284,18 @@ def main() -> int:
             else:
                 report["verdict"] = "no_apm_data"
                 log("WARN: APM bridge silent; no numeric verdict (check 7dtd-apm-bridge installed)")
-
-            set_enabled(True)
-            report["restored"] = True
     except KeyboardInterrupt:
         code = 130
     finally:
-        if ES_CFG_BAK.is_file():
-            shutil.copy2(ES_CFG_BAK, ES_CFG)
-            ES_CFG_BAK.unlink(missing_ok=True)
+        toggle_mode = ARM not in ("on", "off")
+        ES_SWAP.restore()
+        if toggle_mode:
+            # Best effort only: the sampled server may already be gone.
+            try:
+                B.telnet(["es reload"], settle=1.0)
+            except Exception:
+                pass
+            report["restored"] = True
         out = OUT_DIR / f"es_onoff_{time.strftime('%Y%m%d_%H%M%S')}.json"
         out.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
         log(f"report -> {out}")

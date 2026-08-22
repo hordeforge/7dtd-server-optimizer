@@ -29,6 +29,7 @@ test:
 	dotnet run --project $(ROOT)/Source/EfficientServer.Tests -c Release --no-restore
 	python3 $(ROOT)/scripts/check_config_doc.py
 	python3 $(ROOT)/scripts/check_version.py
+	python3 $(ROOT)/scripts/es_cfg_guard.py --selftest
 install:
 	$(ROOT)/scripts/install.sh
 uninstall:

@@ -22,7 +22,6 @@ from __future__ import annotations
 
 import json
 import os
-import shutil
 import sys
 import time
 from pathlib import Path
@@ -31,6 +30,7 @@ OPT_ROOT = Path(__file__).resolve().parent.parent
 LOADGEN_ROOT = OPT_ROOT.parent / "7dtd-loadgen"
 sys.path.insert(0, str(LOADGEN_ROOT / "scripts"))
 import bloodmoon_profile as B  # noqa: E402
+from es_cfg_guard import ConfigSwap  # noqa: E402
 
 PLAYERS = int(os.environ.get("BM_PLAYERS", "12"))
 GAMESTAGE = int(os.environ.get("BM_GAMESTAGE", "250"))
@@ -46,11 +46,23 @@ DS = Path(
     )
 )
 ES_CFG = DS / "Mods/EfficientServer/Config/efficientserver.json"
-ES_CFG_BAK = ES_CFG.with_suffix(".json.bm-bak")
 
 
 def log(msg: str) -> None:
     print(f"[{time.strftime('%H:%M:%S')}] {msg}", flush=True)
+
+
+# Knobs this harness toggles. The guard restores exactly these on any exit
+# path (crash-safe: a backup left by a killed run is finished or quarantined
+# by the NEXT run instead of blindly clobbering operator edits).
+CFG_SWAP = ConfigSwap(
+    ES_CFG,
+    [
+        ("Pathfinding", "MaxPathEnqueuesPerTick"),
+        ("Pathfinding", "DropPathWhenFarDistSq"),
+    ],
+    log=log,
+)
 
 
 def ensure_server_ready(timeout_s: float = 180.0) -> None:
@@ -93,8 +105,8 @@ def sample_health(label: str, seconds: float = SAMPLE_S) -> dict:
 def write_path_config(max_cap: int, drop_far: float) -> None:
     if not ES_CFG.is_file():
         raise FileNotFoundError(f"missing {ES_CFG}")
-    if not ES_CFG_BAK.is_file():
-        shutil.copy2(ES_CFG, ES_CFG_BAK)
+    # Snapshot once per run (idempotent); restore happens in main()'s finally.
+    CFG_SWAP.begin()
     cfg = json.loads(ES_CFG.read_text(encoding="utf-8"))
     pf = cfg.setdefault("Pathfinding", {})
     pf["MaxPathEnqueuesPerTick"] = max_cap
@@ -130,6 +142,10 @@ def main() -> int:
         "verdicts": {},
     }
     try:
+        # Snapshot before anything can mutate the installed config; on any
+        # exit path (including a kill mid-run, recovered by the next run)
+        # only these harness-owned knobs are reverted.
+        CFG_SWAP.begin()
         if not SKIP_START:
             os.environ["BM_PLAYERS"] = str(PLAYERS)
             B.start_server()
@@ -185,9 +201,7 @@ def main() -> int:
     except KeyboardInterrupt:
         return 130
     finally:
-        if ES_CFG_BAK.is_file():
-            shutil.copy2(ES_CFG_BAK, ES_CFG)
-            ES_CFG_BAK.unlink(missing_ok=True)
+        CFG_SWAP.restore()
         out = OUT_DIR / f"bloodmoon_path_{time.strftime('%Y%m%d_%H%M%S')}.json"
         out.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
         log(f"report -> {out}")
