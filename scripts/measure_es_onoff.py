@@ -88,31 +88,59 @@ def latest_server_log() -> Path | None:
     return cands[-1] if cands else None
 
 
+APM_LINE_RE = re.compile(
+    r"APM updates=(\d+) gmUpdateAvg=([0-9.]+)ms tickAvg=([0-9.]+)ms spikes=(\d+)"
+)
+
+# Incremental tail state per log path: byte offset, undecoded partial-line
+# carry, and the newest matching APM health line seen so far. The Unity log is
+# append-only and grows to hundreds of MB under blood-moon loads; rescanning
+# the whole file every poll second would churn page cache and inject disk I/O
+# noise into the exact frame-time numbers this harness measures.
+_APM_TAIL: dict[Path, dict] = {}
+
+
 def read_apm(logf: Path) -> dict | None:
     """Parse the most recent matching [7dtd-apm] health line from the server log.
 
-    Scans backwards: APM health lines append every ~30 s and other [7dtd-apm]
-    lines (session headers) may interleave, so the last *matching* line wins.
-    Returns cumulative counters (updates, gmUpdateAvg, tickAvg, spikes).
+    Reads only bytes appended since the previous call (the log is append-only;
+    state resets if the file shrank or was replaced), so per-second polling
+    costs one small read instead of a full-file rescan. Returns cumulative
+    counters (updates, gmUpdateAvg, tickAvg, spikes); None before the first
+    matching line ever.
     """
-    txt = logf.read_text(encoding="utf-8", errors="replace")
-    m = None
-    for line in reversed(txt.splitlines()):
-        if "[7dtd-apm]" not in line:
-            continue
-        m = re.search(
-            r"APM updates=(\d+) gmUpdateAvg=([0-9.]+)ms tickAvg=([0-9.]+)ms spikes=(\d+)", line
-        )
-        if m:
-            break
-    if not m:
-        return None
-    return {
-        "updates": int(m.group(1)),
-        "gmUpdateAvg": float(m.group(2)),
-        "tickAvg": float(m.group(3)),
-        "spikes": int(m.group(4)),
-    }
+    st = _APM_TAIL.get(logf)
+    try:
+        size = logf.stat().st_size
+    except OSError:
+        return st["last"] if st else None
+    if st is None or size < st["off"]:
+        st = {"off": 0, "tail": b"", "last": None}
+        _APM_TAIL[logf] = st
+    if size > st["off"]:
+        with logf.open("rb") as f:
+            f.seek(st["off"])
+            chunk = f.read(size - st["off"])
+        st["off"] = size
+        data = st["tail"] + chunk
+        # Decode only complete lines; keep the unterminated tail as raw bytes
+        # so a read boundary cannot split a line or a multibyte character.
+        nl = data.rfind(b"\n")
+        if nl >= 0:
+            text = data[:nl].decode("utf-8", errors="replace")
+            st["tail"] = data[nl + 1:]
+            for line in text.split("\n"):
+                if "[7dtd-apm]" not in line:
+                    continue
+                m = APM_LINE_RE.search(line)
+                if m:
+                    st["last"] = {
+                        "updates": int(m.group(1)),
+                        "gmUpdateAvg": float(m.group(2)),
+                        "tickAvg": float(m.group(3)),
+                        "spikes": int(m.group(4)),
+                    }
+    return st["last"]
 
 
 def windowed(a: dict, b: dict) -> dict | None:
