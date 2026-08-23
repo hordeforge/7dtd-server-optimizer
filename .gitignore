@@ -11,3 +11,4 @@ tools/tests/_out/
 /server/logs/
 # Python bytecode from ad-hoc script runs
 __pycache__/
+*.lock
