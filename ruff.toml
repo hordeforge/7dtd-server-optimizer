@@ -1,0 +1,35 @@
+# Python lint gate, wired into `make test` and CI next to shellcheck.
+# Line length mirrors .editorconfig's repo-wide 100-column cap.
+line-length = 100
+
+# Harness scripts import each other directly from scripts/.
+src = ["scripts"]
+
+[lint]
+# Groups proven clean by a full run before being enabled here; a new group
+# must pass on the tree before its selector lands. Deliberately not selected:
+# - T20 (print): these are CLI harnesses; stdout is the product.
+# - BLE / S110 (blind except, except-pass): teardown paths log-and-continue
+#   on purpose so a failed cleanup never masks the real result.
+# - SIM / RET / PTH: style churn with no defect signal in this tree yet.
+select = [
+    "E",    # pycodestyle errors (incl. E501 at 100 via line-length)
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes (undefined names, unused bindings)
+    "I",    # import order
+    "B",    # flake8-bugbear (bug-prone constructs)
+    "C4",   # flake8-comprehensions
+    "UP",   # pyupgrade (stale syntax)
+    "FA",   # missing `from __future__ import annotations`
+    "ISC",  # implicit string concatenation pitfalls
+    "EXE",  # executable/shebang hygiene
+    "FURB", # refurb modernizations
+    "RUF",  # ruff-specific (stale noqa directives, etc.)
+]
+
+[lint.per-file-ignores]
+# harness_common inserts the sibling 7dtd-loadgen scripts dir into sys.path,
+# then imports modules that only exist via that path entry. Those imports
+# cannot be hoisted above the statement that makes them resolvable.
+"scripts/harness_common.py" = ["E402"]
+
