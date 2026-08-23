@@ -46,7 +46,20 @@ verify-reproducible:
 	$(ROOT)/scripts/verify_reproducible.sh
 build-mcs:
 	SEVENDTD_BUILD_BACKEND=mcs $(ROOT)/scripts/build.sh
+# Preflight so a clean machine gets a named error plus the fix instead of a
+# bare "No such file or directory" (Error 127) from whichever gate runs first.
+# Runs after PATH setup above, so a local SDK under ~/.cache/dotnet-sdk or
+# ~/.dotnet counts as found.
 test:
+	@if ! command -v shellcheck >/dev/null 2>&1; then \
+	  echo "ERROR: make test needs shellcheck (lint gate for scripts/*.sh)." >&2; \
+	  echo "  Install it (e.g. apt-get install shellcheck) and rerun make test." >&2; exit 127; fi
+	@if ! command -v python3 >/dev/null 2>&1; then \
+	  echo "ERROR: make test needs python3 (config-doc, version and cfg-guard gates)." >&2; \
+	  echo "  Install python3 and rerun make test." >&2; exit 127; fi
+	@if ! command -v dotnet >/dev/null 2>&1; then \
+	  echo "ERROR: make test needs the .NET SDK pinned by global.json (8.0 band), but dotnet is not on PATH." >&2; \
+	  echo "  A local SDK in ~/.cache/dotnet-sdk or ~/.dotnet is picked up automatically; otherwise install the SDK and rerun make test." >&2; exit 127; fi
 	shellcheck $(wildcard $(ROOT)/scripts/*.sh)
 # Stdlib-only syntax gate for the scripts make test never executes
 # (validate_*.py / measure_es_onoff.py need a live server). Bytecode lands in
