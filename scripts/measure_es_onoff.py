@@ -134,7 +134,7 @@ def read_apm(logf: Path) -> dict | None:
         if nl >= 0:
             text = data[:nl].decode("utf-8", errors="replace")
             st["tail"] = data[nl + 1:]
-            for line in text.split("\n"):
+            for line in text.splitlines():
                 if "[7dtd-server-apm]" not in line:
                     continue
                 m = APM_LINE_RE.search(line)
