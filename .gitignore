@@ -1,11 +1,7 @@
 dist/
 **/bin/
 **/obj/
-tools/*.exe
 *.log
-# Generated Cecil dumps (may contain game IL excerpts)
-../7dtd-research/il/
-tools/tests/_out/
 # Local dedi launch drop (not package source)
 /server/
 /server/logs/
