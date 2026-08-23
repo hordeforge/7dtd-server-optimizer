@@ -112,6 +112,9 @@ supported retarget: rebuild with `make build` and reinstall.
   `rollForward: latestFeature`; CI installs exactly that), target framework
   `net48`; `build.sh` prefers `DOTNET_ROOT` or `~/.cache/dotnet-sdk`
 - Fallback backend `SEVENDTD_BUILD_BACKEND=mcs` (Mono `mcs`) when no SDK is present
+- Host OS: the build/run/package tooling targets **Linux** hosts (Steam library
+  paths, GNU coreutils, `taskset`); the packaged DLL itself is OS-neutral
+  managed code loaded by the game's own runtime on any dedicated-server host
 - `make test` additionally needs `shellcheck` and Python 3 (both preinstalled on
   GitHub runners; the SDK comes from `global.json`)
 - Requires `0_TFP_Harmony` installed in the game's `Mods/` (the Harmony runtime

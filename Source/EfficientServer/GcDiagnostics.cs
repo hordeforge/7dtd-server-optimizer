@@ -102,7 +102,11 @@ namespace EfficientServer
             {
                 // Re-enable defensively so a failed probe never leaves GC disabled.
                 try { GC_enable(); } catch { }
-                ModApi.Log("GC MEGAPAUSE failed (symbol absent?): " + ex.Message);
+                // Name the type + library: DllNotFoundException (host OS ships the
+                // Boehm lib under another name) reads differently from a missing
+                // entry point, and the operator needs to know which one fired.
+                ModApi.Log("GC MEGAPAUSE failed [" + ex.GetType().Name
+                    + " via " + Lib + "]: " + ex.Message);
             }
         }
     }

@@ -17,6 +17,9 @@ namespace EfficientServer
     internal static class GcIncremental
     {
         // Same library the game loads for Boehm; matches the bridge's P/Invoke.
+        // This is the LINUX bundled name (libmonobdwgc-2.0.so); other host OSes
+        // ship the same collector under a different module name, so the calls
+        // below fail soft with DllNotFoundException there by design.
         const string Lib = "monobdwgc-2.0";
 
         [DllImport(Lib)] static extern void GC_enable_incremental();
@@ -44,7 +47,11 @@ namespace EfficientServer
             catch (Exception ex)
             {
                 // Symbol absent on some builds -> stay on the default STW collector.
-                ModApi.Log("GC incremental enable failed (symbol absent?): " + ex.Message);
+                // Name the type + library: a missing module (host OS bundles the
+                // Boehm lib under another name) is a different problem from a
+                // missing entry point, and the log must say which one fired.
+                ModApi.Log("GC incremental enable failed [" + ex.GetType().Name
+                    + " via " + Lib + "]: " + ex.Message);
             }
         }
     }
