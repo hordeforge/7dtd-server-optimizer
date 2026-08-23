@@ -166,7 +166,7 @@ def write_path_config(max_cap: int, drop_far: float) -> dict:
         raise FileNotFoundError(f"missing {ES_CFG}")
     # Snapshot once per run (idempotent); restore happens in main()'s finally.
     CFG_SWAP.begin()
-    cfg = json.loads(ES_CFG.read_text())
+    cfg = json.loads(ES_CFG.read_text(encoding="utf-8"))
     pf = cfg.setdefault("Pathfinding", {})
     prior = {
         "MaxPathEnqueuesPerTick": pf.get("MaxPathEnqueuesPerTick", 0),
@@ -174,7 +174,7 @@ def write_path_config(max_cap: int, drop_far: float) -> dict:
     }
     pf["MaxPathEnqueuesPerTick"] = max_cap
     pf["DropPathWhenFarDistSq"] = drop_far
-    ES_CFG.write_text(json.dumps(cfg, indent=2) + "\n")
+    ES_CFG.write_text(json.dumps(cfg, indent=2) + "\n", encoding="utf-8")
     return prior
 
 
@@ -419,11 +419,11 @@ def main() -> int:
             )
         ts = time.strftime("%Y%m%d_%H%M%S")
         out = OUT_DIR / f"validate_anim_path_{ts}.json"
-        out.write_text(json.dumps(report, indent=2) + "\n")
+        out.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
         log(f"report -> {out}")
         # also latest symlink-ish
         latest = OUT_DIR / "validate_anim_path_latest.json"
-        latest.write_text(json.dumps(report, indent=2) + "\n")
+        latest.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
 
     return code
 

@@ -48,6 +48,22 @@ namespace EfficientServer.Tests
             finally { File.Delete(p); }
         }
 
+        // Same scratch contract as WriteTemp, but the bytes land exactly as given
+        // (BOM included), so encoding-boundary behavior is pinned independent of
+        // any default-encoding choice in the write path.
+        static string WriteTempBytes(byte[] bytes)
+        {
+            string p = Path.Combine(Path.GetTempPath(), "es_cfg_" + Guid.NewGuid().ToString("N") + ".json");
+            File.WriteAllBytes(p, bytes);
+            return p;
+        }
+
+        static ServerPerfConfig LoadTempFile(string p)
+        {
+            try { return ServerPerfConfig.Load(p); }
+            finally { File.Delete(p); }
+        }
+
         // Load with a clean warning sink so channel assertions see only this file.
         static ServerPerfConfig LoadTempTracked(string json)
         {
@@ -278,6 +294,26 @@ namespace EfficientServer.Tests
             Check(GovernorTiers.ThrottleLever(200, 200) == 200, "governor: graph cadence baseline 200 stays 200");
             var missing = LoadTemp("{}");
             Check(missing.Network != null && missing.Diagnostics != null, "missing Network/Diagnostics -> filled");
+
+            // Encoding boundary: the config file is UTF-8. A non-ASCII unknown key
+            // must survive the read verbatim (no mojibake), and a UTF-8 BOM must be
+            // tolerated, so operator configs behave identically on every host.
+            var cyr = ServerPerfConfig.FindUnknownKeys("{\"Путь\":1}");
+            Check(cyr.Count == 1 && cyr[0] == "Путь",
+                "FindUnknownKeys: non-ASCII key reported verbatim (UTF-8 read path)");
+            string bomP = WriteTempBytes(
+                new byte[] { 0xEF, 0xBB, 0xBF }
+                .Concat(System.Text.Encoding.UTF8.GetBytes("{\"Enabled\":false}"))
+                .ToArray());
+            var bom = LoadTempFile(bomP);
+            Check(bom != null && !bom.Enabled,
+                "UTF-8 BOM prefix tolerated at config load");
+            // No-BOM non-ASCII value bytes round-trip through Load without error too.
+            string noBomP = WriteTempBytes(
+                System.Text.Encoding.UTF8.GetBytes("{\"Pathfinding\":{\"GraphUpdateEveryTicks\":6}}"));
+            var noBom = LoadTempFile(noBomP);
+            Check(noBom != null && noBom.Pathfinding.GraphUpdateEveryTicks == 6,
+                "UTF-8 no-BOM config loads normally");
 
             // Fuzz: random JSON into Load never throws.
             var rng = new Random(1234);

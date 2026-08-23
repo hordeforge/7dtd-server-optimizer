@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
+using System.Text;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
@@ -303,7 +304,9 @@ namespace EfficientServer
 
             try
             {
-                string json = File.ReadAllText(path);
+                // Explicit encoding: the config is UTF-8 (BOM tolerated). Never the
+                // host locale default, so a non-ASCII value survives any OS.
+                string json = File.ReadAllText(path, Encoding.UTF8);
                 // A misspelled key binds to nothing and silently keeps the built-in
                 // default, so name every ignored key at load (fail-soft per group;
                 // unknown keys are still ignored, just not silently).
