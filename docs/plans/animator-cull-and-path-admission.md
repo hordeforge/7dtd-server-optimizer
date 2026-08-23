@@ -68,3 +68,7 @@ near players. Do not claim ms/tick win without APM session IDs.
 - [x] animoff/animon + animstate dp check
 - [x] path cap/drop reload fidelity
 - [x] Stress (24p + ~273z, over-budget frame 85->76 ms) 2026-08-03
+- [x] Harness re-run at 8p/32p/64p (2026-08-09): overall PASS x3; first measured
+  tick-bound animator frame win at 64p (117.61 -> 99.53 ms, -15.4%, reversible);
+  path admission no win at any load. RESULTS 'Live animator-emergency +
+  path-admission validation'. Remaining: human combat soak.

@@ -26,7 +26,7 @@ bridge in `7dtd-apm`.
 - [x] Define small, medium, and high scenarios executed by `7dtd-loadgen`. (Seed-locked tier ladder + heavy canonical standard: `7dtd-apm/plans/profile.{canonical,tiers}.json`; docs LOAD_PROFILE.md, 2026-07-18.)
 - [x] Capture baseline/candidate evidence with `7dtd-apm` and record session IDs. (V3.1.0: moderate 16p 135519/135942; heavy 48p 001826/003006; canonical 64p 004634/005248 mixed; see docs/V310_APM_BASELINE.md)
 - [ ] Add regression budgets including simulation/gameplay correctness checks. (2026-08-09: config-level correctness invariants in the harness (AiLod band ordering + scale monotonicity, fully-inverted inputs) AND a live gameplay-correctness floor recorded in RESULTS.md - the V3.1.0 loadgen self-test-join PASS with ES 1.17.0 active (join, walk, jump, death, respawn all intact; 18/18 patches matched). Live APM perf-budget data: whole-mod ES on/off single-session at 24p/194z = -15% gmUpdate (measure_es_onoff.py), and matched-arm fresh-server runs at 12p (~150z) = within noise (load-dependent, server not tick-bound at 12p). Test-infra note: stock LiteNetLib join flake under bot churn (Collection was modified in CreateEvent) blocks >12-bot runs; workaround documented in RESULTS. The matched-arm comparison is further confirmed blocked: a 4p ON arm succeeded (gmUpdateAvg 2.965) but the 4p OFF arm failed the join gate (1/4) - the flake is now intermittent even at minimal cohorts, so a reliable matched pair (and the 64p canonical) cannot complete on this host until the flake is fixed (root cause CLOSED 2026-08-10 in 7dtd-research docs/network.md §4.0) or a stable host is used.)
-- [x] Document every configuration field, unit, range, runtime behavior, and tradeoff. (CONFIG.md covers all 51 config fields - added the previously missing CrowdCollisionLod section incl. `ResolveEveryNTicks` clamp [1,16]; automated cross-check source-vs-doc now passes.)
+- [x] Document every configuration field, unit, range, runtime behavior, and tradeoff. (CONFIG.md covers every config field - added the previously missing CrowdCollisionLod section incl. `ResolveEveryNTicks` clamp [1,16]; automated cross-check source-vs-doc now passes.)
 
 ## Phase 3: packaging and release
 
@@ -130,8 +130,8 @@ Honest open items only. Do not re-open refuted levers without new APM evidence.
 | Path admission defaults | **keep 0/0 vanilla** | Fidelity PASS; no reliable frame win under stress noise. |
 | Canonical 64p ms_per_tick win | **not claimed** | ES ON worse ms/tick at 64p chaos; STW/late-share still better. Residual walls: entity tick, explosions, IO. |
 | Safe Harmony space | **exhausted** | Entity wall ≈ world-collision + close AI; player wall O(N²); serialize-once already stock. |
-| Config unit / dedicated-only tests | open | Phase 1 remaining checkboxes above. |
-| Packaging upgrade/rollback verify | open | Phase 3. |
+| Config unit / dedicated-only tests | closed 2026-07-19 | Unit-test harness shipped v1.4.1 and runs in `make test`; the remaining Phase 1 checkboxes are live AI-LOD / dynamic-mesh validation, not unit tests. |
+| Packaging upgrade/rollback verify | closed 2026-08-09 | Phase 3: install / upgrade / rollback / uninstall verified live on V3.1.0 b14 with ES 1.17.0. |
 | Full blood-moon capacity re-sweep on 3.1 | optional | Prior BM capacity was V3.0.1 campaign; 3.1 has moderate/heavy/canon only. |
 
 Evidence hub: [docs/V310_APM_BASELINE.md](docs/V310_APM_BASELINE.md) · [docs/RESULTS.md](docs/RESULTS.md) · [docs/PERF_RESEARCH_BRIEF.md](docs/PERF_RESEARCH_BRIEF.md).

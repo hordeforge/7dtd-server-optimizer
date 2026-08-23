@@ -92,7 +92,7 @@ Do not re-research these as "open optim ideas". Evidence is in RESULTS.
 | Replication stride | `NetEntityDistribution.OnUpdateEntities` | **-45%** at stride 2 |
 | Adaptive governor | schedules stride + graph | +58% BM capacity vs static |
 | TickGuard | farthest-first despawn | Emergency only |
-| Animator LOD / emergency | headless animator cost | Exit path **wedged** on `enabled` toggle |
+| Animator LOD / emergency | headless animator cost | Exit solved via `cullingMode = CullCompletely` (v1.17.0); default-off pending human soak |
 
 Honest **refutations** (do not rebuild without new evidence): spatial interest as a
 *safe small patch*, build-layer serialize-once, mid-band AI stride as headline,
@@ -263,10 +263,18 @@ animator-emergency + path-admission validation'). Stays default-off pending a
 human-eye combat soak (while active: attack cadence falls back to wall-clock,
 stuns clear next tick, supplementary displacement path).
 
-**Remaining follow-ups:**
-1. Perf re-validation (does it reproduce ~147 -> ~85 ms class win?).
-2. Spawn-hook so new zombies also enter the mode.
-3. Human + `es animstate` dp check on restore.
+**Follow-up status:**
+
+1. Perf re-validation: **done** - CullCompletely reproduced a frame win:
+   stress gate 2026-08-03 (85 -> 76 ms) and the first measured tick-bound win
+   2026-08-09 at 64p (117.61 -> 99.53 ms, -15.4%, reversible with root motion
+   intact; [RESULTS.md](RESULTS.md) 'Live animator-emergency + path-admission
+   validation').
+2. Spawn coverage: **solved without a spawn hook** - GovernorPatch re-runs
+   `AnimatorEmergency.Enter` as a periodic tier-2 sweep, so mid-emergency
+   spawns are culled on the next sweep.
+3. Human combat soak + `es animstate` dp check on restore: **still open**
+   before `Governor.AnimatorEmergency` may default on.
 
 Tracked in repo `TODO.md` (animator revival wedge).
 
@@ -279,7 +287,7 @@ Priority = (expected capacity or smoothness gain) x (evidence readiness) /
 
 | Rank | Work | Type | Why now | Fidelity gate |
 |---:|---|---|---|---|
-| **1** | **Animator `CullCompletely` emergency** | **Built v1.17.0** (default-off) | Enter/exit + es animoff use CullCompletely | Human `es animstate` dp + heavy A/B still required |
+| **1** | **Animator `CullCompletely` emergency** | **Built v1.17.0** (default-off) | Enter/exit + es animoff use CullCompletely | Human combat soak still required (dp check + A/B done 2026-08-09) |
 | **2** | **Path admission (A2)** under synthetic BM | **Built; measured 2026-08-07 default-off** | BM-ish 24p: cap=32+drop@50m **worsened** late ticks / UpdateTick; loadgen still 24/24 | Keep off; only revisit with path-queue telemetry + true BM director |
 | **3** | **Ops pack as first-class** | Docs + launch | ViewDistance, MaxSpawnedZombies, `GC_FREE_SPACE_DIVISOR`, `MONO_ENV_OPTIONS=-O=all` already validated | Publish recommended serverconfig matrix |
 | **4** | **Chunk blob cache design** | Design + optional patch | Ownership closed (Setup on sim from SendChunks/RebuildTerrain); multi-observer join still pays N× encode | Byte-identical packages; invalidation on block edit / TE / density |
@@ -358,6 +366,10 @@ and **path admission under BM**, with ops config as the free capacity dial.
 
 ## Changelog
 
+- **2026-08-23:** Status currency: §3 animator row + §4.6 follow-ups updated to
+  the shipped CullCompletely state (perf re-validation done 2026-08-03/09,
+  spawn coverage via periodic tier-2 sweep); rank 1 gate narrowed to the human
+  combat soak.
 - **2026-08-07:** Path admission BM-ish A/B (24p combat/bait, sessions `161109`/
   `161552`): enabling MaxPathEnqueuesPerTick=32 + DropPathWhenFarDistSq=2500
   **worsened** lag; keep default-off. See V310_APM_BASELINE.md.
