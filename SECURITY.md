@@ -13,7 +13,7 @@ backports.
 
 ## Reporting
 
-Open a GitHub Issue at https://github.com/maci0/7dtd-optimizer/issues and
+Open a GitHub Issue at https://github.com/hordeforge/7dtd-server-optimizer/issues and
 include: affected version, game build, the relevant log lines
 (`[EfficientServer]`-prefixed), and the config that reproduces it. There is no
 private disclosure channel published yet; do not include exploit details you

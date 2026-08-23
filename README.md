@@ -1,6 +1,6 @@
 # 7dtd-optimizer
 
-![CI](https://github.com/maci0/7dtd-optimizer/actions/workflows/ci.yml/badge.svg)
+![CI](https://github.com/hordeforge/7dtd-server-optimizer/actions/workflows/ci.yml/badge.svg)
 
 EfficientServer is a focused Harmony optimization mod for 7 Days to Die
 dedicated servers. It owns only reviewed runtime changes: AI level-of-detail,
