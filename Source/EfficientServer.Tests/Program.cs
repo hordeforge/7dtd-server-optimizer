@@ -83,6 +83,15 @@ namespace EfficientServer.Tests
             Check(Math.Abs(d.Gc.SafetyCollectRamFraction - 0.5f) < 1e-6, "default RamFraction=0.5");
             Check(d.Gc.SafetyCollectAboveMB == 0, "default SafetyCollectAboveMB=0 (AUTO)");
 
+            // Shipped-default drift: Normalize on untouched defaults must be a silent
+            // no-op (FiniteRange/IntRange warn exactly when a value moves). A default
+            // edited outside its own clamp would otherwise log "config corrected" on
+            // every fresh install and silently shift the knob.
+            var defNorm = new ServerPerfConfig();
+            ModApi.Warnings.Clear();
+            defNorm.Normalize();
+            Check(ModApi.Warnings.Count == 0, "defaults need no normalization (silent no-op)");
+
             // Missing file -> defaults, no throw.
             var miss = ServerPerfConfig.Load(Path.Combine(Path.GetTempPath(), "does_not_exist_" + Guid.NewGuid().ToString("N") + ".json"));
             Check(miss != null && miss.Pathfinding.GraphUpdateEveryTicks == 4, "missing file -> defaults");
@@ -101,9 +110,33 @@ namespace EfficientServer.Tests
             Check(secBad != null && secBad.Enabled && secBad.Pathfinding.GraphUpdateEveryTicks == 4,
                 "section value of wrong type -> full defaults");
 
+            // Whole-document JSON null deserializes to a null reference -> the
+            // dedicated defaults branch, silently (valid JSON, so not a parse error).
+            var docNull = LoadTempTracked("null");
+            Check(docNull != null && docNull.Enabled, "whole-document null -> defaults");
+            Check(ModApi.Warnings.Count == 0, "whole-document null -> no warning (not malformed)");
+
             // Empty object -> defaults filled.
             var empty = LoadTemp("{}");
             Check(empty != null && empty.Pathfinding != null && empty.Gc != null, "empty object -> sub-configs filled");
+
+            // Explicit JSON null for a section binds as a null reference and must be
+            // backfilled with defaults. Assert EVERY section via reflection so a
+            // future knob group cannot skip its backfill line and NRE downstream.
+            var secNull = LoadTemp(
+                "{\"AiLod\":null,\"SkipOnDedicated\":null,\"DynamicMesh\":null,\"Gc\":null," +
+                "\"Pathfinding\":null,\"Network\":null,\"WorldTransfer\":null,\"Server\":null," +
+                "\"AnimatorLod\":null,\"CrowdCollisionLod\":null,\"Governor\":null," +
+                "\"TickGuard\":null,\"Diagnostics\":null}");
+            bool allSectionsBackfilled = true;
+            foreach (var sect in typeof(ServerPerfConfig).GetProperties())
+                if (sect.PropertyType.IsClass && sect.PropertyType != typeof(string)
+                    && sect.PropertyType.Namespace == typeof(ServerPerfConfig).Namespace
+                    && sect.GetValue(secNull) == null)
+                    { allSectionsBackfilled = false; break; }
+            Check(allSectionsBackfilled, "explicit null sections -> every section backfilled");
+            Check(secNull.AiLod.FullAiDistSq == 100f && secNull.Governor.OverBudgetMs == 57f,
+                "backfilled sections carry defaults, not zeros");
 
             // Valid round-trip.
             var ok = LoadTemp("{\"Pathfinding\":{\"GraphUpdateEveryTicks\":8,\"MoveRescanThresholdSq\":400}}");
@@ -174,12 +207,14 @@ namespace EfficientServer.Tests
             Check(pathOk.Pathfinding.MaxPathEnqueuesPerTick == 64, "MaxPathEnqueuesPerTick round-trip 64");
             Check(pathOk.Pathfinding.DropPathWhenFarDistSq == 2500f, "DropPathWhenFarDistSq round-trip 2500");
 
-            // Normalize: NaN/Inf fall back. IsNaN alone would also pass a leaked
-            // Infinity, so assert finite AND inside the [1,1e6] clamp.
+            // Normalize: NaN/Inf fall back EXACTLY to the documented fallback (100),
+            // not merely somewhere inside the [1,1e6] clamp. An exact pin keeps a
+            // leaked Infinity (which shares the fallback path) and a wrong fallback
+            // value both failing here.
             var nan = LoadTemp("{\"AiLod\":{\"FullAiDistSq\":\"NaN\"}}");
-            var nanV = nan.AiLod.FullAiDistSq;
-            Check(!float.IsNaN(nanV) && !float.IsInfinity(nanV) && nanV >= 1f && nanV <= 1000000f,
-                "NaN FullAiDistSq -> finite fallback inside [1,1e6] clamp");
+            Check(nan.AiLod.FullAiDistSq == 100f, "NaN FullAiDistSq -> exact fallback 100");
+            var negInf = LoadTemp("{\"AiLod\":{\"FullAiDistSq\":\"-Infinity\"}}");
+            Check(negInf.AiLod.FullAiDistSq == 100f, "-Infinity FullAiDistSq -> exact fallback 100");
 
             // Normalize: inverted Medium>Full scale clamps (Medium <= Full).
             var inv = LoadTemp("{\"AiLod\":{\"FullScale\":0.3,\"MediumScale\":0.9}}");
@@ -390,9 +425,6 @@ namespace EfficientServer.Tests
             Check(actualCross == expectedCross && actualCross > 0,
                 "tick EMA crosses OverBudgetMs on advance " + actualCross + " (predicted " + expectedCross + ")");
 
-            var missing = LoadTemp("{}");
-            Check(missing.Network != null && missing.Diagnostics != null, "missing Network/Diagnostics -> filled");
-
             // Encoding boundary: the config file is UTF-8. A non-ASCII unknown key
             // must survive the read verbatim (no mojibake), and a UTF-8 BOM must be
             // tolerated, so operator configs behave identically on every host.
@@ -442,6 +474,8 @@ namespace EfficientServer.Tests
             Check(fa.FeatureActive("BenchGod", true), "BenchGod -> active when console flag on");
             Check(fa.FeatureActive("FastSend"), "default FastSend -> active (opt-out feature)");
             Check(fa.FeatureActive("Governor"), "default Governor -> active (inert when healthy)");
+            var govOff = LoadTemp("{\"Governor\":{\"Enabled\":false}}");
+            Check(!govOff.FeatureActive("Governor"), "Governor disabled by config -> inactive");
             Check(!fa.FeatureActive("AnimatorLod"), "default AnimatorLod -> inactive (Enabled=false default)");
             Check(!fa.FeatureActive("CrowdCollisionLod"), "default CrowdCollisionLod -> inactive (Enabled=false default)");
             Check(!fa.FeatureActive("UnknownFeature"), "unknown feature key -> inactive");
@@ -510,6 +544,109 @@ namespace EfficientServer.Tests
             Check(clamps.TickGuard.WindowTicks == 20, "TickGuard.WindowTicks 10 -> 20");
             Check(clamps.TickGuard.CooldownTicks == 20, "TickGuard.CooldownTicks 5 -> 20");
             Check(clamps.TickGuard.MinEnemiesKept == 0, "TickGuard.MinEnemiesKept -5 -> 0");
+
+            // Clamp-table boundary sweep. The fuzz targets only prove every knob
+            // lands INSIDE its range; these fixtures pin the exact documented
+            // ENDPOINTS on both sides: a bound that quietly tightens or loosens by
+            // one must fail here, not on an operator server. Endpoints are legal
+            // tunes, so each fixture must also load with ZERO "config corrected"
+            // warnings. Sibling-linked knobs stay mutually consistent (HealthyMs <=
+            // OverBudgetMs-5, scales <= parent, ShedAboveMs over the governor band).
+            ModApi.Warnings.Clear();
+            var atMax = LoadTemp(
+                "{\"AiLod\":{\"FullAiDistSq\":1000000,\"MediumAiDistSq\":1000000,\"SkipTasksFarDistSq\":4000000," +
+                "\"MidTickStride\":20,\"FullScale\":1,\"MediumScale\":1,\"FarScale\":1}," +
+                "\"DynamicMesh\":{\"PlayerAreaChunkBuffer\":64,\"MaxRegionLoadMsPerFrame\":1000,\"MaxActiveSyncs\":128}," +
+                "\"Pathfinding\":{\"GraphUpdateEveryTicks\":200,\"MoveRescanThresholdSq\":10000," +
+                "\"MaxPathEnqueuesPerTick\":2000,\"DropPathWhenFarDistSq\":4000000}," +
+                "\"WorldTransfer\":{\"ChunkPackagesPerObserverPerTick\":32}," +
+                "\"Network\":{\"EntityDistributionEveryTicks\":4}," +
+                "\"CrowdCollisionLod\":{\"ResolveEveryNTicks\":16}," +
+                "\"AnimatorLod\":{\"FullRateDistSq\":1000000,\"FarStride\":10}," +
+                "\"Server\":{\"TargetFps\":120,\"JobWorkerCount\":64}," +
+                "\"Governor\":{\"OverBudgetMs\":500,\"HealthyMs\":495,\"EmergencyOverMs\":1000," +
+                "\"WindowTicks\":6000,\"CooldownTicks\":36000}," +
+                "\"TickGuard\":{\"ShedAboveMs\":1000,\"WindowTicks\":6000,\"ShedBatch\":100," +
+                "\"CooldownTicks\":36000,\"MinEnemiesKept\":10000}," +
+                "\"Gc\":{\"SafetyCollectAboveMB\":1048576,\"SafetyCollectRamFraction\":0.95," +
+                "\"IncrementalPauseTargetMs\":10000}," +
+                "\"Diagnostics\":{\"WarmupSeconds\":3600,\"GrowSeconds\":7200}}");
+            Check(atMax.AiLod.FullAiDistSq == 1000000f && atMax.AiLod.MediumAiDistSq == 1000000f
+                && atMax.AiLod.SkipTasksFarDistSq == 4000000f && atMax.AiLod.MidTickStride == 20
+                && atMax.AiLod.FullScale == 1f && atMax.AiLod.MediumScale == 1f && atMax.AiLod.FarScale == 1f,
+                "AiLod upper endpoints preserved verbatim");
+            Check(atMax.DynamicMesh.PlayerAreaChunkBuffer == 64 && atMax.DynamicMesh.MaxRegionLoadMsPerFrame == 1000
+                && atMax.DynamicMesh.MaxActiveSyncs == 128, "DynamicMesh upper endpoints preserved verbatim");
+            Check(atMax.Pathfinding.GraphUpdateEveryTicks == 200 && atMax.Pathfinding.MoveRescanThresholdSq == 10000f
+                && atMax.Pathfinding.MaxPathEnqueuesPerTick == 2000 && atMax.Pathfinding.DropPathWhenFarDistSq == 4000000f,
+                "Pathfinding upper endpoints preserved verbatim");
+            Check(atMax.WorldTransfer.ChunkPackagesPerObserverPerTick == 32
+                && atMax.Network.EntityDistributionEveryTicks == 4
+                && atMax.CrowdCollisionLod.ResolveEveryNTicks == 16,
+                "transfer/network/crowd upper endpoints preserved verbatim");
+            Check(atMax.AnimatorLod.FullRateDistSq == 1000000f && atMax.AnimatorLod.FarStride == 10,
+                "AnimatorLod upper endpoints preserved verbatim");
+            Check(atMax.Server.TargetFps == 120 && atMax.Server.JobWorkerCount == 64,
+                "Server upper endpoints preserved verbatim");
+            Check(atMax.Governor.OverBudgetMs == 500f && atMax.Governor.HealthyMs == 495f
+                && atMax.Governor.EmergencyOverMs == 1000f && atMax.Governor.WindowTicks == 6000
+                && atMax.Governor.CooldownTicks == 36000, "Governor upper endpoints preserved verbatim");
+            Check(atMax.TickGuard.ShedAboveMs == 1000f && atMax.TickGuard.WindowTicks == 6000
+                && atMax.TickGuard.ShedBatch == 100 && atMax.TickGuard.CooldownTicks == 36000
+                && atMax.TickGuard.MinEnemiesKept == 10000, "TickGuard upper endpoints preserved verbatim");
+            Check(atMax.Gc.SafetyCollectAboveMB == 1048576 && atMax.Gc.SafetyCollectRamFraction == 0.95f
+                && atMax.Gc.IncrementalPauseTargetMs == 10000, "Gc upper endpoints preserved verbatim");
+            Check(atMax.Diagnostics.WarmupSeconds == 3600 && atMax.Diagnostics.GrowSeconds == 7200,
+                "Diagnostics upper endpoints preserved verbatim");
+            Check(ModApi.Warnings.Count == 0, "upper endpoints load without any 'config corrected' warning");
+
+            ModApi.Warnings.Clear();
+            var atMin = LoadTemp(
+                "{\"AiLod\":{\"FullAiDistSq\":1,\"MediumAiDistSq\":1,\"SkipTasksFarDistSq\":1," +
+                "\"MidTickStride\":1,\"FullScale\":0,\"MediumScale\":0,\"FarScale\":0}," +
+                "\"DynamicMesh\":{\"PlayerAreaChunkBuffer\":0,\"MaxRegionLoadMsPerFrame\":1,\"MaxActiveSyncs\":1}," +
+                "\"Pathfinding\":{\"GraphUpdateEveryTicks\":1,\"MoveRescanThresholdSq\":100," +
+                "\"MaxPathEnqueuesPerTick\":0,\"DropPathWhenFarDistSq\":0}," +
+                "\"WorldTransfer\":{\"ChunkPackagesPerObserverPerTick\":1}," +
+                "\"Network\":{\"EntityDistributionEveryTicks\":1}," +
+                "\"CrowdCollisionLod\":{\"ResolveEveryNTicks\":1}," +
+                "\"AnimatorLod\":{\"FullRateDistSq\":100,\"FarStride\":1}," +
+                "\"Server\":{\"TargetFps\":0,\"JobWorkerCount\":0}," +
+                "\"Governor\":{\"OverBudgetMs\":20,\"HealthyMs\":10,\"EmergencyOverMs\":25," +
+                "\"WindowTicks\":20,\"CooldownTicks\":0}," +
+                "\"TickGuard\":{\"ShedAboveMs\":60,\"WindowTicks\":20,\"ShedBatch\":1," +
+                "\"CooldownTicks\":20,\"MinEnemiesKept\":0}," +
+                "\"Gc\":{\"SafetyCollectAboveMB\":0,\"SafetyCollectRamFraction\":0," +
+                "\"IncrementalPauseTargetMs\":0}," +
+                "\"Diagnostics\":{\"WarmupSeconds\":0,\"GrowSeconds\":1}}");
+            Check(atMin.AiLod.FullAiDistSq == 1f && atMin.AiLod.MediumAiDistSq == 1f
+                && atMin.AiLod.SkipTasksFarDistSq == 1f && atMin.AiLod.MidTickStride == 1
+                && atMin.AiLod.FullScale == 0f && atMin.AiLod.MediumScale == 0f && atMin.AiLod.FarScale == 0f,
+                "AiLod lower endpoints preserved verbatim");
+            Check(atMin.DynamicMesh.PlayerAreaChunkBuffer == 0 && atMin.DynamicMesh.MaxRegionLoadMsPerFrame == 1
+                && atMin.DynamicMesh.MaxActiveSyncs == 1, "DynamicMesh lower endpoints preserved verbatim");
+            Check(atMin.Pathfinding.GraphUpdateEveryTicks == 1 && atMin.Pathfinding.MoveRescanThresholdSq == 100f
+                && atMin.Pathfinding.MaxPathEnqueuesPerTick == 0 && atMin.Pathfinding.DropPathWhenFarDistSq == 0f,
+                "Pathfinding lower endpoints preserved verbatim");
+            Check(atMin.WorldTransfer.ChunkPackagesPerObserverPerTick == 1
+                && atMin.Network.EntityDistributionEveryTicks == 1
+                && atMin.CrowdCollisionLod.ResolveEveryNTicks == 1,
+                "transfer/network/crowd lower endpoints preserved verbatim");
+            Check(atMin.AnimatorLod.FullRateDistSq == 100f && atMin.AnimatorLod.FarStride == 1,
+                "AnimatorLod lower endpoints preserved verbatim");
+            Check(atMin.Server.TargetFps == 0 && atMin.Server.JobWorkerCount == 0,
+                "Server lower endpoints preserved verbatim");
+            Check(atMin.Governor.OverBudgetMs == 20f && atMin.Governor.HealthyMs == 10f
+                && atMin.Governor.EmergencyOverMs == 25f && atMin.Governor.WindowTicks == 20
+                && atMin.Governor.CooldownTicks == 0, "Governor lower endpoints preserved verbatim");
+            Check(atMin.TickGuard.ShedAboveMs == 60f && atMin.TickGuard.WindowTicks == 20
+                && atMin.TickGuard.ShedBatch == 1 && atMin.TickGuard.CooldownTicks == 20
+                && atMin.TickGuard.MinEnemiesKept == 0, "TickGuard lower endpoints preserved verbatim");
+            Check(atMin.Gc.SafetyCollectAboveMB == 0 && atMin.Gc.SafetyCollectRamFraction == 0f
+                && atMin.Gc.IncrementalPauseTargetMs == 0, "Gc lower endpoints preserved verbatim");
+            Check(atMin.Diagnostics.WarmupSeconds == 0 && atMin.Diagnostics.GrowSeconds == 1,
+                "Diagnostics lower endpoints preserved verbatim");
+            Check(ModApi.Warnings.Count == 0, "lower endpoints load without any 'config corrected' warning");
 
             if (_failures == 0)
             {
