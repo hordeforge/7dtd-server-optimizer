@@ -14,6 +14,11 @@ namespace EfficientServer.Patches
     /// Alpha 1/32 (~32-tick memory): cheap, smooths spawn spikes without hiding
     /// trends. Seeds at the vanilla 50 ms idle interval so the first ticks after boot
     /// read as healthy instead of as a spike from an arbitrary seed.
+    ///
+    /// The production path reads a Stopwatch started at construction; the
+    /// <see cref="Advance(double)"/> overload takes the tick timestamp explicitly so
+    /// tests can replay identical tick sequences deterministically instead of
+    /// inheriting host scheduler jitter into governor/tick-guard transitions.
     /// </summary>
     sealed class TickIntervalEma
     {
@@ -24,10 +29,17 @@ namespace EfficientServer.Patches
         /// <summary>Record one tick; returns the smoothed interval in ms.</summary>
         public double Advance()
         {
-            double now = _clock.Elapsed.TotalMilliseconds;
+            return Advance(_clock.Elapsed.TotalMilliseconds);
+        }
+
+        // Explicit-timestamp variant: the pure transition function behind Advance().
+        // nowMs must be monotonic across calls; the first positive call only records
+        // the baseline (no gap is averaged yet).
+        public double Advance(double nowMs)
+        {
             if (_lastTickMs > 0)
-                _ms += (now - _lastTickMs - _ms) / 32.0;
-            _lastTickMs = now;
+                _ms += (nowMs - _lastTickMs - _ms) / 32.0;
+            _lastTickMs = nowMs;
             return _ms;
         }
 

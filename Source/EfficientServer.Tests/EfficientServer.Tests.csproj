@@ -27,6 +27,9 @@
     <!-- Test the real source directly; no game-type coupling in these files. -->
     <Compile Include="../EfficientServer/Config.cs" />
     <Compile Include="../EfficientServer/GovernorTiers.cs" />
+    <!-- Game-type-free clock seam: the EMA the governor and tick guard key off,
+         driven here with explicit timestamps instead of a live Stopwatch. -->
+    <Compile Include="../EfficientServer/Patches/TickIntervalEma.cs" />
   </ItemGroup>
 
   <ItemGroup>

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 
@@ -310,6 +311,79 @@ namespace EfficientServer.Tests
             Check(GovernorTiers.ThrottleLever(1, 200) == 2, "governor: graph cadence baseline 1 -> 2 (unchanged)");
             Check(GovernorTiers.ThrottleLever(100, 200) == 200, "governor: graph cadence baseline 100 -> 200 (ceiling)");
             Check(GovernorTiers.ThrottleLever(200, 200) == 200, "governor: graph cadence baseline 200 stays 200");
+
+            // TickIntervalEma deterministic replay. The explicit-timestamp overload is
+            // the pure transition function behind BOTH the governor's tier machine and
+            // the tick guard's shed decision; driving it here with synthetic tick
+            // sequences pins those decisions to their inputs instead of host scheduler
+            // jitter. For a constant interval D stepped n times past the 50 ms seed the
+            // recurrence has the closed form ema_n = D + (Seed - D) * (31/32)^n, so the
+            // expectations below are derived from the spec, not copied from a run.
+            var ema = new EfficientServer.Patches.TickIntervalEma();
+            Check(ema.Value == 50.0, "tick EMA seeds at the vanilla 50 ms idle interval");
+            Check(ema.Advance(100.0) == 50.0, "tick EMA first positive advance only records the baseline");
+            double closedForm = 50.0;
+            bool closedFormHeld = true;
+            for (int i = 2; i <= 640; i++)
+            {
+                closedForm += (100.0 - closedForm) / 32.0;
+                if (ema.Advance(i * 100.0) != closedForm)
+                    { closedFormHeld = false; break; }
+            }
+            Check(closedFormHeld, "tick EMA constant-interval trace matches the recurrence bit-for-bit");
+            Check(Math.Abs(ema.Value - 100.0) < 0.05,
+                "tick EMA converges toward the sustained interval (got " + ema.Value.ToString("F3", CultureInfo.InvariantCulture) + ")");
+
+            // Replay determinism: the same seeded gap sequence fed to two fresh
+            // instances must produce bitwise-identical traces, so a failing simulated
+            // run reproduces exactly from its seed.
+            var gaps = new List<double>();
+            var seqRng = new Random(424242);
+            for (int i = 0; i < 2000; i++)
+                gaps.Add(40.0 + seqRng.NextDouble() * 80.0); // 40..120 ms mixed load
+            var replayA = new EfficientServer.Patches.TickIntervalEma();
+            var replayB = new EfficientServer.Patches.TickIntervalEma();
+            double clockMs = 0.0, prevA = replayA.Value, noOvershoot = true;
+            bool tracesIdentical = true;
+            for (int i = 0; i < gaps.Count; i++)
+            {
+                clockMs += gaps[i];
+                double a = replayA.Advance(clockMs);
+                if (a != replayB.Advance(clockMs)) { tracesIdentical = false; break; }
+                // Hysteresis depends on the smoother never overshooting the current
+                // gap: each step closes strictly less than the full distance to the
+                // sample (|new - dt| == |old - dt| * 31/32), so the EMA cannot ring.
+                double distBefore = Math.Abs(prevA - gaps[i]);
+                double distAfter = Math.Abs(a - gaps[i]);
+                if (!(distAfter < distBefore || distAfter == 0.0)) { noOvershoot = false; break; }
+                prevA = a;
+            }
+            Check(tracesIdentical, "tick EMA same-seed replay is bitwise identical across instances");
+            Check(noOvershoot, "tick EMA never overshoots the sampled interval (hysteresis precondition)");
+
+            // Decision-input tie-in with REAL defaults: how many sustained slow ticks
+            // until the EMA the governor reads crosses OverBudgetMs must be derivable
+            // ahead of time; assert the instance crosses on exactly that advance.
+            var govCfg = LoadTemp("{}").Governor;
+            var crossEma = new EfficientServer.Patches.TickIntervalEma();
+            // The instance records its baseline on the first advance (n=1) and starts
+            // averaging from the second, so the prediction runs the recurrence from
+            // n=2 to mirror that seeding.
+            int expectedCross = -1;
+            double simMs = 50.0;
+            for (int n = 2; n <= 100000; n++)
+            {
+                simMs += (120.0 - simMs) / 32.0;
+                if (expectedCross < 0 && simMs > govCfg.OverBudgetMs) { expectedCross = n; break; }
+            }
+            int actualCross = -1;
+            for (int n = 1; n <= 100000; n++)
+            {
+                if (crossEma.Advance(n * 120.0) > govCfg.OverBudgetMs) { actualCross = n; break; }
+            }
+            Check(actualCross == expectedCross && actualCross > 0,
+                "tick EMA crosses OverBudgetMs on advance " + actualCross + " (predicted " + expectedCross + ")");
+
             var missing = LoadTemp("{}");
             Check(missing.Network != null && missing.Diagnostics != null, "missing Network/Diagnostics -> filled");
 
