@@ -32,6 +32,7 @@ from harness_common import (
     ensure_server_ready,
     log,
     write_path_config,
+    write_report,
 )
 
 PLAYERS = int(os.environ.get("BM_PLAYERS", "12"))
@@ -100,7 +101,7 @@ def main() -> int:
             B.start_server()
         ensure_server_ready()
 
-        bots, joined = B.join_ramped(PLAYERS)
+        _, joined = B.join_ramped(PLAYERS)
         report["joined"] = joined
         if joined < max(1, int(PLAYERS * 0.5)):
             log(f"FAIL: only {joined}/{PLAYERS} joined")
@@ -159,9 +160,7 @@ def main() -> int:
         return 4
     finally:
         CFG_SWAP.restore()
-        out = OUT_DIR / f"bloodmoon_path_{time.strftime('%Y%m%d_%H%M%S')}.json"
-        out.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
-        log(f"report -> {out}")
+        write_report("bloodmoon_path", report)
     return 0
 
 

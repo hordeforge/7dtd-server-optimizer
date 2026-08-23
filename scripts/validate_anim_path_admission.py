@@ -42,6 +42,7 @@ from harness_common import (
     ensure_server_ready,
     log,
     write_path_config,
+    write_report,
 )
 
 PLAYERS = int(os.environ.get("BM_PLAYERS", "16"))
@@ -355,11 +356,8 @@ def main() -> int:
             subprocess.run(
                 ["pkill", "-9", "-f", "7DaysToDieServer.x86_6[4]"], check=False
             )
-        ts = time.strftime("%Y%m%d_%H%M%S")
-        out = OUT_DIR / f"validate_anim_path_{ts}.json"
-        out.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
-        log(f"report -> {out}")
-        # also latest symlink-ish
+        write_report("validate_anim_path", report)
+        # Fixed-name copy of the same report so tooling can tail one path.
         latest = OUT_DIR / "validate_anim_path_latest.json"
         latest.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
 

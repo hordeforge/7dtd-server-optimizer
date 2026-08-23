@@ -37,7 +37,7 @@ import time
 from pathlib import Path
 
 from es_cfg_guard import ConfigSwap
-from harness_common import B, DS, ES_CFG, OUT_DIR, ensure_server_ready, log
+from harness_common import B, DS, ES_CFG, OUT_DIR, ensure_server_ready, log, write_report
 
 PLAYERS = int(os.environ.get("BM_PLAYERS", "32"))
 ZOMBIES = int(os.environ.get("BM_ZOMBIES", "250"))
@@ -160,21 +160,18 @@ def sample_apm(label: str, logf: Path, seconds: float = SAMPLE_S) -> dict | None
     return w
 
 
-def set_enabled(on: bool) -> None:
+def set_config_enabled(on: bool, live_reload: bool) -> None:
+    """Set Enabled in the installed config. With live_reload, apply it now via
+    `es reload` (toggle mode); otherwise stage it for the next boot only
+    (matched-arm mode: the fresh server starts with the arm's setting)."""
     cfg = json.loads(ES_CFG.read_text(encoding="utf-8"))
     cfg["Enabled"] = on
     ES_CFG.write_text(json.dumps(cfg, indent=2) + "\n", encoding="utf-8")
+    if not live_reload:
+        log(f"ES Enabled={on} set before boot (matched-arm mode)")
+        return
     B.telnet(["es reload"], settle=2.0)
     log(f"ES Enabled={on} written + es reload")
-
-
-def set_enabled_before_boot(on: bool) -> None:
-    """Set Enabled in the installed config BEFORE the server boots (matched-arm
-    mode): the fresh server starts with the arm's setting, no live toggle."""
-    cfg = json.loads(ES_CFG.read_text(encoding="utf-8"))
-    cfg["Enabled"] = on
-    ES_CFG.write_text(json.dumps(cfg, indent=2) + "\n", encoding="utf-8")
-    log(f"ES Enabled={on} set before boot (matched-arm mode)")
 
 
 def main() -> int:
@@ -192,7 +189,7 @@ def main() -> int:
             ES_SWAP.begin()
         if not SKIP_START:
             if ARM in ("on", "off"):
-                set_enabled_before_boot(ARM == "on")
+                set_config_enabled(ARM == "on", live_reload=False)
             B.start_server()
         ensure_server_ready()
         logf = latest_server_log()
@@ -201,7 +198,7 @@ def main() -> int:
             return 2
         report["server_log"] = str(logf)
 
-        bots, joined = B.join_ramped(PLAYERS)
+        _, joined = B.join_ramped(PLAYERS)
         report["joined"] = joined
         if joined < max(1, int(PLAYERS * 0.5)):
             log(f"FAIL: only {joined}/{PLAYERS} joined")
@@ -229,12 +226,12 @@ def main() -> int:
         else:
             # Single-session toggle mode: same load, ES on then off. The
             # pre-run Enabled value goes back in main()'s finally.
-            set_enabled(True)
+            set_config_enabled(True, live_reload=True)
             on = sample_apm("es_on", logf)
             report["phases"]["es_on"] = on
             log(f"  ES ON : {on}")
 
-            set_enabled(False)
+            set_config_enabled(False, live_reload=True)
             off = sample_apm("es_off", logf)
             report["phases"]["es_off"] = off
             log(f"  ES OFF: {off}")
@@ -268,9 +265,7 @@ def main() -> int:
             except Exception:
                 pass
             report["restored"] = True
-        out = OUT_DIR / f"es_onoff_{time.strftime('%Y%m%d_%H%M%S')}.json"
-        out.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
-        log(f"report -> {out}")
+        write_report("es_onoff", report)
     return code
 
 

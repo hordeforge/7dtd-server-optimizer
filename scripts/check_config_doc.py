@@ -23,9 +23,6 @@ CONFIG_CS = ROOT / "Source" / "EfficientServer" / "Config.cs"
 CONFIG_MD = ROOT / "docs" / "CONFIG.md"
 CONFIG_JSON = ROOT / "config" / "efficientserver.json"
 
-# Names that are methods, not config fields (skip).
-NON_FIELDS = {"FeatureActive", "ShouldRunFor", "Normalize", "Load", "DefaultPathBesideAssembly"}
-
 SCALAR_TYPES = {"bool", "int", "float", "string", "double", "long"}
 # One top-level class block of Config.cs (bodies are 4-space indented).
 CLASS_BLOCK = re.compile(r"^ {4}(?:public |internal )?(?:sealed )?class (\w+)\n    \{\n(.*?)^    \}", re.M | re.S)
@@ -73,11 +70,13 @@ def unknown_json_keys(schema: dict[str, dict], data: dict) -> list[str]:
 def main() -> int:
     src = CONFIG_CS.read_text(encoding="utf-8")
     doc = CONFIG_MD.read_text(encoding="utf-8")
+    schema = parse_cs_schema(src)
 
-    fields = sorted(
-        set(re.findall(r"public (?:bool|int|float|string|double|long) ([A-Za-z]+)", src))
-        - NON_FIELDS
-    )
+    # PROP_DECL anchors on `{ get; set; }`, so methods can never leak in here.
+    all_scalars: set[str] = set()
+    for parsed in schema.values():
+        all_scalars |= parsed["scalars"]
+    fields = sorted(all_scalars)
     doc_tokens = set(re.findall(r"`([A-Za-z]+(?:\.[A-Za-z]+)?)`", doc))
     doc_names = {t.split(".")[-1] for t in doc_tokens}
 
@@ -94,7 +93,7 @@ def main() -> int:
     except (OSError, ValueError) as ex:
         print(f"FAIL: {CONFIG_JSON.name} is not valid JSON: {ex}", file=sys.stderr)
         return 1
-    problems = unknown_json_keys(parse_cs_schema(src), data)
+    problems = unknown_json_keys(schema, data)
     if problems:
         print(f"FAIL: {len(problems)} unknown key(s) in {CONFIG_JSON.relative_to(ROOT)}:", file=sys.stderr)
         for p in problems:

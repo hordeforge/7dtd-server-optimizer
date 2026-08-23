@@ -5,11 +5,11 @@
 V3.1.0 APM: [V310_APM_BASELINE.md](V310_APM_BASELINE.md) moderate 16p + heavy 48p + canonical 64p (004634/005248 mixed) + animator stress 20260803.
 
 Authoritative record of every lever: RE target, mechanism, config knob, IL target,
-Next-work map: [`PERF_RESEARCH_BRIEF.md`](PERF_RESEARCH_BRIEF.md).
 A/B session IDs + numbers, and verdict. Companion: graded backlog
 [`OPTIMIZATION_CANDIDATES.md`](OPTIMIZATION_CANDIDATES.md); bottleneck catalog
 [`bottlenecks.md`](bottlenecks.md); allocation
-[`ALLOCATION_UPSTREAM.md`](ALLOCATION_UPSTREAM.md).
+[`ALLOCATION_UPSTREAM.md`](ALLOCATION_UPSTREAM.md). Next-work map:
+[`PERF_RESEARCH_BRIEF.md`](PERF_RESEARCH_BRIEF.md).
 
 All A/B captures: `7dtd-apm capture --only all,alloc`, 150 s window, matched load,
 same world/seed, back-to-back restarts. Sessions under `~/.local/share/7dtd-apm/`.

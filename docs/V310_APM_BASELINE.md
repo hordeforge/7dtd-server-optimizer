@@ -239,13 +239,6 @@ Report: `server/logs/validate_anim_path_20260803_082721.json`
 
 Honest notes: path admission did not improve frame at this load (+5.6 ms noise). Animator emergency still default-off until human combat soak; stress frame win is real but smaller than the old 147->85 class under different load.
 
-## Changelog
-
-- **2026-08-03:** Heavy 48p ES on/off + animator stress gate on V3.1.0.
-- **2026-08-02:** Moderate 16p pair (section above).
-
-
-
 ## Canonical-heavy-v2 (64 clients, forensic 150s, seed 20240717)
 
 Full profile from `7dtd-apm/plans/profile.canonical.json`.
@@ -295,8 +288,5 @@ At full 64p + demolition chaos, **ES is not a free win on ms_per_tick**.
 
 ## Changelog
 
-- **2026-08-03 (later):** Full canonical-heavy-v2 64p ES on/off (mixed; STW win, ms_per_tick not).
-
-- **2026-08-03 (later):** Full canonical-heavy-v2 64p ES on/off (mixed).
-- **2026-08-03:** Heavy 48p ES on/off + animator stress gate.
-- **2026-08-02:** First V3.1.0 matched ES on/off moderate forensic pair.
+- **2026-08-03:** Full canonical-heavy-v2 64p ES on/off (mixed; STW win, ms_per_tick not); heavy 48p ES on/off + animator stress gate.
+- **2026-08-02:** Moderate 16p pair (section above).

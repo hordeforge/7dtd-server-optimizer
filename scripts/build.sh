@@ -26,6 +26,15 @@ fi
 
 OUT="$ROOT/dist/EfficientServer"
 SRC="$ROOT/Source/EfficientServer"
+
+# Shared by both backends so dist contents cannot drift between them.
+finish() {
+  cp "$SRC/ModInfo.xml" "$OUT/ModInfo.xml"
+  cp "$ROOT/config/efficientserver.json" "$OUT/Config/efficientserver.json"
+  echo "OK -> $OUT/EfficientServer.dll"
+  ls -la "$OUT"
+}
+
 # Output dir, not an incremental cache: wipe so files removed upstream (or a
 # leftover .pdb from an older build) cannot leak into the packaged mod.
 rm -rf "$OUT"
@@ -38,10 +47,7 @@ if [[ "$BUILD_BACKEND" != "mcs" ]] && command -v dotnet >/dev/null 2>&1 && dotne
   dotnet build "$SRC/EfficientServer.csproj" -c Release \
     -p:GameManagedDir="$MANAGED" -p:HarmonyPath="$HARMONY" \
     -p:EfficientServerOutput="$OUT/"
-  cp "$SRC/ModInfo.xml" "$OUT/ModInfo.xml"
-  cp "$ROOT/config/efficientserver.json" "$OUT/Config/efficientserver.json"
-  echo "OK -> $OUT/EfficientServer.dll"
-  ls -la "$OUT"
+  finish
   exit 0
 fi
 
@@ -77,7 +83,4 @@ mcs -nostdlib -sdk:4.7.2 -target:library -optimize+ -langversion:7.2 \
   "${refs[@]}" \
   "${sources[@]}"
 
-cp "$SRC/ModInfo.xml" "$OUT/ModInfo.xml"
-cp "$ROOT/config/efficientserver.json" "$OUT/Config/efficientserver.json"
-echo "OK -> $OUT/EfficientServer.dll"
-ls -la "$OUT"
+finish

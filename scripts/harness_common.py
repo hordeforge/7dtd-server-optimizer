@@ -77,3 +77,11 @@ def write_path_config(max_cap: int, drop_far: float) -> None:
     pf["MaxPathEnqueuesPerTick"] = max_cap
     pf["DropPathWhenFarDistSq"] = drop_far
     ES_CFG.write_text(json.dumps(cfg, indent=2) + "\n", encoding="utf-8")
+
+
+def write_report(prefix: str, report: dict) -> Path:
+    """Write a run's JSON report as OUT_DIR/<prefix>_<timestamp>.json."""
+    out = OUT_DIR / f"{prefix}_{time.strftime('%Y%m%d_%H%M%S')}.json"
+    out.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    log(f"report -> {out}")
+    return out
