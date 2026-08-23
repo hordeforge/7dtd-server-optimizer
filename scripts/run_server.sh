@@ -14,7 +14,7 @@
 set -euo pipefail
 
 SCRIPTDIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROOT="$(cd "$SCRIPTDIR/.." && pwd)"
+_ROOT="$(cd "$SCRIPTDIR/.." && pwd)"
 
 # Resolve dedicated server directory
 SRV="${SEVENDTD_DS_DIR:-${DS:-$HOME/.local/share/Steam/steamapps/common/7 Days to Die Dedicated Server}}"
