@@ -10,7 +10,7 @@ CI will pass: it runs exactly `make test` on every PR and on pushes to main
 - .NET SDK, 8.0.4xx band, pinned by [`global.json`](global.json). The Makefile
   picks up a local install from `~/.cache/dotnet-sdk` or `~/.dotnet`
   automatically; otherwise put `dotnet` on `PATH`
-- `shellcheck` and Python 3 (`make test`)
+- `shellcheck`, `ruff`, and Python 3 (`make test`)
 - A dedicated server install ("7 Days to Die Dedicated Server") only for
   build/install/run/package: the mod compiles against the game's shipped DLLs,
   which this repo does not redistribute
@@ -41,7 +41,8 @@ acceptance (`docs/FEATURES.md` fidelity checks).
 
 | Gate | Fails when | Fix |
 |---|---|---|
-| `shellcheck scripts/*.sh` | a shell script has a lint violation | fix the script |
+| `shellcheck -x scripts/*.sh` | a shell script has a lint violation | fix the script |
+| `ruff check scripts/` (config in `ruff.toml`) | a Python script has a lint violation (undefined name, unused binding, over-long line, import order) | fix the script; rule groups are added only once the tree passes them |
 | `python3 -m compileall scripts` | a script has a syntax error | fix the script |
 | `dotnet restore --locked-mode` | you changed a `PackageReference` without regenerating the lockfile | run plain `dotnet restore Source/EfficientServer.Tests` and commit the regenerated `packages.lock.json` with the csproj change |
 | config harness (`Source/EfficientServer.Tests`) | a `Config.cs` behavior change broke a pinned check | change the code or update the check together; never delete a check to pass |

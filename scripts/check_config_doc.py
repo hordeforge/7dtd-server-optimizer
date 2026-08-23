@@ -30,7 +30,10 @@ CONFIG_JSON = ROOT / "config" / "efficientserver.json"
 
 SCALAR_TYPES = {"bool", "int", "float", "string", "double", "long"}
 # One top-level class block of Config.cs (bodies are 4-space indented).
-CLASS_BLOCK = re.compile(r"^ {4}(?:public |internal )?(?:sealed )?class (\w+)\n    \{\n(.*?)^    \}", re.M | re.S)
+CLASS_BLOCK = re.compile(
+    r"^ {4}(?:public |internal )?(?:sealed )?class (\w+)\n    \{\n(.*?)^    \}",
+    re.MULTILINE | re.DOTALL,
+)
 PROP_DECL = re.compile(r"public (\w+) (\w+) \{ get; set; \}(?: = ([^;]+);)?")
 
 USAGE = """\
@@ -155,7 +158,10 @@ def main() -> int:
 
     missing = [f for f in fields if f not in doc_names]
     if missing:
-        print(f"FAIL: {len(missing)} config field(s) undocumented in {CONFIG_MD.name}:", file=sys.stderr)
+        print(
+            f"FAIL: {len(missing)} config field(s) undocumented in {CONFIG_MD.name}:",
+            file=sys.stderr,
+        )
         for m in missing:
             print(f"  {m}", file=sys.stderr)
         return 1
@@ -168,7 +174,10 @@ def main() -> int:
         return 1
     problems = unknown_json_keys(schema, data)
     if problems:
-        print(f"FAIL: {len(problems)} unknown key(s) in {CONFIG_JSON.relative_to(ROOT)}:", file=sys.stderr)
+        print(
+            f"FAIL: {len(problems)} unknown key(s) in {CONFIG_JSON.relative_to(ROOT)}:",
+            file=sys.stderr,
+        )
         for p in problems:
             print(f"  {p}", file=sys.stderr)
         return 1

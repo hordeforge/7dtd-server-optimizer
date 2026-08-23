@@ -222,7 +222,9 @@ def _selftest() -> int:
         cfg.write_text(json.dumps(original, indent=2) + "\n", encoding="utf-8")
 
         logs: list[str] = []
-        mk = lambda: ConfigSwap(cfg, keys, log=logs.append)
+
+        def mk() -> ConfigSwap:
+            return ConfigSwap(cfg, keys, log=logs.append)
 
         # 1. begin/restore roundtrip restores exact bytes.
         s = mk()
@@ -232,7 +234,8 @@ def _selftest() -> int:
         doc["Pathfinding"]["MaxPathEnqueuesPerTick"] = 64
         cfg.write_text(json.dumps(doc, indent=2) + "\n", encoding="utf-8")
         s.restore()
-        check("roundtrip restores exact bytes", cfg.read_bytes() == json.dumps(original, indent=2).encode() + b"\n")
+        expected = json.dumps(original, indent=2).encode() + b"\n"
+        check("roundtrip restores exact bytes", cfg.read_bytes() == expected)
 
         # 2. crash simulation: a NEW instance finishes the interrupted restore.
         s = mk()
@@ -268,9 +271,15 @@ def _selftest() -> int:
         s2.restore()
         s2.restore()  # second call must be a no-op
         after = _read_doc(cfg)
-        check("key-scoped restore keeps other keys", after["Network"]["EntityDistributionEveryTicks"] == 3)
+        check(
+            "key-scoped restore keeps other keys",
+            after["Network"]["EntityDistributionEveryTicks"] == 3,
+        )
         check("restore reverts managed key", after["Enabled"] is True)
-        check("restore removes key absent in snapshot", "DropPathWhenFarDistSq" not in after["Pathfinding"])
+        check(
+            "restore removes key absent in snapshot",
+            "DropPathWhenFarDistSq" not in after["Pathfinding"],
+        )
         check("repeat restore is a no-op", not s2.bak.exists())
 
         # 5. double begin does not re-snapshot over modified state.

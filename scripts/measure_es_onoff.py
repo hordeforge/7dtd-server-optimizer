@@ -38,10 +38,10 @@ from pathlib import Path
 
 from es_cfg_guard import ConfigSwap
 from harness_common import (
-    B,
     DS,
     ES_CFG,
     OUT_DIR,
+    B,
     ensure_server_ready,
     log,
     teardown_bots,
@@ -84,7 +84,9 @@ def latest_server_log() -> Path | None:
     # Pick newest by mtime, not name sort: the zero-padded timestamp sorts
     # chronologically only within one world-name prefix, so logs from different
     # world names interleaved in the same dir would misorder by name.
-    by_mtime = lambda paths: sorted(paths, key=lambda p: p.stat().st_mtime)
+    def by_mtime(paths):
+        return sorted(paths, key=lambda p: p.stat().st_mtime)
+
     cands = by_mtime(LOG_GLOB.glob("server_prefab_*.txt")) if LOG_GLOB.is_dir() else []
     if not cands:
         cands = by_mtime(DS.glob("logs/server_prefab_*.txt"))
@@ -157,8 +159,12 @@ def windowed(a: dict, b: dict) -> dict | None:
     if du <= 0:
         return None
     return {
-        "gmUpdateAvg": round((b["updates"] * b["gmUpdateAvg"] - a["updates"] * a["gmUpdateAvg"]) / du, 3),
-        "tickAvg": round((b["updates"] * b["tickAvg"] - a["updates"] * a["tickAvg"]) / du, 3),
+        "gmUpdateAvg": round(
+            (b["updates"] * b["gmUpdateAvg"] - a["updates"] * a["gmUpdateAvg"]) / du, 3
+        ),
+        "tickAvg": round(
+            (b["updates"] * b["tickAvg"] - a["updates"] * a["tickAvg"]) / du, 3
+        ),
         "spikes": b["spikes"],
         "window_updates": du,
     }
@@ -239,7 +245,6 @@ def main() -> int:
             # one sample, no toggle. Two runs (ES_ARM=on / ES_ARM=off) give the
             # canonical fresh-server-per-arm comparison.
             report["arm"] = ARM
-            arm_on = ARM == "on"
             # confirm the booted setting stuck
             st = B.telnet(["es status"], settle=1.5)
             report["es_status"] = st[-400:]
@@ -269,7 +274,10 @@ def main() -> int:
                 log(f"  delta gmUpdateAvg (ON-OFF) = {d:+.3f} ms -> {verdict}")
             else:
                 report["verdict"] = "no_apm_data"
-                log("WARN: APM bridge silent; no numeric verdict (check 7dtd-server-apm-bridge installed)")
+                log(
+                    "WARN: APM bridge silent; no numeric verdict"
+                    " (check 7dtd-server-apm-bridge installed)"
+                )
     except KeyboardInterrupt:
         code = 130
     except Exception as e:

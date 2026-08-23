@@ -23,8 +23,8 @@ help:
 	@echo "EfficientServer: Harmony optimization mod for 7 Days to Die dedicated servers"
 	@echo
 	@echo "Contributor loop (works without a game install):"
-	@echo "  make test              Every CI gate: shellcheck + script syntax +"
-	@echo "                         config harness + doc/version consistency gates"
+	@echo "  make test              Every CI gate: shellcheck + ruff +"
+	@echo "                         script syntax + config harness + doc/version"
 	@echo "  make clean             Remove dist/ and bin/obj build outputs"
 	@echo
 	@echo "Game-backed targets (need DS=/path/to/'7 Days to Die Dedicated Server',"
@@ -57,10 +57,15 @@ test:
 	@if ! command -v python3 >/dev/null 2>&1; then \
 	  echo "ERROR: make test needs python3 (config-doc, version and cfg-guard gates)." >&2; \
 	  echo "  Install python3 and rerun make test." >&2; exit 127; fi
+	@if ! command -v ruff >/dev/null 2>&1; then \
+	  echo "ERROR: make test needs ruff (lint gate for scripts/*.py, config in ruff.toml)." >&2; \
+	  echo "  Install it (e.g. pipx install ruff / uv tool install ruff) and rerun make test." >&2; exit 127; fi
 	@if ! command -v dotnet >/dev/null 2>&1; then \
 	  echo "ERROR: make test needs the .NET SDK pinned by global.json (8.0 band), but dotnet is not on PATH." >&2; \
 	  echo "  A local SDK in ~/.cache/dotnet-sdk or ~/.dotnet is picked up automatically; otherwise install the SDK and rerun make test." >&2; exit 127; fi
-	shellcheck $(wildcard $(ROOT)/scripts/*.sh)
+# -x follows sourced files so checks see through `. ./lib.sh` style sharing.
+	shellcheck -x $(wildcard $(ROOT)/scripts/*.sh)
+	ruff check $(ROOT)/scripts
 # Stdlib-only syntax gate for the scripts make test never executes
 # (validate_*.py / measure_es_onoff.py need a live server). Bytecode lands in
 # scripts/__pycache__, which is gitignored.

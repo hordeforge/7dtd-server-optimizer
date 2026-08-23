@@ -26,9 +26,9 @@ import sys
 import time
 
 from harness_common import (
-    B,
     CFG_SWAP,
     OUT_DIR,
+    B,
     ensure_server_ready,
     log,
     teardown_bots,
@@ -184,7 +184,10 @@ if __name__ == "__main__":
         print(USAGE)
         raise SystemExit(0)
     if argv:
-        print(f"validate_bloodmoon_path.py: unrecognized arguments: {' '.join(argv)}", file=sys.stderr)
+        print(
+            f"validate_bloodmoon_path.py: unrecognized arguments: {' '.join(argv)}",
+            file=sys.stderr,
+        )
         print(USAGE, file=sys.stderr)
         raise SystemExit(2)
     sys.exit(main())

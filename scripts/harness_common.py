@@ -22,8 +22,12 @@ OPT_ROOT = Path(__file__).resolve().parent.parent
 LOADGEN_ROOT = OPT_ROOT.parent / "7dtd-loadgen"
 sys.path.insert(0, str(LOADGEN_ROOT / "scripts"))
 
-import bloodmoon_profile as B  # noqa: E402
-from es_cfg_guard import ConfigSwap  # noqa: E402
+# These imports must stay below the sys.path insert (bloodmoon_profile and
+# es_cfg_guard resolve against the sibling loadgen tree); the resulting E402
+# is exempted per-file in ruff.toml instead of inline noqa noise.
+import bloodmoon_profile as B
+
+from es_cfg_guard import ConfigSwap
 
 # Canonical here is SEVENDTD_DS_DIR (same var as build/install/run and the
 # Makefile's DS=); SEVENDTD_SERVER_DIR is also accepted because that is the

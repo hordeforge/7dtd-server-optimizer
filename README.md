@@ -127,8 +127,9 @@ supported retarget: rebuild with `make build` and reinstall.
 - Host OS: the build/run/package tooling targets **Linux** hosts (Steam library
   paths, GNU coreutils, `taskset`); the packaged DLL itself is OS-neutral
   managed code loaded by the game's own runtime on any dedicated-server host
-- `make test` additionally needs `shellcheck` and Python 3 (both preinstalled on
-  GitHub runners; the SDK comes from `global.json`)
+- `make test` additionally needs `shellcheck`, `ruff` (pinned install:
+  `pipx install ruff==0.16.4`; config in `ruff.toml`), and Python 3
+  (CI installs the pinned ruff itself; the SDK comes from `global.json`)
 - Requires `0_TFP_Harmony` installed in the game's `Mods/` (the Harmony runtime
   the patches load through)
 - Game refs (Assembly-CSharp, UnityEngine.*, 0Harmony, Newtonsoft.Json,

@@ -34,4 +34,8 @@ jobs:
         with:
           cache: true
           cache-dependency-path: Source/EfficientServer.Tests/packages.lock.json
+      # Runners ship shellcheck + python3 but not ruff. Pinned to the exact
+      # version used locally so rule behavior cannot diverge between a green
+      # local run and a red remote one (and vice versa).
+      - run: pipx install ruff==0.16.4
       - run: make test

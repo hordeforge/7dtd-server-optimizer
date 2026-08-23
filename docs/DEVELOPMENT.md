@@ -52,7 +52,8 @@ Change **one group at a time**, then re-measure.
 ## Workflow
 
 ```text
-0. make test - config harness (normalize/clamps/invariants/fuzz), config-doc
+0. make test - shellcheck + ruff lint gates, config harness
+   (normalize/clamps/invariants/fuzz), config-doc
    coverage gate, version-consistency gate (ModInfo == Assembly == docs);
    also runs in CI on every PR and on pushes to main (.github/workflows/ci.yml)
 1. Baseline: 7dtd-loadgen workload + 7dtd-server-apm capture
