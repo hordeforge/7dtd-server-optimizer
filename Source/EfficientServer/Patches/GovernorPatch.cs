@@ -159,15 +159,23 @@ namespace EfficientServer.Patches
                 return; // baseline tier: the fresh object is already correct
 
             GovernorConfig cfg = ModApi.Config != null ? ModApi.Config.Governor : null;
-            if (cfg == null || !cfg.Enabled)
+            // The master switch counts too: Enabled=false promises "every patch
+            // installed but inert", and the postfix stops running under it, so a
+            // tier-2 emergency left standing would freeze every enemy rig at
+            // CullCompletely with no code path left to restore it.
+            bool governorInactive = ModApi.Config == null || !ModApi.Config.Enabled
+                || cfg == null || !cfg.Enabled;
+            if (governorInactive)
             {
-                // Governor removed/disabled mid-tier: stand the levers down on the
-                // new object; exit an active tier-2 emergency so rigs cannot stay
-                // CullCompletely with no governor left to recover them.
+                // Governor removed/disabled (or mod disabled) mid-tier: stand the
+                // levers down on the new object; exit an active tier-2 emergency
+                // so rigs cannot stay CullCompletely with no governor left to
+                // recover them.
                 if (_level >= 2)
                     AnimatorEmergency.Exit();
                 _level = 0;
-                ModApi.Log("config reloaded: governor disabled - levers left at reloaded (baseline) values");
+                ModApi.Log("config reloaded: governor inactive (disabled or master off) - "
+                    + "levers left at reloaded (baseline) values");
                 return;
             }
 
