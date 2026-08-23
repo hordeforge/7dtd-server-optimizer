@@ -18,10 +18,14 @@ standalone bridge from sibling `7dtd-apm` for managed instrumentation, and use
 sibling `7dtd-loadgen` for repeatable clients.
 
 ```bash
+make help        # every target, grouped: contributor loop vs game-backed
 make build
 make install DS="/path/to/7 Days to Die Dedicated Server"
 make run DS="/path/to/7 Days to Die Dedicated Server"
 ```
+
+Contributing: [`CONTRIBUTING.md`](CONTRIBUTING.md) (PR gates are `make test`,
+the same command CI runs).
 
 Configuration is in [`config/efficientserver.json`](config/efficientserver.json).
 Change one feature group at a time and validate it with the same loadgen

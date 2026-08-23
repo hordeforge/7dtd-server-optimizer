@@ -185,8 +185,6 @@ namespace EfficientServer
         {
             // BENCH ONLY: player damage immunity so synthetic bots survive
             // endgame hordes and the load stays an active siege (RESULTS 3q).
-            // The toggle itself is invisible in game state, so the confirmation
-            // doubles as the audit line in the server log.
             string arg = ConsoleCommandUtil.Arg(_params, 1, lower: true);
             bool changed = arg == "on" || arg == "off";
             if (arg == "on") Patches.BenchGodPatch.BenchGod = true;

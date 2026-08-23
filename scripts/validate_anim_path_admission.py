@@ -34,13 +34,15 @@ import re
 import subprocess
 import sys
 import time
-from pathlib import Path
 
-OPT_ROOT = Path(__file__).resolve().parent.parent
-LOADGEN_ROOT = OPT_ROOT.parent / "7dtd-loadgen"
-sys.path.insert(0, str(LOADGEN_ROOT / "scripts"))
-import bloodmoon_profile as B  # noqa: E402
-from es_cfg_guard import ConfigSwap  # noqa: E402
+from harness_common import (
+    B,
+    CFG_SWAP,
+    OUT_DIR,
+    ensure_server_ready,
+    log,
+    write_path_config,
+)
 
 PLAYERS = int(os.environ.get("BM_PLAYERS", "16"))
 ZOMBIES = int(os.environ.get("BM_ZOMBIES", "200"))
@@ -49,31 +51,6 @@ SAMPLE_S = float(os.environ.get("BM_HOLD_SAMPLE_S", "12"))
 PATH_CAP = int(os.environ.get("PATH_CAP", "64"))
 PATH_DROP = float(os.environ.get("PATH_DROP_FAR_SQ", "2500"))
 SKIP_START = os.environ.get("SKIP_SERVER_START", "0") == "1"
-OUT_DIR = Path(os.environ.get("VALIDATE_OUT", str(OPT_ROOT / "server" / "logs")))
-DS = Path(
-    os.environ.get(
-        "SEVENDTD_SERVER_DIR",
-        str(Path.home() / ".local/share/Steam/steamapps/common/7 Days to Die Dedicated Server"),
-    )
-)
-ES_CFG = DS / "Mods/EfficientServer/Config/efficientserver.json"
-
-
-def log(msg: str) -> None:
-    print(f"[{time.strftime('%H:%M:%S')}] {msg}", flush=True)
-
-
-# Knobs this harness toggles. The guard restores exactly these on any exit
-# path (crash-safe: a backup left by a killed run is finished or quarantined
-# by the NEXT run instead of blindly clobbering operator edits).
-CFG_SWAP = ConfigSwap(
-    ES_CFG,
-    [
-        ("Pathfinding", "MaxPathEnqueuesPerTick"),
-        ("Pathfinding", "DropPathWhenFarDistSq"),
-    ],
-    log=log,
-)
 
 
 def sample_health(label: str, seconds: float = SAMPLE_S) -> dict:
@@ -160,19 +137,6 @@ def animstate_snapshot() -> tuple[str, list[dict]]:
     return text, parse_animstate(text)
 
 
-def write_path_config(max_cap: int, drop_far: float) -> None:
-    """Rewrite EfficientServer path knobs on disk."""
-    if not ES_CFG.is_file():
-        raise FileNotFoundError(f"missing {ES_CFG}")
-    # Snapshot once per run (idempotent); restore happens in main()'s finally.
-    CFG_SWAP.begin()
-    cfg = json.loads(ES_CFG.read_text(encoding="utf-8"))
-    pf = cfg.setdefault("Pathfinding", {})
-    pf["MaxPathEnqueuesPerTick"] = max_cap
-    pf["DropPathWhenFarDistSq"] = drop_far
-    ES_CFG.write_text(json.dumps(cfg, indent=2) + "\n", encoding="utf-8")
-
-
 def fast_spawn(target: int) -> int:
     """Burst telnet spawnentity; faster than bloodmoon_profile.spawn_endgame for mid loads."""
     mix = (
@@ -199,22 +163,6 @@ def fast_spawn(target: int) -> int:
         log(f"  fast_spawn round {round_i+1}: alive={B.alive()}/{target}")
         time.sleep(1)
     return B.alive()
-
-
-def ensure_server_ready(timeout_s: float = 180.0) -> None:
-
-    # Monotonic deadline: immune to NTP steps / manual clock changes mid-wait.
-    deadline = time.monotonic() + timeout_s
-    while time.monotonic() < deadline:
-        try:
-            r = B.telnet(["version"], settle=1.0)
-            if r and "error" not in r.lower()[:40]:
-                log("telnet ready")
-                return
-        except Exception as e:
-            log(f"  wait telnet: {e}")
-        time.sleep(3)
-    raise RuntimeError("telnet not ready")
 
 
 def main() -> int:

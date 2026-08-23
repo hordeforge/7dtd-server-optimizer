@@ -14,7 +14,30 @@ ifneq ($(DOTNET_ROOT),)
   export PATH := $(DOTNET_ROOT):$(PATH)
 endif
 
-.PHONY: build build-mcs test install uninstall run clean package verify-reproducible
+# Bare `make` must orient a fresh contributor, not fail on a missing game
+# install (the old implicit default target, build, did exactly that).
+.DEFAULT_GOAL := help
+
+.PHONY: help build build-mcs test install uninstall run clean package verify-reproducible
+help:
+	@echo "EfficientServer: Harmony optimization mod for 7 Days to Die dedicated servers"
+	@echo
+	@echo "Contributor loop (works without a game install):"
+	@echo "  make test              Every CI gate: shellcheck + script syntax +"
+	@echo "                         config harness + doc/version consistency gates"
+	@echo "  make clean             Remove dist/ and bin/obj build outputs"
+	@echo
+	@echo "Game-backed targets (need DS=/path/to/'7 Days to Die Dedicated Server',"
+	@echo "default: ~/.local/share/Steam/steamapps/common/7 Days to Die Dedicated Server):"
+	@echo "  make build             Compile dist/EfficientServer against game DLLs"
+	@echo "  make build-mcs         Same, forcing the Mono mcs fallback backend"
+	@echo "  make install           Build and copy into \$$DS/Mods/EfficientServer"
+	@echo "  make uninstall         Remove \$$DS/Mods/EfficientServer"
+	@echo "  make run               Launch the dedicated server with tuned env"
+	@echo "  make package           Build and zip dist/EfficientServer-<version>.zip"
+	@echo "  make verify-reproducible   Package twice, compare hashes (repro proof)"
+	@echo
+	@echo "Docs: README.md (toolchain), CONTRIBUTING.md (PR gates), docs/DEVELOPMENT.md"
 build:
 	$(ROOT)/scripts/build.sh
 package:

@@ -32,15 +32,6 @@ namespace EfficientServer.Patches
             }
         }
 
-        // Persistent form of `settargetfps` (which does not survive restarts).
-        // Frame rate is NOT the tick rate - the full entity tick stays ~20 Hz at
-        // any fps; extra frames smooth the per-frame path (pump, slices), lowering
-        // delivery jitter. 0 = leave vanilla.
-        //
-        // Applied at GameStartDone AND re-enforced periodically (TargetFpsPatch):
-        // vanilla resets targetFrameRate back to its default some time after
-        // GameStartDone (measured: the one-shot set at ~21 s was 20 fps again
-        // minutes later), so a single apply silently loses.
         // Unity job-system worker pool size (0 = vanilla). Runtime-settable; the
         // saturated frame is partly main-thread job-fence waiting (RESULTS 3o), and
         // pool size is the one untested variable there. Logs the current count even
@@ -66,6 +57,15 @@ namespace EfficientServer.Patches
             }
         }
 
+        // Persistent form of `settargetfps` (which does not survive restarts).
+        // Frame rate is NOT the tick rate - the full entity tick stays ~20 Hz at
+        // any fps; extra frames smooth the per-frame path (pump, slices), lowering
+        // delivery jitter. 0 = leave vanilla.
+        //
+        // Applied at GameStartDone AND re-enforced periodically (TargetFpsPatch):
+        // vanilla resets targetFrameRate back to its default some time after
+        // GameStartDone (measured: the one-shot set at ~21 s was 20 fps again
+        // minutes later), so a single apply silently loses.
         public static void ApplyTargetFps()
         {
             ServerConfig cfg = ModApi.Config != null ? ModApi.Config.Server : null;

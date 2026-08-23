@@ -32,16 +32,12 @@ from __future__ import annotations
 import json
 import os
 import re
-import subprocess
 import sys
 import time
 from pathlib import Path
 
-OPT_ROOT = Path(__file__).resolve().parent.parent
-LOADGEN_ROOT = OPT_ROOT.parent / "7dtd-loadgen"
-sys.path.insert(0, str(LOADGEN_ROOT / "scripts"))
-import bloodmoon_profile as B  # noqa: E402
-from es_cfg_guard import ConfigSwap  # noqa: E402
+from es_cfg_guard import ConfigSwap
+from harness_common import B, DS, ES_CFG, OUT_DIR, ensure_server_ready, log
 
 PLAYERS = int(os.environ.get("BM_PLAYERS", "32"))
 ZOMBIES = int(os.environ.get("BM_ZOMBIES", "250"))
@@ -49,19 +45,6 @@ GAMESTAGE = int(os.environ.get("BM_GAMESTAGE", "250"))
 SAMPLE_S = float(os.environ.get("BM_HOLD_SAMPLE_S", "35"))
 SKIP_START = os.environ.get("SKIP_SERVER_START", "0") == "1"
 ARM = os.environ.get("ES_ARM", "")  # "on" or "off" = matched-arm mode (fresh server per arm)
-OUT_DIR = Path(os.environ.get("VALIDATE_OUT", str(OPT_ROOT / "server" / "logs")))
-DS = Path(
-    os.environ.get(
-        "SEVENDTD_SERVER_DIR",
-        str(Path.home() / ".local/share/Steam/steamapps/common/7 Days to Die Dedicated Server"),
-    )
-)
-ES_CFG = DS / "Mods/EfficientServer/Config/efficientserver.json"
-
-
-def log(msg: str) -> None:
-    print(f"[{time.strftime('%H:%M:%S')}] {msg}", flush=True)
-
 
 # Toggle-mode crash safety: Enabled is snapshotted before the first rewrite
 # and put back on any exit path. A backup left by a killed run is finished or
@@ -69,21 +52,6 @@ def log(msg: str) -> None:
 # Matched-arm mode never snapshots: the caller owns the config between arms.
 ES_SWAP = ConfigSwap(ES_CFG, [("Enabled",)], log=log)
 LOG_GLOB = Path(os.environ.get("SEVENDTD_LOGDIR", str(Path.home() / ".cache" / "7dtd-loadgen")))
-
-
-def ensure_server_ready(timeout_s: float = 180.0) -> None:
-    # Monotonic deadline: immune to NTP steps / manual clock changes mid-wait.
-    deadline = time.monotonic() + timeout_s
-    while time.monotonic() < deadline:
-        try:
-            r = B.telnet(["version"], settle=1.0)
-            if r and "error" not in r.lower()[:40]:
-                log("telnet ready")
-                return
-        except Exception as e:
-            log(f"  wait telnet: {e}")
-        time.sleep(3)
-    raise RuntimeError("telnet not ready")
 
 
 def latest_server_log() -> Path | None:
