@@ -315,25 +315,15 @@ namespace EfficientServer.Tests
             Check(noBom != null && noBom.Pathfinding.GraphUpdateEveryTicks == 6,
                 "UTF-8 no-BOM config loads normally");
 
-            // Fuzz: random JSON into Load never throws.
-            var rng = new Random(1234);
-            const string chars = "{}[]\":,.0123456789abcTruefalsngP_ \t\n";
-            for (int i = 0; i < 500; i++)
-            {
-                var sb = new System.Text.StringBuilder();
-                int len = rng.Next(0, 80);
-                for (int j = 0; j < len; j++) sb.Append(chars[rng.Next(chars.Length)]);
-                try
-                {
-                    var got = LoadTemp(sb.ToString());
-                    Check(got != null, "fuzz load returns non-null");
-                }
-                catch (Exception ex)
-                {
-                    Check(false, "fuzz load threw: " + ex.GetType().Name);
-                    break;
-                }
-            }
+            // Fuzz: the config file is the mod's untrusted-input surface, so two
+            // deterministic targets hammer Load + FindUnknownKeys (Fuzz.cs):
+            // structure-aware mutations of the default config reach Normalize's
+            // value paths that character soup never parses into, and garbage
+            // text covers truncation, deep nesting, bad escapes and raw bytes.
+            // Both assert the full post-Normalize invariant table, so a
+            // wrong-but-non-crashing load fails the run instead of hiding.
+            ConfigFuzz.StructureAware(Check, LoadTemp);
+            ConfigFuzz.GarbageText(Check, LoadTemp, bytes => LoadTempFile(WriteTempBytes(bytes)));
 
             // Dedicated-only gate (ShouldRunFor): disabled config never runs.
             Check(!ServerPerfConfig.ShouldRunFor(false, true, true, true), "active=false -> no run");
