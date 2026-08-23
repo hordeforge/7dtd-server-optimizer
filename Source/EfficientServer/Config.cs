@@ -354,7 +354,10 @@ namespace EfficientServer
         {
             foreach (JProperty prop in obj.Properties())
             {
-                PropertyInfo known = schema.GetProperty(prop.Name,
+                // var (not PropertyInfo): GetProperty is annotated nullable, so
+                // an explicit type fails CS8600 under the tests project's
+                // nullable context; var infers PropertyInfo? in both projects.
+                var known = schema.GetProperty(prop.Name,
                     BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
                 if (known == null)
                 {

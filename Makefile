@@ -23,6 +23,10 @@ build-mcs:
 	SEVENDTD_BUILD_BACKEND=mcs $(ROOT)/scripts/build.sh
 test:
 	shellcheck $(wildcard $(ROOT)/scripts/*.sh)
+# Stdlib-only syntax gate for the scripts make test never executes
+# (validate_*.py / measure_es_onoff.py need a live server). Bytecode lands in
+# scripts/__pycache__, which is gitignored.
+	python3 -m compileall -q $(ROOT)/scripts
 # Locked restore: fails when a PackageReference changed without regenerating
 # packages.lock.json, instead of silently floating to newer versions.
 	dotnet restore --locked-mode $(ROOT)/Source/EfficientServer.Tests

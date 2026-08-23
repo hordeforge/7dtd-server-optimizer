@@ -2,6 +2,10 @@
   <PropertyGroup>
     <TargetFramework>net48</TargetFramework>
     <LangVersion>latest</LangVersion>
+    <!-- Nullable stays off: the game API surface (Assembly-CSharp, UnityEngine)
+         is unannotated and ~34 CS8600-class findings fire tree-wide today.
+         Enable only after a dedicated null-safety pass annotates or guards
+         those sites; TreatWarningsAsErrors would otherwise block every build. -->
     <Nullable>disable</Nullable>
     <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
     <AssemblyName>EfficientServer</AssemblyName>
