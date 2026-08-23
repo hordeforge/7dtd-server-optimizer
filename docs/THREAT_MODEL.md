@@ -33,7 +33,7 @@ mod folder and the log.
 | E3 | Operator console command `es` / `efficientserver` | `Source/EfficientServer/ConsoleCmdEfficientServer.cs:19` | Subcommands: `reload`, `status`, `animoff`/`animon`, `animstate`, `rigoff`/`rigon`, `benchgod on\|off`. Reachable from the server terminal, the telnet remote console, and in-game clients the game's permission system admits to console commands |
 | E4 | P/Invoke into bundled Boehm GC library | `Source/EfficientServer/GcIncremental.cs:25`, `Source/EfficientServer/GcDiagnostics.cs:20` | `libmonobdwgc-2.0`; flips collector mode, disables/enables collection, forces collects |
 | E5 | Install/run scripts | `scripts/install.sh`, `scripts/run_server.sh`, `Makefile` (targets `install`, `uninstall`, `run`) | Copy artifacts into `<DS>/Mods/EfficientServer/`, export GC/JIT env vars, exec the server binary |
-| E6 | CI workflow | `.github/workflows/ci.yml` | Runs `make test` on push/PR |
+| E6 | CI workflow | `.github/workflows/ci.yml` | Runs `make test` on main pushes and PRs |
 
 ## Trust boundaries
 
@@ -44,7 +44,7 @@ mod folder and the log.
 | B3 | Mod to game host process (E1, E3, E4) | No boundary in a memory-safety sense: the mod shares the process, and patches rewrite game method behavior (prefix/transpiler/finalizer) |
 | B4 | Build and publish to installed server (E5) | `dist/EfficientServer/` copied verbatim into the game's `Mods/` tree |
 | B5 | Host environment to server process (E5) | Env vars consumed at process init: `GC_FREE_SPACE_DIVISOR`, `GC_NPROCS`, `MONO_ENV_OPTIONS`, optional affinity wrapper; plus `LD_LIBRARY_PATH` prepended with the server dir |
-| B6 | CI runner to repository (E6) | GitHub Actions with `permissions: contents: read` (`.github/workflows/ci.yml:4`) |
+| B6 | CI runner to repository (E6) | GitHub Actions with `permissions: contents: read` (`.github/workflows/ci.yml:10`) |
 
 ## Assets
 
@@ -121,7 +121,7 @@ mod folder and the log.
   record and verify a hash at install time (candidate for a later pass; not
   fixed here).
 - Spoofing (supply chain): CI actions are commit-pinned with a stated reason
-  (`.github/workflows/ci.yml:18`), NuGet restore is locked-mode
+  (`.github/workflows/ci.yml:24`), NuGet restore is locked-mode
   (`Makefile:28`). Dependency surface is small: Newtonsoft.Json comes from the
   game's own Managed folder for the mod; test deps are lock-pinned
   (`Source/EfficientServer.Tests/packages.lock.json`).
@@ -135,8 +135,9 @@ mod folder and the log.
 
 ### B6: CI runner to repository
 
-- Low. Read-only token (`ci.yml:4`), 15-minute timeout (`ci.yml:14`),
-  concurrency cancellation (`ci.yml:8`). No secrets are used or needed.
+- Low. Read-only token (`ci.yml:10`) that is not persisted into the runner
+  workspace (`ci.yml:29`; the gate runs no git commands), 15-minute timeout
+  (`ci.yml:20`), concurrency cancellation (`ci.yml:12`). No secrets are used or needed.
 
 ## Abuse cases (scenarios, not demonstrations)
 
@@ -171,7 +172,7 @@ mod folder and the log.
 | Fail-closed `DedicatedOnly` gate | B3 activation on wrong host type | `Config.cs:471`, `ModApi.cs:175` |
 | One-shot guards on irreversible native flips | B3 repeated/mixed GC modes | `GcIncremental.cs:35`, `GcDiagnostics.cs:45` |
 | Defensive `GC_enable()` on probe failure | B3 permanently-disabled collector | `GcDiagnostics.cs:104` |
-| Commit-pinned CI actions, read-only token | B6 supply chain | `.github/workflows/ci.yml:4,18` |
+| Commit-pinned CI actions, unpersisted read-only token | B6 supply chain | `.github/workflows/ci.yml:10,24,29` |
 | Locked-mode restore, SDK pin | B4/B6 dependency drift | `Makefile:28`, `global.json` |
 | Reproducible package build (sorted, epoch mtimes) | B4 artifact diffing | `scripts/package.sh:9` |
 | Command-execution logging kept on | B2 repudiation | `server/serverconfig.optimized.xml:49` (template default) |

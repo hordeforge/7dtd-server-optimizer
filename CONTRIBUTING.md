@@ -1,7 +1,7 @@
 # Contributing to 7dtd-optimizer
 
 The whole CI gate is one local command. If `make test` passes on your machine,
-CI will pass: it runs exactly `make test` on every push and PR
+CI will pass: it runs exactly `make test` on every PR and on pushes to main
 (`.github/workflows/ci.yml`).
 
 ## Requirements

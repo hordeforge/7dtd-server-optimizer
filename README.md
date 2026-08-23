@@ -45,7 +45,7 @@ so two builds of the same tree zip byte-identically. `make verify-reproducible`
 proves it by rebuilding from scratch at a second path and comparing hashes,
 and every package run records its toolchain in
 `dist/EfficientServer-*.buildinfo.txt`. CI runs `make test`
-on every push and PR.
+on every PR and on pushes to main.
 
 ## Measured impact (v1.17.x)
 

@@ -54,7 +54,7 @@ Change **one group at a time**, then re-measure.
 ```text
 0. make test - config harness (normalize/clamps/invariants/fuzz), config-doc
    coverage gate, version-consistency gate (ModInfo == Assembly == docs);
-   also runs in CI on every push/PR (.github/workflows/ci.yml)
+   also runs in CI on every PR and on pushes to main (.github/workflows/ci.yml)
 1. Baseline: 7dtd-loadgen workload + 7dtd-apm capture
 2. Edit one feature group (config and/or patch code)
 3. Rebuild and install against current dedicated Managed
@@ -102,7 +102,7 @@ version before tagging (`check_version.py` fails if the shipped mod version has
 no changelog entry).
 
 ```bash
-make test        # CI gate; also runs on every push/PR via .github/workflows/ci.yml
+make test        # CI gate; also runs on every PR / main push via .github/workflows/ci.yml
 make package     # builds dist/EfficientServer and zips it (needs a game install)
 gh release create v0.1.0 dist/EfficientServer-0.1.0.zip --title "EfficientServer 0.1.0" --notes "..."
 ```

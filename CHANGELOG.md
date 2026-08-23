@@ -54,6 +54,10 @@ So `EfficientServer-0.1.0.zip` logging `mod=1.17.0` is correct, not drift.
   source usage, compile-verified against both build backends); the test
   project's `Newtonsoft.Json` dependency is now hash-pinned in a committed
   `packages.lock.json` that `make test` restores in locked mode.
+- CI: the workflow now triggers on PRs and direct pushes to `main` instead of
+  every branch push, so a pushed PR branch no longer starts a duplicate run,
+  and checkout no longer persists the GitHub token into the runner workspace
+  (the test gate performs no git operations).
 
 ## [0.1.0] - 2026-08-22
 
