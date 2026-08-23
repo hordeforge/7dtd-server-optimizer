@@ -27,7 +27,7 @@ namespace EfficientServer.Patches
             }
             catch (Exception ex)
             {
-                ModApi.Log("mesh budget apply failed: " + ex.Message);
+                ModApi.Warn("mesh budget apply failed [" + ex.GetType().Name + "]: " + ex.Message);
             }
         }
     }

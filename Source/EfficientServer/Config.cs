@@ -307,7 +307,7 @@ namespace EfficientServer
                 // default, so name every ignored key at load (fail-soft per group;
                 // unknown keys are still ignored, just not silently).
                 foreach (string key in FindUnknownKeys(json))
-                    ModApi.Log("config unknown key '" + key + "' ignored (no such option; check spelling)");
+                    ModApi.Warn("config unknown key '" + key + "' ignored (no such option; check spelling)");
                 var loaded = JsonConvert.DeserializeObject<ServerPerfConfig>(json);
                 if (loaded == null) return new ServerPerfConfig();
                 if (loaded.AiLod == null) loaded.AiLod = new AiLodConfig();
@@ -328,7 +328,9 @@ namespace EfficientServer
             }
             catch (Exception ex)
             {
-                ModApi.Log("Config load failed, using defaults: " + ex.Message);
+                // Type name + message: a parse error names its JSON line in Message,
+                // and the type separates syntax errors from IO failures.
+                ModApi.Warn("Config load failed [" + ex.GetType().Name + "], using defaults: " + ex.Message);
                 return new ServerPerfConfig();
             }
         }
@@ -447,14 +449,16 @@ namespace EfficientServer
             // an unclamped fallback could re-violate the invariant Normalize enforces.
             float chosen = float.IsNaN(value) || float.IsInfinity(value) ? fallback : value;
             float normalized = Math.Max(min, Math.Min(max, chosen));
-            if (normalized != value) ModApi.Log("config corrected " + name + ": " + value + " -> " + normalized);
+            if (normalized != value)
+                ModApi.Warn("config corrected " + name + ": " + value + " -> " + normalized);
             return normalized;
         }
 
         static int IntRange(string name, int value, int min, int max)
         {
             int normalized = Math.Max(min, Math.Min(max, value));
-            if (normalized != value) ModApi.Log("config corrected " + name + ": " + value + " -> " + normalized);
+            if (normalized != value)
+                ModApi.Warn("config corrected " + name + ": " + value + " -> " + normalized);
             return normalized;
         }
 

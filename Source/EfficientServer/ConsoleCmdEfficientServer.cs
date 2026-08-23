@@ -14,7 +14,8 @@ namespace EfficientServer
     {
         public override string[] getCommands() => new[] { "efficientserver", "es" };
         public override string getDescription() =>
-            "EfficientServer: 'es reload' re-reads the config (applies live), 'es status' shows active levers";
+            "EfficientServer: 'es reload' re-reads the config (applies live), "
+            + "'es status' shows active levers plus live governor/gate counters";
 
         public override void Execute(List<string> _params, CommandSenderInfo _senderInfo)
         {
@@ -53,6 +54,7 @@ namespace EfficientServer
                     + $"envAudio={c.SkipOnDedicated.EnvironmentAudioUpdates} cloth={c.SkipOnDedicated.ClothAndJiggleBoneSimulation} "
                     + $"lightSpectrum={c.SkipOnDedicated.AmbientLightSpectrumUpdates} explosionFx={c.SkipOnDedicated.ExplosionParticles}) | "
                     + $"diagGcMegapauseProbe={c.Diagnostics.GcMegapauseTest}");
+                OutputRuntime();
             }
             else if (sub == "animoff" || sub == "animon")
             {
@@ -65,8 +67,8 @@ namespace EfficientServer
                 if (sub == "animoff")
                 {
                     Patches.AnimatorEmergency.Enter();
-                    SdtdConsole.Instance.Output(
-                        "[EfficientServer] animprobe: ENTER CullCompletely emergency "
+                    ConsoleCommandUtil.Output(
+                        "animprobe: ENTER CullCompletely emergency "
                         + $"(active={Patches.AnimatorEmergency.Active}) - read frame time, then 'es animon'");
                 }
                 else
@@ -74,8 +76,8 @@ namespace EfficientServer
                     // bare is accepted for CLI compat but culling restore ignores it.
                     bool bare = _params.Count > 1 && _params[1] == "bare";
                     Patches.AnimatorEmergency.Exit();
-                    SdtdConsole.Instance.Output(
-                        $"[EfficientServer] animprobe: EXIT emergency (bare={bare}); "
+                    ConsoleCommandUtil.Output(
+                        $"animprobe: EXIT emergency (bare={bare}); "
                         + "check 'es animstate' for dp>0 on moving zombies");
                 }
             }
@@ -136,8 +138,8 @@ namespace EfficientServer
                             _rigDisabled.Add(behaviours[b]);
                         }
                     }
-                    SdtdConsole.Instance.Output(
-                        $"[EfficientServer] rigprobe: DISABLED {_rigDisabled.Count} rig components (bench only)");
+                    ConsoleCommandUtil.Output(
+                        $"rigprobe: DISABLED {_rigDisabled.Count} rig components (bench only)");
                 }
                 else
                 {
@@ -145,18 +147,24 @@ namespace EfficientServer
                     for (int i = 0; i < _rigDisabled.Count; i++)
                         if (_rigDisabled[i] != null) { _rigDisabled[i].enabled = true; restored++; }
                     _rigDisabled.Clear();
-                    SdtdConsole.Instance.Output($"[EfficientServer] rigprobe: restored {restored} components");
+                    ConsoleCommandUtil.Output($"rigprobe: restored {restored} components");
                 }
             }
             else if (sub == "benchgod")
             {
                 // BENCH ONLY: player damage immunity so synthetic bots survive
                 // endgame hordes and the load stays an active siege (RESULTS 3q).
+                // The toggle itself is invisible in game state, so the confirmation
+                // doubles as the audit line in the server log.
                 string arg = _params.Count > 1 ? _params[1].ToLowerInvariant() : "";
+                bool changed = arg == "on" || arg == "off";
                 if (arg == "on") Patches.BenchGodPatch.BenchGod = true;
                 else if (arg == "off") Patches.BenchGodPatch.BenchGod = false;
-                SdtdConsole.Instance.Output(
-                    $"[EfficientServer] benchgod={(Patches.BenchGodPatch.BenchGod ? "ON (bench only!)" : "off")}");
+                string state = $"benchgod={(Patches.BenchGodPatch.BenchGod ? "ON (bench only!)" : "off")}";
+                // A real toggle is audited in the server log (the flag is invisible
+                // in game state); a bare `es benchgod` stays a read-only peek.
+                if (changed) ConsoleCommandUtil.Output(state);
+                else SdtdConsole.Instance.Output(ModApi.LogPrefix + state + " (use on|off)");
             }
             else
             {
@@ -167,5 +175,24 @@ namespace EfficientServer
         }
 
         static readonly List<Behaviour> _rigDisabled = new List<Behaviour>();
+
+        // Live state the config dump above cannot show: which levers are engaged
+        // at this instant, the tick EMA driving the governor/tick-guard, and how
+        // much work the silent hot-path gates have shed so far. Read-only, so it
+        // stays console-only (no log echo).
+        static void OutputRuntime()
+        {
+            SdtdConsole.Instance.Output(
+                $"[EfficientServer] runtime: modActive={ModApi.ShouldRun()} "
+                + $"governorTier={Patches.GovernorPatch.Level} tickEmaMs={Patches.GovernorPatch.EmaMs:F1} "
+                + $"animatorEmergency={Patches.AnimatorEmergency.Active} | "
+                + $"gcSafetyCollects={Patches.GcGuardPatch.SafetyCollects} "
+                + $"tickGuardShedTotal={Patches.TickGuardPatch.ShedTotal}");
+            SdtdConsole.Instance.Output(
+                "[EfficientServer] runtime: pathDroppedCap=" + Patches.PathAdmissionPatch.DroppedCapTotal
+                + " pathDroppedFar=" + Patches.PathAdmissionPatch.DroppedFarTotal
+                + " | tasksSkippedFar=" + Patches.UpdateTasksLodPatch.SkippedFarTotal
+                + " tasksStridedOff=" + Patches.UpdateTasksLodPatch.StridedOffTotal);
+        }
     }
 }

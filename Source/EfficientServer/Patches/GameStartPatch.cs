@@ -26,7 +26,9 @@ namespace EfficientServer.Patches
             }
             catch (Exception ex)
             {
-                ModApi.Log("GameStartDone handler: " + ex.Message);
+                // Full exception: this wraps the whole start-time chain, so the type
+                // and stack are what say WHICH apply step broke.
+                ModApi.Error("GameStartDone handler failed: " + ex);
             }
         }
 
@@ -58,7 +60,10 @@ namespace EfficientServer.Patches
                 Unity.Jobs.LowLevel.Unsafe.JobsUtility.JobWorkerCount = cfg.JobWorkerCount;
                 ModApi.Log($"job workers {current} -> {cfg.JobWorkerCount}");
             }
-            catch (Exception ex) { ModApi.Log("job worker set failed: " + ex.Message); }
+            catch (Exception ex)
+            {
+                ModApi.Warn("job worker set failed [" + ex.GetType().Name + "]: " + ex.Message);
+            }
         }
 
         public static void ApplyTargetFps()

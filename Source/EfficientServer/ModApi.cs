@@ -10,6 +10,9 @@ namespace EfficientServer
     public class ModApi : IModApi
     {
         public const string HarmonyId = "com.7dtd.efficientserver";
+        // Single source of the mod prefix so console echo and log lines stay
+        // greppable under one tag across all three severity channels.
+        public const string LogPrefix = "[EfficientServer] ";
         public static ServerPerfConfig Config { get; private set; } = new ServerPerfConfig();
         public static string ModPath { get; private set; } = "";
         public static bool Active { get; private set; }
@@ -64,20 +67,25 @@ namespace EfficientServer
                     else
                     {
                         missing++;
-                        Log($"MISSING TARGET: {g.Name} matched no game method (version drift?) - this optimization is INACTIVE");
+                        Warn($"MISSING TARGET: {g.Name} matched no game method (version drift?) - this optimization is INACTIVE");
                     }
                 }
-                Log($"init {(missing == 0 ? "OK" : "with " + missing + " MISSING required target(s)")}. "
-                    + $"matched methods={methods} dedicatedOnly={Config.DedicatedOnly} path={ModPath}");
+                string summary = $"init {(missing == 0 ? "OK" : "with " + missing + " MISSING required target(s)")}. "
+                    + $"matched methods={methods} dedicatedOnly={Config.DedicatedOnly} path={ModPath}";
+                if (missing == 0) Log(summary); else Warn(summary);
 
                 // Post-start setup runs via the sanctioned lifecycle hook, not a
                 // Harmony patch on StartGame (no IL match needed just for timing).
                 try { ModEvents.GameStartDone.RegisterHandler(Patches.GameStartPatch.OnGameStartDone); }
-                catch (Exception ex) { Log("ModEvents.GameStartDone register failed: " + ex.Message); }
+                catch (Exception ex)
+                {
+                    Warn("GameStartDone register failed [" + ex.GetType().Name + "]: "
+                        + ex.Message + " - start-time knobs (mesh budgets, target fps, job workers, skips) will not apply");
+                }
             }
             catch (Exception ex)
             {
-                Log("InitMod failed: " + ex);
+                Error("InitMod failed: " + ex);
             }
         }
 
@@ -152,7 +160,9 @@ namespace EfficientServer
             }
             catch (Exception ex)
             {
-                Log($"patch {t.Name} failed: {ex.Message}");
+                // Full exception, not just Message: Harmony failures name the failing
+                // IL stage in inner exceptions, and this fires once per group at init.
+                Error($"patch {t.Name} failed: {ex}");
                 return new List<MethodInfo>();
             }
         }
@@ -192,8 +202,32 @@ namespace EfficientServer
 
         public static void Log(string msg)
         {
-            try { global::Log.Out("[EfficientServer] " + msg); }
-            catch { Console.WriteLine("[EfficientServer] " + msg); }
+            Emit(global::Log.Out, msg);
+        }
+
+        // Recoverable problems an operator must notice when grepping the log for
+        // WARNING: config corrections, skipped/missing optional targets, failed
+        // applies that fell back to vanilla behavior.
+        public static void Warn(string msg)
+        {
+            Emit(global::Log.Warning, msg);
+        }
+
+        // Failures that leave a patch group INACTIVE or the mod partially broken:
+        // version drift, patch application exceptions, init aborts.
+        public static void Error(string msg)
+        {
+            Emit(global::Log.Error, msg);
+        }
+
+        // The game's Log static writes to the dedicated log file and console; if it
+        // is unavailable (very early init, odd host), fall back to stdout rather
+        // than losing the line.
+        static void Emit(Action<string> sink, string msg)
+        {
+            string line = LogPrefix + msg;
+            try { sink(line); }
+            catch { Console.WriteLine(line); }
         }
     }
 }

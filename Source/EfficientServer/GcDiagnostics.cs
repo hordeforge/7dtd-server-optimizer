@@ -74,7 +74,7 @@ namespace EfficientServer
                     ModApi.Log("GC MEGAPAUSE: +" + (int)sw.Elapsed.TotalSeconds + "s heap=" + Gb(h));
                     if (h >= SafetyCapBytes)
                     {
-                        ModApi.Log("GC MEGAPAUSE: SAFETY CAP hit (" + Gb(h) + "), collecting early");
+                        ModApi.Warn("GC MEGAPAUSE: SAFETY CAP hit (" + Gb(h) + "), collecting early");
                         aborted = true;
                         break;
                     }
@@ -105,7 +105,7 @@ namespace EfficientServer
                 // Name the type + library: DllNotFoundException (host OS ships the
                 // Boehm lib under another name) reads differently from a missing
                 // entry point, and the operator needs to know which one fired.
-                ModApi.Log("GC MEGAPAUSE failed [" + ex.GetType().Name
+                ModApi.Warn("GC MEGAPAUSE failed [" + ex.GetType().Name
                     + " via " + Lib + "]: " + ex.Message);
             }
         }

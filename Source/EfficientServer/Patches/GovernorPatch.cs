@@ -39,6 +39,12 @@ namespace EfficientServer.Patches
         static int _baseGraphEvery = -1;
         static int _baseEntityStride = -1;
 
+        // Live state for `es status` / incident response: which tier is applied
+        // RIGHT NOW (config alone cannot tell you this) and the smoothed tick
+        // interval driving it.
+        public static int Level { get { return _level; } }
+        public static double EmaMs { get { return _emaMs; } }
+
         static void Postfix()
         {
             GovernorConfig cfg = ModApi.Config != null ? ModApi.Config.Governor : null;

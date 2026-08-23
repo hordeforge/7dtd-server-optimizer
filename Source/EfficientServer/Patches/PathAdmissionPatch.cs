@@ -23,6 +23,15 @@ namespace EfficientServer.Patches
         static int _frameStamp = -1;
         static int _enqueuedThisFrame;
 
+        // Lifetime drop counters for `es status`. Both knobs are silent by design
+        // on the hot path (per-request logging would flood at blood-moon rates),
+        // so these totals are how an operator tells "cap engaged" from "cap
+        // never reached". Two longs, incremented only on the drop branch.
+        static long _droppedCapTotal;
+        static long _droppedFarTotal;
+        public static long DroppedCapTotal { get { return _droppedCapTotal; } }
+        public static long DroppedFarTotal { get { return _droppedFarTotal; } }
+
         // Return false to skip the original FindPath (drop this request).
         static bool Prefix(EntityAlive __instance)
         {
@@ -50,7 +59,10 @@ namespace EfficientServer.Patches
             }
 
             if (dropFarSq > 0f && __instance.aiClosestPlayerDistSq >= dropFarSq)
+            {
+                _droppedFarTotal++;
                 return false; // far non-alert: drop
+            }
 
             if (maxPerTick <= 0)
                 return true;
@@ -63,7 +75,10 @@ namespace EfficientServer.Patches
                 _enqueuedThisFrame = 0;
             }
             if (_enqueuedThisFrame >= maxPerTick)
+            {
+                _droppedCapTotal++;
                 return false;
+            }
             _enqueuedThisFrame++;
             return true;
         }

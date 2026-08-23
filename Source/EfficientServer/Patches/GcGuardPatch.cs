@@ -23,6 +23,12 @@ namespace EfficientServer.Patches
         static readonly MethodInfo Guard =
             AccessTools.Method(typeof(GcGuardPatch), nameof(MaybeCollect));
 
+        // Times the guard had to fire (heap crossed the ceiling). Vanilla cadence
+        // calls MaybeCollect about once per ~120 s, so both the counter and the
+        // per-fire log are bounded and cheap.
+        static int _safetyCollects;
+        public static int SafetyCollects { get { return _safetyCollects; } }
+
         static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
         {
             int swapped = 0;
@@ -59,10 +65,17 @@ namespace EfficientServer.Patches
             }
             // Skip the forced periodic collect, but keep a safety net: if the
             // managed heap has grown past the ceiling, collect anyway so a
-            // long-lived server cannot leak unbounded.
+            // long-lived server cannot leak unbounded. The collect is itself a
+            // full STW pause (the thing the guard exists to avoid), so each fire
+            // is logged with heap and ceiling: recurring lines mean the ceiling
+            // sits below the working set and must be raised.
             long ceilingMB = SafetyCeilingMB(cfg);
             if (ceilingMB > 0 && GC.GetTotalMemory(false) > ceilingMB * 1024L * 1024L)
             {
+                _safetyCollects++;
+                ModApi.Warn("gc guard safety collect fired: heap "
+                    + (GC.GetTotalMemory(false) / 1024L / 1024L) + " MB > ceiling " + ceilingMB
+                    + " MB (STW pause now; total fires " + _safetyCollects + ")");
                 GC.Collect();
             }
         }

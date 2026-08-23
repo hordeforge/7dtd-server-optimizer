@@ -30,6 +30,10 @@ namespace EfficientServer.Patches
         static int _cooldown;
         static readonly List<(float distSq, Entity entity)> Scratch = new List<(float, Entity)>();
 
+        // Live state for `es status`: current tick EMA and lifetime shed count.
+        public static double EmaMs { get { return _emaMs; } }
+        public static long ShedTotal { get; private set; }
+
         static void Postfix()
         {
             TickGuardConfig cfg = ModApi.Config != null ? ModApi.Config.TickGuard : null;
@@ -87,8 +91,9 @@ namespace EfficientServer.Patches
             int shed = Mathf.Min(cfg.ShedBatch, enemies - cfg.MinEnemiesKept);
             for (int i = 0; i < shed; i++)
                 world.RemoveEntity(Scratch[i].entity.entityId, EnumRemoveEntityReason.Despawned);
+            ShedTotal += shed;
             ModApi.Log($"TickGuard: tick EMA {_emaMs:F1}ms > {cfg.ShedAboveMs}ms - shed {shed} "
-                + $"farthest enemies ({enemies} -> {enemies - shed})");
+                + $"farthest enemies ({enemies} -> {enemies - shed}, lifetime {ShedTotal})");
             Scratch.Clear();
         }
     }

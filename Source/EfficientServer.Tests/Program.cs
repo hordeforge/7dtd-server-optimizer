@@ -1,13 +1,20 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 
-// Stub the only external symbol Config.cs touches (game-type-free), so the real
-// Config source compiles and runs under the plain .NET SDK.
+// Stub the only external symbols Config.cs touches (game-type-free), so the real
+// Config source compiles and runs under the plain .NET SDK. Warnings are recorded
+// so tests can pin which channel each config problem is reported on.
 namespace EfficientServer
 {
     internal static class ModApi
     {
+        public static readonly List<string> Warnings = new List<string>();
+
         public static void Log(string msg) { /* swallow in tests */ }
+
+        public static void Warn(string msg) { Warnings.Add(msg); }
     }
 }
 
@@ -41,6 +48,13 @@ namespace EfficientServer.Tests
             finally { File.Delete(p); }
         }
 
+        // Load with a clean warning sink so channel assertions see only this file.
+        static ServerPerfConfig LoadTempTracked(string json)
+        {
+            ModApi.Warnings.Clear();
+            return LoadTemp(json);
+        }
+
         static int Main()
         {
             // Defaults.
@@ -57,8 +71,12 @@ namespace EfficientServer.Tests
             Check(miss != null && miss.Pathfinding.GraphUpdateEveryTicks == 4, "missing file -> defaults");
 
             // Malformed JSON -> defaults, no throw.
-            var bad = LoadTemp("{ this is not json ][");
+            var bad = LoadTempTracked("{ this is not json ][");
             Check(bad != null && bad.Enabled, "malformed json -> defaults");
+            // The failure must surface on the WARNING channel (operators grep the
+            // dedicated log for WARNING/ERROR; info-level config failures vanish).
+            Check(ModApi.Warnings.Count == 1 && ModApi.Warnings[0].StartsWith("Config load failed ["),
+                "malformed json -> one WARNING naming the exception type");
 
             // Non-object value for a section key: deserialization throws ->
             // Load fails soft with full defaults.
@@ -91,16 +109,21 @@ namespace EfficientServer.Tests
                 "FindUnknownKeys: malformed json -> empty, no throw");
             Check(ServerPerfConfig.FindUnknownKeys("").Count == 0,
                 "FindUnknownKeys: empty input -> empty");
-            var typo = LoadTemp("{\"Pathfinding\":{\"GraphUpdateEveryTick\":8}}");
+            var typo = LoadTempTracked("{\"Pathfinding\":{\"GraphUpdateEveryTick\":8}}");
             Check(typo != null && typo.Pathfinding.GraphUpdateEveryTicks == 4,
                 "typo'd knob keeps default (and is logged), other fields unaffected");
+            Check(ModApi.Warnings.Any(w => w.Contains("unknown key 'Pathfinding.GraphUpdateEveryTick'")),
+                "typo'd knob -> WARNING names the dotted key");
             var caseBind = LoadTemp("{\"ailod\":{\"enabled\":false}}");
             Check(caseBind.AiLod.Enabled == false,
                 "case-variant key binds like Newtonsoft (value applied)");
 
             // Normalize: GraphUpdateEveryTicks clamps [1,200].
-            var big = LoadTemp("{\"Pathfinding\":{\"GraphUpdateEveryTicks\":1000000}}");
+            var big = LoadTempTracked("{\"Pathfinding\":{\"GraphUpdateEveryTicks\":1000000}}");
             Check(big.Pathfinding.GraphUpdateEveryTicks == 200, "GraphUpdateEveryTicks 1e6 -> 200");
+            Check(ModApi.Warnings.Any(w => w.StartsWith("config corrected Pathfinding.GraphUpdateEveryTicks")
+                && w.Contains("1000000") && w.Contains("200")),
+                "out-of-range knob -> WARNING records old and corrected value");
             var neg = LoadTemp("{\"Pathfinding\":{\"GraphUpdateEveryTicks\":-5}}");
             Check(neg.Pathfinding.GraphUpdateEveryTicks == 1, "GraphUpdateEveryTicks -5 -> 1");
 

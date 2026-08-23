@@ -49,8 +49,9 @@ namespace EfficientServer
                 // Symbol absent on some builds -> stay on the default STW collector.
                 // Name the type + library: a missing module (host OS bundles the
                 // Boehm lib under another name) is a different problem from a
-                // missing entry point, and the log must say which one fired.
-                ModApi.Log("GC incremental enable failed [" + ex.GetType().Name
+                // missing entry point, and the log must say which one fired. An
+                // opt-in lever that silently did not apply is WARNING material.
+                ModApi.Warn("GC incremental enable failed [" + ex.GetType().Name
                     + " via " + Lib + "]: " + ex.Message);
             }
         }

@@ -401,9 +401,10 @@ would wrap the millisecond product negative and kill the probe.
 
 ## Console command (`es`, v1.13.1+)
 
-`es status` prints every active lever value; `es reload` re-reads
-`efficientserver.json` and applies it LIVE (all patches read the config object per
-call - no restart needed). Diagnostics (BENCH ONLY, gameplay breaks while active):
+`es status` prints every active lever value plus a runtime line (governor tier,
+tick EMA, lifetime shed/drop counters from the silent hot-path gates); `es reload`
+re-reads `efficientserver.json` and applies it LIVE (all patches read the config
+object per call - no restart needed). Diagnostics (BENCH ONLY, gameplay breaks while active):
 `es animoff` / `es animon [bare]` toggle all enemy Animators (used to measure the
 19.9 ms animator slice; skips corpses; `bare` = enable+pump without Rebind/param
 re-push; restore is verified complete - live 2026-08-09 runs at 8p/32p/64p

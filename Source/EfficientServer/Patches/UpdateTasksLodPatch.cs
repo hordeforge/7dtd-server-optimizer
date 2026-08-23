@@ -20,6 +20,15 @@ namespace EfficientServer.Patches
     [HarmonyPatch(typeof(EntityAlive), "updateTasks")]
     public static class UpdateTasksLodPatch
     {
+        // Lifetime skip counters for `es status`: how many entity-ticks ran the
+        // despawn-only path instead of the heavy tail, split far-skip vs mid-band
+        // off-frame. Per-event logging would flood (this fires per entity per
+        // tick), so the totals are the engagement signal.
+        static long _skippedFarTotal;
+        static long _stridedOffTotal;
+        public static long SkippedFarTotal { get { return _skippedFarTotal; } }
+        public static long StridedOffTotal { get { return _stridedOffTotal; } }
+
         static bool Prefix(EntityAlive __instance)
         {
             if (!ModApi.ShouldRun()) return true;
@@ -63,6 +72,7 @@ namespace EfficientServer.Patches
             // the expensive path follow + EAI + move-helper.
             try { __instance.CheckDespawn(); }
             catch { return true; } // API drift -> let stock run rather than leak
+            if (far) _skippedFarTotal++; else _stridedOffTotal++;
             return false;
         }
     }

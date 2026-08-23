@@ -90,8 +90,12 @@ scrubbed (cmdline/exe redacted, home path replaced).
 
 - Server melting, need vanilla NOW: set `"Enabled": false` + `es reload` (all levers
   inert, no restart), or remove `Mods/EfficientServer`.
-- Governor stuck throttled: check `es status`, then the log for the engaging EMA;
-  if the load is real, that is the system working. `Governor.Enabled=false` +
-  `es reload` to force vanilla behavior.
-- Horde thinner than expected: TickGuard is shedding (log says so, with counts).
-  Disable it or raise `ShedAboveMs`.
+- Governor stuck throttled: check `es status` (the runtime line shows the current
+  tier and tick EMA directly, no log dive needed); the transitions themselves are
+  in the log. If the load is real, that is the system working. `Governor.Enabled=false`
+  + `es reload` to force vanilla behavior.
+- Horde thinner than expected: TickGuard is shedding (log says so per shed with
+  counts; `es status` shows the lifetime total).
+- Mystery ~120 s hitches: grep WARNING for "gc guard safety collect fired" - the
+  heap ceiling is below the working set and the safety net is collecting; raise
+  `Gc.SafetyCollectAboveMB`.
