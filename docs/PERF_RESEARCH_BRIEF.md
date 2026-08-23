@@ -105,7 +105,8 @@ director (arithmetic kill).
 ## 4. IL re-check of open / structural hot methods (2026-07-28)
 
 Local dumps: regenerate with
-`MONO_PATH=tools/bin mono tools/bin/DumpMethod.exe Assembly-CSharp.dll <Type> <Method>`.
+`cd ../7dtd-research/tools && ./build.sh`, then
+`MONO_PATH=bin mono bin/DumpMethod.exe Assembly-CSharp.dll <Type> <Method>`.
 
 ### 4.1 Path admission surface (still open for BM spikes)
 

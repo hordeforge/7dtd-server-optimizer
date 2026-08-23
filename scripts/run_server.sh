@@ -32,7 +32,7 @@ export LD_LIBRARY_PATH="$SRV:${LD_LIBRARY_PATH:-}"
 export MALLOC_ARENA_MAX="${MALLOC_ARENA_MAX:-2}"
 
 # Boehm GC RAM-headroom (EAC-safe, read by the GC at process init): trade RAM for
-# fewer + shorter GC pauses (GC is ~30% of aggregate CPU). See 7dtd-research/docs/runtime-tuning.md.
+# fewer + shorter GC pauses (GC is ~30% of aggregate CPU). See docs/runtime-tuning.md.
 # (env vars verified honored by this build's libmonobdwgc-2.0.so.)
 #  - FREE_SPACE_DIVISOR: keep more free heap -> collect LESS often. Heap settles at
 #    ~live_set * (1 + 1/divisor). Default 3 (~1.33x live). A/B validated: 1 (~2x live)

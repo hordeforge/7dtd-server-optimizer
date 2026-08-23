@@ -1,8 +1,16 @@
 # Network / serialization optimization plan
 
 **Hub:** [`README.md`](../README.md).  
-**Status:** research + implementation plan for the player-scale wall. Not yet
-built. Promote each lever only with APM before/after + a desync/fidelity check.
+**Status:** research + implementation plan for the player-scale wall. Two cheap
+levers from this space already SHIPPED - `Network.FastSingleTargetSend` (O(1)
+single-target recipient lookup, default on) and
+`Network.EntityDistributionEveryTicks` (whole-pass replication stride; also moved
+dynamically by the governor) - see [FEATURES.md](FEATURES.md) / [CONFIG.md](CONFIG.md).
+The structural levers below (L1 serialize-once - note stock RE later showed the
+build layer already serializes once, see PERF_RESEARCH_BRIEF refutations; L2
+spatial grid, L3 interest LOD bands, L4 round-robin budget, L5 per-player caps)
+are NOT yet built. Promote each
+lever only with APM before/after + a desync/fidelity check.
 
 **Owns:** the detailed attack plan for `NetEntityDistribution` / `ConnectionManager`
 serialization cost. Graded summary lives in

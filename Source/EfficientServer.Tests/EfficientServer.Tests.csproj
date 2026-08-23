@@ -10,6 +10,9 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net8.0</TargetFramework>
+    <!-- Harness only: run on whatever newer runtime the host has (e.g. net10-only
+         boxes) instead of failing with a missing-framework error in `make test`. -->
+    <RollForward>LatestMajor</RollForward>
     <!-- Nullable on: the compiled subset (Config.cs, GovernorTiers.cs, this
          project) passes clean. The main net48 project keeps it off until the
          game-API interop sites are annotated; see EfficientServer.csproj. -->
