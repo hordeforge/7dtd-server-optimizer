@@ -170,14 +170,6 @@ entity fit `session_20260717_{224604,225502,231311}_pid2415896`. Scaling JSON:
 how-to lives in the repo-root `RUNBOOK.md`; graded candidates in
 `7dtd-server-optimizer/docs/OPTIMIZATION_CANDIDATES.md` §4b/§4d.
 
-## 6. See also
-
-| Doc | Why |
-|---|---|
-| [`loop.md`](../../7dtd-engine-research/docs/loop.md) | Static frame/tick map; `AstarManager.UpdateGraphs` peer (§12) |
-| [`network.md`](../../7dtd-engine-research/docs/network.md) | Player-axis send path (`updatePlayerList`, `PooledBinaryWriter`) |
-| [`entity-ai.md`](../../7dtd-engine-research/docs/entity-ai.md) | Entity-axis tick / AI onion behind the linear cost |
-| [`runtime-tuning.md`](runtime-tuning.md) | GC is downstream of the allocation ranked in §4b |
 ## Related docs
 
 | Doc | Role |
@@ -188,12 +180,15 @@ how-to lives in the repo-root `RUNBOOK.md`; graded candidates in
 | [SCALE_1000x10000.md](SCALE_1000x10000.md) | Extreme scale extrapolation |
 | [algorithms.md](algorithms.md) | Hot-subsystem algorithms |
 | [bottlenecks.md](bottlenecks.md) | Ranked bottleneck catalog |
-| [loop.md](../../7dtd-engine-research/docs/loop.md) | Static IL map |
-| [network.md](../../7dtd-engine-research/docs/network.md) | Net packages |
+| [loop.md](../../7dtd-engine-research/docs/loop.md) | Static frame/tick map; `AstarManager.UpdateGraphs` peer (§12) |
+| [network.md](../../7dtd-engine-research/docs/network.md) | Player-axis send path (`updatePlayerList`, `PooledBinaryWriter`) |
+| [entity-ai.md](../../7dtd-engine-research/docs/entity-ai.md) | Entity-axis tick / AI onion behind the linear cost |
 | [HOST_TUNING.md](HOST_TUNING.md) | Host topology |
 | [LOAD_PROFILE.md](../../7dtd-server-apm/docs/LOAD_PROFILE.md) | Canonical workload |
+| [runtime-tuning.md](runtime-tuning.md) | GC is downstream of the allocation ranked in §4b |
 
 ## Changelog
 
+- **2026-08-24:** Merged the duplicate "See also" table into Related docs (loop/network were listed in both).
 - **2026-08-08:** Stale `il/*-v3.0.1/` dump paths updated to current `*-v3.1.0/` dirs (gaps, loop-complete, dedi-complete).
 - **2026-07-19:** Related docs table.

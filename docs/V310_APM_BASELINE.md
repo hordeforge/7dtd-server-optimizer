@@ -110,7 +110,7 @@ RE_WORLD_NAME=Navezgane RE_SERVER_MAX_PLAYERS=32 RE_MAX_ZOMBIES=128 \
   bash 7dtd-loadgen/scripts/start_dedicated_prefab.sh
 
 export SEVENDTD_TELNET_PASSWORD=retest DOTNET_ROOT=$HOME/.cache/dotnet-sdk
-cd 7dtd-server-container-apm
+cd 7dtd-server-apm
 uv run 7dtd-server-apm scenario run --clients 16 --actions 4000 --seconds 90 --warmup 45 \
   --preset forensic --seed 20240802 \
   --bot-mix 'traverse:30,wander:25,combat:30,bait:15' \

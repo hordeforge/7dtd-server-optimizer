@@ -16,7 +16,7 @@ evidence ([RESULTS](RESULTS.md)).
 ## 1. Install
 
 ```bash
-cd 7dtd-server-container-optimizer
+cd 7dtd-server-optimizer
 make build
 make install DS="/path/to/7 Days to Die Dedicated Server"     # EfficientServer
 cd ../7dtd-server-apm

@@ -18,7 +18,7 @@ CI will pass: it runs exactly `make test` on every PR and on pushes to main
 ## First run
 
 ```bash
-git clone <this repo> && cd 7dtd-server-container-optimizer
+git clone <this repo> && cd 7dtd-server-optimizer
 make test        # ~2s; needs network once for the pinned NuGet restore
 ```
 
