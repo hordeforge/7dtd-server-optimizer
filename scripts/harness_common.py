@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -85,3 +86,30 @@ def write_report(prefix: str, report: dict) -> Path:
     out.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     log(f"report -> {out}")
     return out
+
+
+def teardown_bots(bots) -> None:
+    """Stop the loadgen bot cohort on every exit path.
+
+    A cohort left running keeps loading the server (and the host) until its
+    own wall clock expires (LOADGEN_TIMEOUT is up to an hour), poisoning any
+    run that follows; Ctrl-C and tool-timeout kills must tear down exactly
+    like a clean end. Kick server-side first so connections drop even if the
+    process misses the signal, then terminate (escalating to kill) the held
+    process, then sweep stragglers orphaned by earlier killed runs.
+    """
+    try:
+        B.telnet(["kickall", "kick all"], settle=0.5)
+    except Exception:
+        pass
+    if bots is not None:
+        try:
+            bots.terminate()
+            try:
+                bots.wait(timeout=15)
+            except subprocess.TimeoutExpired:
+                bots.kill()
+        except Exception:
+            pass
+    # Bracketed [n] so the pattern cannot match its own pkill command line.
+    subprocess.run(["pkill", "-9", "-f", "net8.0/7dtd-loadge[n]"], check=False)

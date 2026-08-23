@@ -31,6 +31,7 @@ from harness_common import (
     OUT_DIR,
     ensure_server_ready,
     log,
+    teardown_bots,
     write_path_config,
     write_report,
 )
@@ -92,6 +93,7 @@ def main() -> int:
         "phases": {},
         "verdicts": {},
     }
+    bots = None
     try:
         # Snapshot before anything can mutate the installed config; on any
         # exit path (including a kill mid-run, recovered by the next run)
@@ -101,7 +103,7 @@ def main() -> int:
             B.start_server()
         ensure_server_ready()
 
-        _, joined = B.join_ramped(PLAYERS)
+        bots, joined = B.join_ramped(PLAYERS)
         report["joined"] = joined
         if joined < max(1, int(PLAYERS * 0.5)):
             log(f"FAIL: only {joined}/{PLAYERS} joined")
@@ -160,6 +162,7 @@ def main() -> int:
         return 4
     finally:
         CFG_SWAP.restore()
+        teardown_bots(bots)
         write_report("bloodmoon_path", report)
     return 0
 

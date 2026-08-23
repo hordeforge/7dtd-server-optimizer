@@ -37,7 +37,16 @@ import time
 from pathlib import Path
 
 from es_cfg_guard import ConfigSwap
-from harness_common import B, DS, ES_CFG, OUT_DIR, ensure_server_ready, log, write_report
+from harness_common import (
+    B,
+    DS,
+    ES_CFG,
+    OUT_DIR,
+    ensure_server_ready,
+    log,
+    teardown_bots,
+    write_report,
+)
 
 PLAYERS = int(os.environ.get("BM_PLAYERS", "32"))
 ZOMBIES = int(os.environ.get("BM_ZOMBIES", "250"))
@@ -178,6 +187,7 @@ def main() -> int:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     B.PLAYERS, B.ZOMBIES, B.GAMESTAGE = PLAYERS, ZOMBIES, GAMESTAGE
     report = {"players": PLAYERS, "zombies": ZOMBIES, "gamestage": GAMESTAGE, "phases": {}}
+    bots = None
     code = 0
     try:
         # Toggle mode: snapshot Enabled before anything rewrites it. Arm mode
@@ -198,7 +208,7 @@ def main() -> int:
             return 2
         report["server_log"] = str(logf)
 
-        _, joined = B.join_ramped(PLAYERS)
+        bots, joined = B.join_ramped(PLAYERS)
         report["joined"] = joined
         if joined < max(1, int(PLAYERS * 0.5)):
             log(f"FAIL: only {joined}/{PLAYERS} joined")
@@ -265,6 +275,7 @@ def main() -> int:
             except Exception:
                 pass
             report["restored"] = True
+        teardown_bots(bots)
         write_report("es_onoff", report)
     return code
 

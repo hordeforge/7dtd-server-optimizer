@@ -41,6 +41,7 @@ from harness_common import (
     OUT_DIR,
     ensure_server_ready,
     log,
+    teardown_bots,
     write_path_config,
     write_report,
 )
@@ -335,21 +336,10 @@ def main() -> int:
     finally:
         try:
             CFG_SWAP.restore()
-            B.telnet(["es reload", "es animon", "kickall"], settle=1.0)
+            B.telnet(["es reload", "es animon"], settle=1.0)
         except Exception:
             pass
-        if bots is not None:
-            try:
-                bots.terminate()
-                bots.wait(timeout=15)
-            except Exception:
-                try:
-                    bots.kill()
-                except Exception:
-                    pass
-        subprocess.run(
-            ["pkill", "-9", "-f", "net8.0/7dtd-loadge[n]"], check=False
-        )
+        teardown_bots(bots)
         # Default: leave dedicated running so multi-phase/tool-timeout runs can resume.
         # Set VALIDATE_KILL_SERVER=1 to tear down.
         if os.environ.get("VALIDATE_KILL_SERVER", "0") == "1":
