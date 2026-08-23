@@ -1,6 +1,7 @@
 dist/
 **/bin/
 **/obj/
+TestResults/
 *.log
 # Local dedi launch drop (not package source)
 /server/

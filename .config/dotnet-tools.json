@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "isRoot": true,
+  "tools": {
+    "dotnet-coverage": {
+      "version": "17.14.1",
+      "commands": ["dotnet-coverage"]
+    }
+  }
+}

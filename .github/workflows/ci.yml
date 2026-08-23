@@ -39,3 +39,37 @@ jobs:
       # local run and a red remote one (and vice versa).
       - run: pipx install ruff==0.16.4
       - run: make test
+
+  coverage-badge:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: optimizer
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          cache: true
+          cache-dependency-path: Source/EfficientServer.Tests/packages.lock.json
+      - run: pipx install ruff==0.16.4
+      - run: make coverage
+      - run: python3 scripts/coverage_badge.py TestResults/coverage.cobertura.xml "$RUNNER_TEMP/coverage.svg"
+      - name: Publish the badge to the badges branch
+        run: |
+          set -euo pipefail
+          url="https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          if git ls-remote --exit-code --heads origin badges >/dev/null 2>&1; then
+            git clone --depth 1 --branch badges "$url" badge-repo
+          else
+            git init -q -b badges badge-repo
+          fi
+          cp "$RUNNER_TEMP/coverage.svg" badge-repo/
+          cd badge-repo
+          git remote add origin "$url"
+          git config user.name "hordeforge-ci"
+          git config user.email "ci@hordeforge.noreply.github.com"
+          git add coverage.svg
+          git diff --cached --quiet || git commit -m "update coverage badge"
+          git push origin badges

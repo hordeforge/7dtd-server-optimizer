@@ -18,7 +18,7 @@ endif
 # install (the old implicit default target, build, did exactly that).
 .DEFAULT_GOAL := help
 
-.PHONY: help build build-mcs test install uninstall run clean package verify-reproducible
+.PHONY: help build build-mcs test coverage install uninstall run clean package verify-reproducible
 help:
 	@echo "EfficientServer: Harmony optimization mod for 7 Days to Die dedicated servers"
 	@echo
@@ -78,6 +78,14 @@ test:
 	python3 $(ROOT)/scripts/check_version.py
 	python3 $(ROOT)/scripts/es_cfg_guard.py --selftest
 	python3 $(ROOT)/scripts/gen_sbom.py --selftest
+
+# Line coverage of the unit suite via dotnet-coverage. Writes
+# TestResults/coverage.cobertura.xml; CI renders it into the README badge
+# with scripts/coverage_badge.py.
+coverage:
+	dotnet tool restore
+	mkdir -p "$(ROOT)/TestResults"
+	dotnet-coverage collect --format cobertura -o "$(ROOT)/TestResults/coverage.cobertura.xml" -- dotnet run --project "$(ROOT)/Source/EfficientServer.Tests" -c Release --no-restore
 install:
 	$(ROOT)/scripts/install.sh
 # $(SEVENDTD_DS_DIR), not $(DS): an exported SEVENDTD_DS_DIR overrides ?=, so
