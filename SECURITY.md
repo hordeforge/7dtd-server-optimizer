@@ -6,9 +6,10 @@ report those to their respective maintainers (The Fun Pimps for the game).
 
 ## Supported versions
 
-Security-relevant fixes are made against the latest tagged release
-(1.17.x at this writing; see `Source/EfficientServer/ModInfo.xml`) and land on
-`main`. Older releases receive no backports.
+Security-relevant fixes are made for the current release version stated in
+`Source/EfficientServer/ModInfo.xml` (1.17.x at this writing; it is
+authoritative, git tags lag it) and land on `main`. Older releases receive no
+backports.
 
 ## Reporting
 
