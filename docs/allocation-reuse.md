@@ -6,7 +6,7 @@ the Boehm "use more RAM, collect less" knobs.
 single-threaded 20 TPS. Host has **128 GB RAM** - memory is not the constraint, GC
 pause is. **Hub:** [`INDEX.md`](INDEX.md). **Pairs with:** process-level GC knobs
 [`runtime-tuning.md`](runtime-tuning.md); concrete optimizer levers
-[`../../7dtd-optimizer/docs/ALLOCATION_UPSTREAM.md`](ALLOCATION_UPSTREAM.md).
+[`../../7dtd-server-optimizer/docs/ALLOCATION_UPSTREAM.md`](ALLOCATION_UPSTREAM.md).
 
 ---
 

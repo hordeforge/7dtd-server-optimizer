@@ -20,8 +20,8 @@ EfficientServer today: tighter AI LOD, distant task skip, dedicated presentation
 | [`SIM_PARALLELISM.md`](SIM_PARALLELISM.md) | Extract sim off main, threading policy, hot-path catalog, Amdahl |
 | [`SCALE_1000x10000.md`](SCALE_1000x10000.md) | 1k×10k data structures / single-host fantasy |
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | Stock frame RE summary |
-| [`../../7dtd-research/docs/loop.md`](../../7dtd-research/docs/loop.md) | Full dedicated loop RE map (evidence) |
-| [`../../7dtd-research/oss-tools/NOTES.md`](../../7dtd-research/oss-tools/NOTES.md) | IceCoffee / ServerTools / ecosystem |
+| [`../../7dtd-engine-research/docs/loop.md`](../../7dtd-engine-research/docs/loop.md) | Full dedicated loop RE map (evidence) |
+| [`../../7dtd-engine-research/oss-tools/NOTES.md`](../../7dtd-engine-research/oss-tools/NOTES.md) | IceCoffee / ServerTools / ecosystem |
 
 ---
 
@@ -55,7 +55,7 @@ Stock already moves **pathfinding** to `PathFinderThread` / A* workers and **sli
 
 ### Ecosystem evidence (open source)
 
-Public mods rarely ship validated parallel AI. The open IceCoffee ServerKit tree has a full `PerformanceTuning/` folder that is **entirely commented out**: concurrent `PathFinderThread` subclass with unbounded `Task.Run` per path, `Parallel.ForEach` over `EAITaskList` and `ConnectionManager.SendPackage`, async player save, off-thread block packages. Live optim-adjacent code there is **less work** (falling block → air, crude zombie cap), not more threads. NAIWAZI markets entity threads / gateway split in closed binaries we did not measure. See [`../../7dtd-research/oss-tools/NOTES.md`](../../7dtd-research/oss-tools/NOTES.md).
+Public mods rarely ship validated parallel AI. The open IceCoffee ServerKit tree has a full `PerformanceTuning/` folder that is **entirely commented out**: concurrent `PathFinderThread` subclass with unbounded `Task.Run` per path, `Parallel.ForEach` over `EAITaskList` and `ConnectionManager.SendPackage`, async player save, off-thread block packages. Live optim-adjacent code there is **less work** (falling block → air, crude zombie cap), not more threads. NAIWAZI markets entity threads / gateway split in closed binaries we did not measure. See [`../../7dtd-engine-research/oss-tools/NOTES.md`](../../7dtd-engine-research/oss-tools/NOTES.md).
 
 **Reading:** the community keeps rediscovering “parallel the hot path,” then abandons it in-tree or sells it closed. That reinforces **admission + LOD first**, threads only with fixed pools, safe commit, and APM proof.
 
@@ -228,7 +228,7 @@ Full grades: [`OPTIMIZATION_CANDIDATES.md`](OPTIMIZATION_CANDIDATES.md).
 Only promote after APM shows the bottleneck under a fixed loadgen scenario.
 
 **Authoritative graded inventory:** [`OPTIMIZATION_CANDIDATES.md`](OPTIMIZATION_CANDIDATES.md).
-Loop RE evidence: [`../../7dtd-research/docs/loop.md`](../../7dtd-research/docs/loop.md).
+Loop RE evidence: [`../../7dtd-engine-research/docs/loop.md`](../../7dtd-engine-research/docs/loop.md).
 
 ### 5.1 Near-term (Grade A from RE)
 
@@ -316,18 +316,18 @@ Is the bottleneck a content mod TE/NPC pack?
 - Extreme scale data structures (1k players / 10k zombies): [`SCALE_1000x10000.md`](SCALE_1000x10000.md)
 - Extract sim / threading policy / hot-path catalog: [`SIM_PARALLELISM.md`](SIM_PARALLELISM.md) (§5-7)
 - Stock frame RE: [`ARCHITECTURE.md`](ARCHITECTURE.md)
-- Dedicated loop RE map: [`../../7dtd-research/docs/loop.md`](../../7dtd-research/docs/loop.md)
-- NAIWAZI ServerKit reconstruction (gateway split, free AC/Bot RE): [`../../7dtd-research/oss-tools/naiwazi.md`](../../7dtd-research/oss-tools/naiwazi.md)
-- ServerTools (dmustanger) admin suite, optim-relevant bits: [`../../7dtd-research/oss-tools/servertools.md`](../../7dtd-research/oss-tools/servertools.md)
-- Open-source tools survey (IceCoffee, SphereII, CSMM, MVirus, OCB, Allocs, …): [`../../7dtd-research/oss-tools/NOTES.md`](../../7dtd-research/oss-tools/NOTES.md)
+- Dedicated loop RE map: [`../../7dtd-engine-research/docs/loop.md`](../../7dtd-engine-research/docs/loop.md)
+- NAIWAZI ServerKit reconstruction (gateway split, free AC/Bot RE): [`../../7dtd-engine-research/oss-tools/naiwazi.md`](../../7dtd-engine-research/oss-tools/naiwazi.md)
+- ServerTools (dmustanger) admin suite, optim-relevant bits: [`../../7dtd-engine-research/oss-tools/servertools.md`](../../7dtd-engine-research/oss-tools/servertools.md)
+- Open-source tools survey (IceCoffee, SphereII, CSMM, MVirus, OCB, Allocs, …): [`../../7dtd-engine-research/oss-tools/NOTES.md`](../../7dtd-engine-research/oss-tools/NOTES.md)
 
 ## Changelog
 
-- **2026-07-16:** Optim candidates canonical file is `OPTIMIZATION_CANDIDATES.md` in this project (not under 7dtd-research/il).
+- **2026-07-16:** Optim candidates canonical file is `OPTIMIZATION_CANDIDATES.md` in this project (not under 7dtd-engine-research/il).
 - **2026-07-16:** Deeper RE: path drain ≤8/slice, combat FindPath×3, MoveHelper dig/jump, Vulture 1344; link SYNTHESIS.
 - **2026-07-16:** Merged opt-scan RE: path always-enqueue, MoveHelper 1236, SpawnUpdate 441, net entry 509, deco/splash, candidate order §5.
 - **2026-07-16:** Hijack-gmUpdate conductor hybrid (§4.8, rejects); details in SIM §5.6.1.
 - **2026-07-16:** Doc ownership map; §4.8 extract-sim rows; §4.9 hot-path summary; rejects for Harmony sim extraction / sim thread pool; related links to SIM §5-7.
 - **2026-07-16:** Merged OSS survey lessons into §2 (ecosystem evidence), lever catalog (§4.1-4.8), candidates + measurement protocol (§5), decision rules (§6), rejects (§7).
-- **2026-07-16:** Linked OSS tools survey notes under `7dtd-research/oss-tools/NOTES.md`.
+- **2026-07-16:** Linked OSS tools survey notes under `7dtd-engine-research/oss-tools/NOTES.md`.
 - **2026-07-16:** Initial idea map: threading, io_uring, lever catalog, near-term candidates, rejects.

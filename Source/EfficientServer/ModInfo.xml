@@ -3,10 +3,8 @@
 	<Name value="EfficientServer" />
 	<DisplayName value="Efficient Dedicated Server" />
 	<Description value="Reviewed, configurable performance optimizations for dedicated servers." />
-	<Author value="7dtd" />
+	<Author value="HordeForge" />
 	<Version value="1.17.0" />
-
-
-	<Website value="" />
+	<Website value="https://github.com/hordeforge/7dtd-server-optimizer" />
 	<SkipWithAntiCheat value="true" />
 </xml>

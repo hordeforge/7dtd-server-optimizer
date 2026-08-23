@@ -2,13 +2,13 @@
 
 **Owns:** live APM scaling measurements (complement to static IL map).  
 **Not:** host CCD/NUMA ops ([HOST_TUNING](HOST_TUNING.md)), product RealEarth status.  
-**Loop/net context:** [`loop.md`](../../7dtd-research/docs/loop.md), [`network.md`](../../7dtd-research/docs/network.md).  
-**Ceiling map (static):** [`engine-limitations.md`](../../7dtd-research/docs/engine-limitations.md).  
+**Loop/net context:** [`loop.md`](../../7dtd-engine-research/docs/loop.md), [`network.md`](../../7dtd-engine-research/docs/network.md).  
+**Ceiling map (static):** [`engine-limitations.md`](../../7dtd-engine-research/docs/engine-limitations.md).  
 **Hub:** [`INDEX.md`](INDEX.md).
 
-Empirical complement to the static IL map ([`loop.md`](../../7dtd-research/docs/loop.md), [`network.md`](../../7dtd-research/docs/network.md)).  
+Empirical complement to the static IL map ([`loop.md`](../../7dtd-engine-research/docs/loop.md), [`network.md`](../../7dtd-engine-research/docs/network.md)).  
 IL surfaces named below are documented under `research/il/gaps-v3.1.0/`, `research/il/loop-complete-v3.1.0/` (historical `gmUpdate-v3.0.1` name), `research/il/dedi-complete-v3.1.0/` (e.g. `ConnectionManager.Update` IL≈215, `NetEntityDistribution.OnUpdateEntities` IL=322).  
-All numbers from live `7dtd-apm` captures against the V3.0.1 dedicated server with the Harmony telemetry bridge
+All numbers from live `7dtd-server-apm` captures against the V3.0.1 dedicated server with the Harmony telemetry bridge
 (DeepMode on), driven by `7dtd-loadgen` bots. Dates 2026-07-17/18.
 
 ## 1. Two scaling axes, two different walls
@@ -108,7 +108,7 @@ error**, it sent a chunk the client can't parse. Observed concretely with the
 **RealEarth** mod (expands chunk Y-columns: `ResolveTerrainBlocks`,
 `chunkEarthOriginX`) on the client vs a vanilla server. Takeaway: `Chunk.read`'s
 wire format is coupled to any mod that touches terrain/chunk serialization; a
-mod that changes it must ship on both ends. The `7dtd-apm-bridge` mod is
+mod that changes it must ship on both ends. The `7dtd-server-apm-bridge` mod is
 timing-only and does **not** alter serialization, so it is client-safe.
 
 ## 4. Instrumentation caveat: `NetConnectionSimple.taskSerialize`
@@ -154,7 +154,7 @@ Rank the site by **total bytes** and attribute to the first game frame under the
   snapshot records `players=0`. Prefer using already-captured sessions at
   distinct player counts. Connect-rate at scale: 250 concurrent joins reached
   only ~146 on this host.
-- **Entity ladder** (`7dtd-apm/plans/scale_ladder.py`): hold a small fixed bot
+- **Entity ladder** (`7dtd-server-apm/plans/scale_ladder.py`): hold a small fixed bot
   cohort (~16, `--no-spawn`) as observers, ramp zombies via telnet
   `spawnscouts` + `spawnentity` near each bot. Needs a **fresh world save**
   (accumulated ghosts / spawn-drift on a hammered save break spawning). Zombie
@@ -166,17 +166,17 @@ Rank the site by **total bytes** and attribute to the first game frame under the
 
 Source sessions: player fit `session_20260717_{022851,015855,072731,081439,030120}`;
 entity fit `session_20260717_{224604,225502,231311}_pid2415896`. Scaling JSON:
-`~/.local/share/7dtd-apm/{ladder_scaling,zladder_scaling}.json`. Operational
+`~/.local/share/7dtd-server-apm/{ladder_scaling,zladder_scaling}.json`. Operational
 how-to lives in the repo-root `RUNBOOK.md`; graded candidates in
-`7dtd-optimizer/docs/OPTIMIZATION_CANDIDATES.md` §4b/§4d.
+`7dtd-server-optimizer/docs/OPTIMIZATION_CANDIDATES.md` §4b/§4d.
 
 ## 6. See also
 
 | Doc | Why |
 |---|---|
-| [`loop.md`](../../7dtd-research/docs/loop.md) | Static frame/tick map; `AstarManager.UpdateGraphs` peer (§12) |
-| [`network.md`](../../7dtd-research/docs/network.md) | Player-axis send path (`updatePlayerList`, `PooledBinaryWriter`) |
-| [`entity-ai.md`](../../7dtd-research/docs/entity-ai.md) | Entity-axis tick / AI onion behind the linear cost |
+| [`loop.md`](../../7dtd-engine-research/docs/loop.md) | Static frame/tick map; `AstarManager.UpdateGraphs` peer (§12) |
+| [`network.md`](../../7dtd-engine-research/docs/network.md) | Player-axis send path (`updatePlayerList`, `PooledBinaryWriter`) |
+| [`entity-ai.md`](../../7dtd-engine-research/docs/entity-ai.md) | Entity-axis tick / AI onion behind the linear cost |
 | [`runtime-tuning.md`](runtime-tuning.md) | GC is downstream of the allocation ranked in §4b |
 ## Related docs
 
@@ -188,10 +188,10 @@ how-to lives in the repo-root `RUNBOOK.md`; graded candidates in
 | [SCALE_1000x10000.md](SCALE_1000x10000.md) | Extreme scale extrapolation |
 | [algorithms.md](algorithms.md) | Hot-subsystem algorithms |
 | [bottlenecks.md](bottlenecks.md) | Ranked bottleneck catalog |
-| [loop.md](../../7dtd-research/docs/loop.md) | Static IL map |
-| [network.md](../../7dtd-research/docs/network.md) | Net packages |
+| [loop.md](../../7dtd-engine-research/docs/loop.md) | Static IL map |
+| [network.md](../../7dtd-engine-research/docs/network.md) | Net packages |
 | [HOST_TUNING.md](HOST_TUNING.md) | Host topology |
-| [LOAD_PROFILE.md](../../7dtd-apm/docs/LOAD_PROFILE.md) | Canonical workload |
+| [LOAD_PROFILE.md](../../7dtd-server-apm/docs/LOAD_PROFILE.md) | Canonical workload |
 
 ## Changelog
 

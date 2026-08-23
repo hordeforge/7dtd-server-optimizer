@@ -1,4 +1,4 @@
-# Contributing to 7dtd-optimizer
+# Contributing to 7dtd-server-optimizer
 
 The whole CI gate is one local command. If `make test` passes on your machine,
 CI will pass: it runs exactly `make test` on every PR and on pushes to main
@@ -18,7 +18,7 @@ CI will pass: it runs exactly `make test` on every PR and on pushes to main
 ## First run
 
 ```bash
-git clone <this repo> && cd 7dtd-optimizer
+git clone <this repo> && cd 7dtd-server-container-optimizer
 make test        # ~2s; needs network once for the pinned NuGet restore
 ```
 
@@ -70,5 +70,5 @@ acceptance (`docs/FEATURES.md` fidelity checks).
 | `config/efficientserver.json` | Shipped default config |
 | `docs/DEVELOPMENT.md` | Full workflow, env vars, release process |
 
-Stock-game research belongs in the sibling `7dtd-research` repo, not here
+Stock-game research belongs in the sibling `7dtd-engine-research` repo, not here
 (see `AGENTS.md`).

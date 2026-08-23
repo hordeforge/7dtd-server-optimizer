@@ -2,7 +2,7 @@
 
 **Hub:** [`README.md`](../README.md).  
 **Owns:** shipped EfficientServer feature groups and validation notes.  
-**Not:** host topology ([HOST_TUNING](HOST_TUNING.md)), APM evidence ([../../7dtd-apm/docs/APM.md](../../7dtd-apm/docs/APM.md)), candidate backlog ([OPTIMIZATION_CANDIDATES](OPTIMIZATION_CANDIDATES.md)).  
+**Not:** host topology ([HOST_TUNING](HOST_TUNING.md)), APM evidence ([../../7dtd-server-apm/docs/APM.md](../../7dtd-server-apm/docs/APM.md)), candidate backlog ([OPTIMIZATION_CANDIDATES](OPTIMIZATION_CANDIDATES.md)).  
 **Dev process:** [DEVELOPMENT](DEVELOPMENT.md).
 
 ## AI level of detail
@@ -406,7 +406,7 @@ changes no wire/save bytes**, so a vanilla client connects and nothing desyncs;
 the server simply runs without EAC, as any code mod does. Only XML-only mods run
 under EAC.
 
-Instrumentation is supplied by `7dtd-apm`; workloads are supplied by
+Instrumentation is supplied by `7dtd-server-apm`; workloads are supplied by
 `7dtd-loadgen`. EfficientServer deliberately has no console profiler or load
 generation commands. Development workflow: [`DEVELOPMENT.md`](DEVELOPMENT.md).
 General modding rules: [`../../MODDING_BEST_PRACTICES.md`](../../MODDING_BEST_PRACTICES.md).
@@ -419,8 +419,8 @@ General modding rules: [`../../MODDING_BEST_PRACTICES.md`](../../MODDING_BEST_PR
 | [HOST_TUNING.md](HOST_TUNING.md) | Host topology (not Harmony) |
 | [SIM_PARALLELISM.md](SIM_PARALLELISM.md) | Sim threading / extract-off-main |
 | [OPTIMIZATION_CANDIDATES.md](OPTIMIZATION_CANDIDATES.md) | Evidence backlog |
-| [loop.md](../../7dtd-research/docs/loop.md) | Generic frame map |
-| [APM.md](../../7dtd-apm/docs/APM.md) | Evidence |
+| [loop.md](../../7dtd-engine-research/docs/loop.md) | Generic frame map |
+| [APM.md](../../7dtd-server-apm/docs/APM.md) | Evidence |
 
 ## Path admission (v1.17.0)
 

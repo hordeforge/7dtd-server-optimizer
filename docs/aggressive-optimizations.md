@@ -3,7 +3,7 @@
 **Owns:** the optimization space **beyond safe Harmony** - levers that trade
 correctness, fidelity, stability, or maintainability for performance, and exactly
 what risk each takes. Written after the safe Harmony space was exhausted + proven
-([`../../7dtd-optimizer/docs/RESULTS.md`](RESULTS.md) §3b).
+([`../../7dtd-server-optimizer/docs/RESULTS.md`](RESULTS.md) §3b).
 **Hub:** [`INDEX.md`](INDEX.md). **Costs to beat:** [`bottlenecks.md`](bottlenecks.md).
 **Algorithms:** [`algorithms.md`](algorithms.md).
 
@@ -115,7 +115,7 @@ benchable steady-state win (array large but infrequent). **25-min fidelity soak 
 zero pathfinding exceptions at a 10 GB heap, no leak, `alive` stable - the unsafe lever
 is **safe under sustained load**, cleared for opt-in use. Still no *proven* perf win
 (no matched pool-off soak at 10 GB); final gate is a visual blood-moon watch. Full
-detail in [`../../7dtd-optimizer/docs/RESULTS.md`](RESULTS.md)
+detail in [`../../7dtd-server-optimizer/docs/RESULTS.md`](RESULTS.md)
 §3c-3d.
 
 ---

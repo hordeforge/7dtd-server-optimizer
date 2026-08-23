@@ -15,6 +15,10 @@ It intentionally contains no profiler and no load generator. Install the
 standalone bridge from sibling `7dtd-server-apm` for managed instrumentation, and use
 sibling `7dtd-loadgen` for repeatable clients.
 
+## 📚 Modding Best Practices
+
+See the canonical **[HordeForge 7DTD Modding Best Practices Guide](https://github.com/hordeforge/.github/blob/main/MODDING_BEST_PRACTICES.md)** for engine load order rules, EAC-off requirements, `ModInfo.xml` specifications, and V3.1.0 compatibility notes.
+
 ```bash
 make help        # every target, grouped: contributor loop vs game-backed
 make build

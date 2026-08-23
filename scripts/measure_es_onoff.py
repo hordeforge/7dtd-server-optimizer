@@ -7,7 +7,7 @@ endgame zombies, then samples server health twice under the same load:
   Phase ON : EfficientServer Enabled=true  (config as installed)
   Phase OFF: Enabled=false via config rewrite + `es reload`
 
-Samples are read from the server log's periodic `[7dtd-apm]` lines
+Samples are read from the server log's periodic `[7dtd-server-apm]` lines
 (gmUpdateAvg / tickAvg) plus telnet health, so the comparison is
 APM-bridge ground truth, not a frame-timer. Restores the config and
 writes a JSON report under server/logs/.
@@ -104,7 +104,7 @@ _APM_TAIL: dict[Path, dict] = {}
 
 
 def read_apm(logf: Path) -> dict | None:
-    """Parse the most recent matching [7dtd-apm] health line from the server log.
+    """Parse the most recent matching [7dtd-server-apm] health line from the server log.
 
     Reads only bytes appended since the previous call (the log is append-only;
     state resets if the file shrank or was replaced), so per-second polling
@@ -133,7 +133,7 @@ def read_apm(logf: Path) -> dict | None:
             text = data[:nl].decode("utf-8", errors="replace")
             st["tail"] = data[nl + 1:]
             for line in text.split("\n"):
-                if "[7dtd-apm]" not in line:
+                if "[7dtd-server-apm]" not in line:
                     continue
                 m = APM_LINE_RE.search(line)
                 if m:
@@ -269,7 +269,7 @@ def main() -> int:
                 log(f"  delta gmUpdateAvg (ON-OFF) = {d:+.3f} ms -> {verdict}")
             else:
                 report["verdict"] = "no_apm_data"
-                log("WARN: APM bridge silent; no numeric verdict (check 7dtd-apm-bridge installed)")
+                log("WARN: APM bridge silent; no numeric verdict (check 7dtd-server-apm-bridge installed)")
     except KeyboardInterrupt:
         code = 130
     except Exception as e:

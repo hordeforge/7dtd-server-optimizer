@@ -13,9 +13,9 @@ This file is **optimizer-only**: how to change EfficientServer without inventing
 
 | Owns | Does not own |
 |---|---|
-| Reviewed Harmony optimizers (AI LOD, task skip, dedicated skips, dynamic mesh budgets) | Profiler / APM (use `7dtd-apm`) |
+| Reviewed Harmony optimizers (AI LOD, task skip, dedicated skips, dynamic mesh budgets) | Profiler / APM (use `7dtd-server-apm`) |
 | `config/efficientserver.json` feature groups | Load generation (use `7dtd-loadgen`) |
-| Stock-game RE tooling lives in the sibling [`../../7dtd-research/tools/`](../../7dtd-research/tools/) (not here) | Terrain / RealEarth product work |
+| Stock-game RE tooling lives in the sibling [`../../7dtd-engine-research/tools/`](../../7dtd-engine-research/tools/) (not here) | Terrain / RealEarth product work |
 | Dedicated-focused install scripts | Balance XML modlets |
 | Links to host ops guidance | **CCD/NUMA/affinity** (ops only; see [`HOST_TUNING.md`](HOST_TUNING.md)) |
 
@@ -55,7 +55,7 @@ Change **one group at a time**, then re-measure.
 0. make test - config harness (normalize/clamps/invariants/fuzz), config-doc
    coverage gate, version-consistency gate (ModInfo == Assembly == docs);
    also runs in CI on every PR and on pushes to main (.github/workflows/ci.yml)
-1. Baseline: 7dtd-loadgen workload + 7dtd-apm capture
+1. Baseline: 7dtd-loadgen workload + 7dtd-server-apm capture
 2. Edit one feature group (config and/or patch code)
 3. Rebuild and install against current dedicated Managed
 4. Same workload + APM compare / budget
@@ -151,35 +151,35 @@ supply-chain posture this documents: [`SECURITY.md`](../SECURITY.md),
 Known infra note: >12 loadgen bots can trigger a stock LiteNetLib join flake
 (`Collection was modified` in `CreateEvent`) that drops clients; use small
 cohorts for measurement runs (see RESULTS). **Root cause closed 2026-08-10
-(7dtd-research):** a managed race - `LiteNetLibAuthWrapperServer.
+(7dtd-engine-research):** a managed race - `LiteNetLibAuthWrapperServer.
 ConnectionRequestCheck` enumerates `ConnectionManager.Clients.List` on the
 socket-receive thread (`UnsyncedEvents=true` from `NetworkCommonLiteNetLib.
 InitConfig`) while the main thread mutates it. Fix direction: run the
 duplicate-IP scan on the main thread or copy the IP set under lock. Full
-evidence: `7dtd-research/docs/network.md` §4.0; a second churn bug
+evidence: `7dtd-engine-research/docs/network.md` §4.0; a second churn bug
 (`NetPackageMinEventFire.write` NRE on null itemValue) is in
-`7dtd-research/docs/protocol-packages.md` §6.23.
+`7dtd-engine-research/docs/protocol-packages.md` §6.23.
 
 ## Reverse engineering helpers
 
 | Path | Role |
 |---|---|
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | Dedicated hot path notes (gmUpdate, AI, mesh, networking) |
-| [`../../7dtd-research/docs/loop-gmupdate.md`](../../7dtd-research/docs/loop-gmupdate.md) | V3.0.1 gmUpdate phase map |
-| [`../../7dtd-research/docs/entity-ai.md`](../../7dtd-research/docs/entity-ai.md) | Entity/AI/path/fall/net deep chain |
-| [`../../7dtd-research/tools/`](../../7dtd-research/tools/) | **All RE dumpers** (general `src/` + legacy per-family `legacy/`), build + regen tests |
-| [`../../7dtd-research/docs/re-methodology.md`](../../7dtd-research/docs/re-methodology.md) | How to RE: dump, read IL, reconstruct layouts |
-| [`../../7dtd-research/docs/INDEX.md`](../../7dtd-research/docs/INDEX.md) | Index of all RE dump sets |
-| [`../../7dtd-research/docs/loop.md`](../../7dtd-research/docs/loop.md) | Complete dedicated game/sim loop map + open gaps |
+| [`../../7dtd-engine-research/docs/loop-gmupdate.md`](../../7dtd-engine-research/docs/loop-gmupdate.md) | V3.0.1 gmUpdate phase map |
+| [`../../7dtd-engine-research/docs/entity-ai.md`](../../7dtd-engine-research/docs/entity-ai.md) | Entity/AI/path/fall/net deep chain |
+| [`../../7dtd-engine-research/tools/`](../../7dtd-engine-research/tools/) | **All RE dumpers** (general `src/` + legacy per-family `legacy/`), build + regen tests |
+| [`../../7dtd-engine-research/docs/re-methodology.md`](../../7dtd-engine-research/docs/re-methodology.md) | How to RE: dump, read IL, reconstruct layouts |
+| [`../../7dtd-engine-research/docs/INDEX.md`](../../7dtd-engine-research/docs/INDEX.md) | Index of all RE dump sets |
+| [`../../7dtd-engine-research/docs/loop.md`](../../7dtd-engine-research/docs/loop.md) | Complete dedicated game/sim loop map + open gaps |
 | [`OPTIMIZATION_CANDIDATES.md`](OPTIMIZATION_CANDIDATES.md) | Graded optim candidates (this project) |
 | [`OPTIMIZATION_IDEAS.md`](OPTIMIZATION_IDEAS.md) | Optim idea map |
-| Sibling `7dtd-apm` | Host + bridge evidence (not in this repo) |
+| Sibling `7dtd-server-apm` | Host + bridge evidence (not in this repo) |
 | Sibling `7dtd-loadgen` | Controlled clients |
 
-Narratives under `7dtd-research/docs/`; IL under `7dtd-research/il/` is **generated**. Regenerate after game updates; do not redistribute game IL.
+Narratives under `7dtd-engine-research/docs/`; IL under `7dtd-engine-research/il/` is **generated**. Regenerate after game updates; do not redistribute game IL.
 
 ```bash
-cd ../7dtd-research/tools && ./build.sh
+cd ../7dtd-engine-research/tools && ./build.sh
 mono bin/legacy/DumpGmUpdate.exe "$DS/7DaysToDieServer_Data/Managed/Assembly-CSharp.dll" ../il/gmUpdate-VERSION
 ```
 

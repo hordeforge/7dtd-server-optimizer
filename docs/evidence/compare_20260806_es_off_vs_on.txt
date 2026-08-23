@@ -1,7 +1,7 @@
 # APM session compare
 
-- **A:** `/home/maci/.local/share/7dtd-apm/session_20260806_160357_pid3639944`
-- **B:** `/home/maci/.local/share/7dtd-apm/session_20260806_155401_pid3593984`
+- **A:** `/home/maci/.local/share/7dtd-server-apm/session_20260806_160357_pid3639944`
+- **B:** `/home/maci/.local/share/7dtd-server-apm/session_20260806_155401_pid3593984`
 - **Overall better (lower total layer pressure):** **A**
 - Sum layer scores: A=270.0  B=300.0
 - Layers A better: 1  B better: 1

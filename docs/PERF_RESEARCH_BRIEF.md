@@ -5,15 +5,15 @@
 do next, what is already closed, and which "big wins" are dead ends.
 **Not:** full bottleneck tables ([bottlenecks.md](bottlenecks.md)), A/B ledger
 ([RESULTS.md](RESULTS.md)), or stock-only RE narratives
-([`../../7dtd-research/docs/`](../../7dtd-research/docs/)).
+([`../../7dtd-engine-research/docs/`](../../7dtd-engine-research/docs/)).
 **Evidence date:** 2026-07-28 brief; APM campaign through 2026-07-21; IL re-check
 of open hot methods same day (dumps under local `/tmp/perf-re/`, regenerable via
-`7dtd-research/tools`). **2026-08-06 research follow-up:** Clone call-site triage
+`7dtd-engine-research/tools`). **2026-08-06 research follow-up:** Clone call-site triage
 and chunk encode ownership closed in stock RE (see §4.4-4.5).
 
 **Read with:** [RESULTS.md](RESULTS.md) (verdicts), [measured-scaling.md](measured-scaling.md)
-(exponents), [bottlenecks.md](bottlenecks.md) (catalog), [engine-limitations.md](../../7dtd-research/docs/engine-limitations.md)
-(stock ceilings), [loop.md](../../7dtd-research/docs/loop.md) (frame ownership).
+(exponents), [bottlenecks.md](bottlenecks.md) (catalog), [engine-limitations.md](../../7dtd-engine-research/docs/engine-limitations.md)
+(stock ceilings), [loop.md](../../7dtd-engine-research/docs/loop.md) (frame ownership).
 
 ---
 
@@ -29,7 +29,7 @@ and chunk encode ownership closed in stock RE (see §4.4-4.5).
 | What should the optimizer *not* re-open? | Serialize-once at build layer (stock already does it), mid-band AI stride as a headline win, parallel EAI, parallel SendPackage, fps as TPS lever. |
 
 ```text
-Stock RE (7dtd-research)     Measured APM (7dtd-apm)     EfficientServer (this repo)
+Stock RE (7dtd-engine-research)     Measured APM (7dtd-server-apm)     EfficientServer (this repo)
   loop / net / entity IL  -->  exponents + section ms  -->  one lever + same load A/B
 ```
 
@@ -42,7 +42,7 @@ Stock RE (7dtd-research)     Measured APM (7dtd-apm)     EfficientServer (this r
 | **Players** | `ConnectionManager.Update`, `NetEntityDistribution.OnUpdateEntities` | ~**O(N^2.27)** / **O(N^2.26)** per-call | ~**450-500** players (near-zero zombies) | Interest + send fan-out; view distance is the safe knob |
 | **Entities** | `World.TickEntities*` , move/AI | ~**O(N)** | Volume / BM capacity | LOD, caps, governor, TickGuard; not complexity class |
 
-Canonical measure profile: `7dtd-apm` `canonical-heavy-v2` (64 clients, mixed bots,
+Canonical measure profile: `7dtd-server-apm` `canonical-heavy-v2` (64 clients, mixed bots,
 forensic preset). Capacity under shipping defaults (2026-07-21): **~232 sustained
 endgame zombies at 64 players** with adaptive governor (was ~147 static stride).
 
@@ -216,8 +216,8 @@ join/spread loads; at BM ceiling it is ~5% of UpdateTick after entities+replicat
 | `NetPackageChunk.Setup` | **4**: two from `SendChunksToClients` (first-load + reload), plus disc/flat `RebuildTerrain` overwrite paths |
 | `NetPackageChunk.write` | **0** direct; body goes through virtual package serialize on the connection writer |
 
-Narrative: [world-chunks.md](../../7dtd-research/docs/world-chunks.md),
-[engine-limitations.md](../../7dtd-research/docs/engine-limitations.md).
+Narrative: [world-chunks.md](../../7dtd-engine-research/docs/world-chunks.md),
+[engine-limitations.md](../../7dtd-engine-research/docs/engine-limitations.md).
 
 **Optimizer use:** blob cache per (chunkKey, version) shared across observers is the
 safe-ish research design; off-thread encode races world mutation. P6 send-batch
@@ -240,7 +240,7 @@ Array clones allocate `newarr` then per-element Clone.
 | NetPackagePlayerInventory / ItemDrop Setup | 4 | Medium (wire copy) |
 | Loot / trader / quest / rewards / game events | rest | Medium, event-driven |
 
-Full table: [items.md](../../7dtd-research/docs/items.md) § ItemStack.Clone call-site triage.
+Full table: [items.md](../../7dtd-engine-research/docs/items.md) § ItemStack.Clone call-site triage.
 
 **Optimizer use:**
 
@@ -321,12 +321,12 @@ Stock RE facts for patch targets live in:
 
 | Topic | Research doc |
 |---|---|
-| Frame ownership (gmUpdate vs ConnectionManager vs DynamicMesh) | [loop.md](../../7dtd-research/docs/loop.md) |
-| AI LOD bands / updateTasks | [entity-ai.md](../../7dtd-research/docs/entity-ai.md) |
-| Net interest / package thresholds | [network.md](../../7dtd-research/docs/network.md), [protocol-packages.md](../../7dtd-research/docs/protocol-packages.md) |
-| Chunk stream / SendChunks ownership | [world-chunks.md](../../7dtd-research/docs/world-chunks.md) |
-| ItemStack.Clone call-site triage | [items.md](../../7dtd-research/docs/items.md) § Clone triage |
-| Hard ceilings | [engine-limitations.md](../../7dtd-research/docs/engine-limitations.md) |
+| Frame ownership (gmUpdate vs ConnectionManager vs DynamicMesh) | [loop.md](../../7dtd-engine-research/docs/loop.md) |
+| AI LOD bands / updateTasks | [entity-ai.md](../../7dtd-engine-research/docs/entity-ai.md) |
+| Net interest / package thresholds | [network.md](../../7dtd-engine-research/docs/network.md), [protocol-packages.md](../../7dtd-engine-research/docs/protocol-packages.md) |
+| Chunk stream / SendChunks ownership | [world-chunks.md](../../7dtd-engine-research/docs/world-chunks.md) |
+| ItemStack.Clone call-site triage | [items.md](../../7dtd-engine-research/docs/items.md) § Clone triage |
+| Hard ceilings | [engine-limitations.md](../../7dtd-engine-research/docs/engine-limitations.md) |
 
 ---
 

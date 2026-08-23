@@ -4,9 +4,9 @@
 **Audience:** Linux hosts running `7DaysToDieServer` under load.  
 **Owns:** CCD/NUMA/affinity/IRQ/storage host placement (ops).  
 **Not:** in-process Harmony optim ([FEATURES](FEATURES.md)), game sim map ([ARCHITECTURE](ARCHITECTURE.md)), RealEarth product status.  
-**Companion docs:** [`ARCHITECTURE.md`](ARCHITECTURE.md) (sim hot path), [`DEVELOPMENT.md`](DEVELOPMENT.md) (EfficientServer), sibling `7dtd-apm` (evidence), workspace [`MODDING_BEST_PRACTICES.md`](../../MODDING_BEST_PRACTICES.md).  
-**Engine loop / scale evidence:** [`../../7dtd-research/docs/loop.md`](../../7dtd-research/docs/loop.md), [`measured-scaling.md`](measured-scaling.md) (APM laws live in this repo, not research).  
-**Stock ceilings:** [`../../7dtd-research/docs/engine-limitations.md`](../../7dtd-research/docs/engine-limitations.md).
+**Companion docs:** [`ARCHITECTURE.md`](ARCHITECTURE.md) (sim hot path), [`DEVELOPMENT.md`](DEVELOPMENT.md) (EfficientServer), sibling `7dtd-server-apm` (evidence), workspace [`MODDING_BEST_PRACTICES.md`](../../MODDING_BEST_PRACTICES.md).  
+**Engine loop / scale evidence:** [`../../7dtd-engine-research/docs/loop.md`](../../7dtd-engine-research/docs/loop.md), [`measured-scaling.md`](measured-scaling.md) (APM laws live in this repo, not research).  
+**Stock ceilings:** [`../../7dtd-engine-research/docs/engine-limitations.md`](../../7dtd-engine-research/docs/engine-limitations.md).
 
 EfficientServer only changes **in-process** behavior via Harmony. Much of dedicated performance is **outside** the game DLL: stock config, workload shape, storage, and CPU topology. This document is the measure-first checklist for host and process placement.
 
@@ -22,8 +22,8 @@ Typical order for a Unity/Mono dedicated with a **single-thread-dominated sim lo
 |---|---|---|---|
 | 1 | Game data / stock knobs | `MaxSpawnedZombies`, view distance, `DynamicMesh*`, `SandboxCode`, world size | `serverconfig.xml` / ops |
 | 2 | Workload shape | Player count/spread, blood moon, POI density | `7dtd-loadgen` + world choice |
-| 3 | Sim / Harmony | EfficientServer AI LOD, dedicated skips, mesh budgets; avoid heavy inject mods | `7dtd-optimizer`, other mods |
-| 4 | Runtime noise | Mono GC spikes, competing processes on the host | `7dtd-apm` + process hygiene |
+| 3 | Sim / Harmony | EfficientServer AI LOD, dedicated skips, mesh budgets; avoid heavy inject mods | `7dtd-server-optimizer`, other mods |
+| 4 | Runtime noise | Mono GC spikes, competing processes on the host | `7dtd-server-apm` + process hygiene |
 | 5 | **CPU topology** | CCD affinity, core isolation, NUMA bind, IRQ steering | **This doc** (host ops) |
 | 6 | Storage / net | Local SSD for userdata, avoid high-latency NFS for saves, sane NIC settings | Host ops |
 
@@ -47,7 +47,7 @@ CCD/NUMA work is real, but it mostly buys **lower jitter and protecting the main
 - **Classic NUMA (multi-socket):** wrong node placement adds memory latency for the whole process.
 - **IRQ / softirq on the sim core:** NIC or disk interrupts steal the main thread under player load.
 
-Measure thread CPU and run-queue latency with `7dtd-apm` (thread collector, sched/futex, perf) before pinning.
+Measure thread CPU and run-queue latency with `7dtd-server-apm` (thread collector, sched/futex, perf) before pinning.
 
 ### MEASURED: naive main-thread pinning HURTS on Ryzen 9950X (2026-07-20)
 
@@ -299,7 +299,7 @@ Tiers:
 
 ```text
 1. Record machine map (lscpu / numactl)
-2. Baseline: loadgen + 7dtd-apm (standard or deep), fixed world/seed/bots/duration
+2. Baseline: loadgen + 7dtd-server-apm (standard or deep), fixed world/seed/bots/duration
 3. Apply ONE host change (e.g. CPUAffinity to one CCD)
 4. Repeat identical scenario
 5. Compare tick/CPU/sched; keep only if variance or headroom improves
@@ -332,7 +332,7 @@ Document the final affinity mask and kernel cmdline in the server’s ops notes 
 | Does APM set affinity? | **No.** It only measures (optional bridge for managed timings). |
 | Can host tuning replace EfficientServer? | **No.** Different layers; both can apply. |
 | Can host tuning replace stock caps? | **No.** Sim work still scales with zombies/chunks. |
-| Where do I prove a host change? | `7dtd-apm` session compare under `7dtd-loadgen`. |
+| Where do I prove a host change? | `7dtd-server-apm` session compare under `7dtd-loadgen`. |
 
 ---
 
@@ -361,10 +361,10 @@ Is MaxSpawnedZombies / view distance / mesh / SandboxCode sane?
 | [ARCHITECTURE](ARCHITECTURE.md) | Single-thread sim hot path |
 | [FEATURES](FEATURES.md) | EfficientServer feature groups |
 | [SCALE_1000x10000](SCALE_1000x10000.md) | Extreme scale design notes |
-| [research loop](../../7dtd-research/docs/loop.md) | gmUpdate / dedicated frame |
+| [research loop](../../7dtd-engine-research/docs/loop.md) | gmUpdate / dedicated frame |
 | [measured-scaling](measured-scaling.md) | Live player/entity scaling laws |
 | [runtime-tuning](runtime-tuning.md) | GC / FPS process knobs |
-| APM | [`../../7dtd-apm/docs/APM.md`](../../7dtd-apm/docs/APM.md) |
+| APM | [`../../7dtd-server-apm/docs/APM.md`](../../7dtd-server-apm/docs/APM.md) |
 | Loadgen | [`../../7dtd-loadgen/docs/README.md`](../../7dtd-loadgen/docs/README.md) |
 
 ## Changelog

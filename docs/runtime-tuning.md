@@ -93,9 +93,9 @@ the skip-forced-collect guard, everything-on did **0 full collections, worst STW
 This is the divisor win at a heavier (10 GB-class) heap: the megapause is not merely
 shorter, it did not fire at all in the window. Sessions `session_20260720_053013`
 (vanilla) / `_053846` (everything). Full detail:
-[`../../7dtd-optimizer/docs/RESULTS.md`](RESULTS.md) §3.
+[`../../7dtd-server-optimizer/docs/RESULTS.md`](RESULTS.md) §3.
 
-**Measured (2026-07-18, see `7dtd-optimizer` A7 benchmark):** the GC guard helps
+**Measured (2026-07-18, see `7dtd-server-optimizer` A7 benchmark):** the GC guard helps
 at moderate churn (removes the forced collect, -28% late-tick overage) but is a
 wash at heavy churn (Boehm auto-collects on pressure regardless). Incremental mode
 is marginal (~8% late ticks at 128 players; write-barrier overhead ~cancels the
@@ -123,7 +123,7 @@ Sanctioned hooks that avoid a Harmony patch just for timing: `ModEvents.GameAwak
 `GameStartDone` takes `ref ModEvents.SGameStartDoneData` (the older parameterless
 `void()` form is pre-V1.0). Prefer these + public setters + P/Invoke over Harmony;
 Harmony only for per-call behavior with no hook (see the IModApi-vs-Harmony note
-in `7dtd-optimizer/docs/FEATURES.md`).
+in `7dtd-server-optimizer/docs/FEATURES.md`).
 
 ## 4. Correction: `PooledBinaryWriter.FinalizeSizeMarker`
 
@@ -135,6 +135,6 @@ error-throw path only. Not a valid allocation-cut target.
 
 ## See also
 - [`measured-scaling.md`](measured-scaling.md) - runtime scaling laws, GC-pause vs CPU regimes
-- [`network.md`](../../7dtd-research/docs/network.md) - replication send path (the churn source)
-- `7dtd-optimizer/docs/FEATURES.md` - EfficientServer GC guard / incremental, EAC
-- `7dtd-optimizer/docs/NETWORK_OPTIMIZATION.md` - the network levers
+- [`network.md`](../../7dtd-engine-research/docs/network.md) - replication send path (the churn source)
+- `7dtd-server-optimizer/docs/FEATURES.md` - EfficientServer GC guard / incremental, EAC
+- `7dtd-server-optimizer/docs/NETWORK_OPTIMIZATION.md` - the network levers

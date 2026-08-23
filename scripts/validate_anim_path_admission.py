@@ -10,7 +10,7 @@ zombies, then:
   Phase B (path admission): with anim restored, toggle path knobs via config
     rewrite + es reload, sample health under same load.
 
-Writes a JSON report under 7dtd-optimizer/server/logs/ (or VALIDATE_OUT).
+Writes a JSON report under 7dtd-server-optimizer/server/logs/ (or VALIDATE_OUT).
 
 Env (subset of bloodmoon_profile):
   BM_PLAYERS (default 16 for a faster gate; use 32/64 for stress)

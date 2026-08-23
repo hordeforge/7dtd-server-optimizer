@@ -5,8 +5,8 @@ scaling, inefficient data structures, and serial single-thread stages.
 **Method:** IL RE + live APM scaling (`apm scaling`), 42 findings verified against
 IL and measured exponents (adversarial audit, 2026-07-19). **Hub:** [`INDEX.md`](INDEX.md).
 **Companion docs:** optimizer-facing summary [`PERF_RESEARCH_BRIEF.md`](PERF_RESEARCH_BRIEF.md); scaling laws [`measured-scaling.md`](measured-scaling.md); unsafe levers [`aggressive-optimizations.md`](aggressive-optimizations.md); algorithm cost anatomy [`algorithms.md`](algorithms.md); allocation
-[`allocation-reuse.md`](allocation-reuse.md) + [`../../7dtd-optimizer/docs/ALLOCATION_UPSTREAM.md`](ALLOCATION_UPSTREAM.md);
-graded levers [`../../7dtd-optimizer/docs/OPTIMIZATION_CANDIDATES.md`](OPTIMIZATION_CANDIDATES.md).
+[`allocation-reuse.md`](allocation-reuse.md) + [`../../7dtd-server-optimizer/docs/ALLOCATION_UPSTREAM.md`](ALLOCATION_UPSTREAM.md);
+graded levers [`../../7dtd-server-optimizer/docs/OPTIMIZATION_CANDIDATES.md`](OPTIMIZATION_CANDIDATES.md).
 
 **Confidence:** **CONFIRMED** = IL + measured scaling both check out. **PLAUSIBLE** =
 IL/code pattern confirmed but impact attribution weak or already mitigated.
@@ -173,7 +173,7 @@ steady floor; every allocator is one lever against the same 479 ms STW pause.
 6.9 GB heap (the `GcMegapauseTest` probe). At runtime the launch env
 `GC_FREE_SPACE_DIVISOR=1` gives enough headroom that *natural* full collections drop to
 **0 in a 150 s window** (vanilla did 3 + a 274 ms freeze at the same load) - see the
-aggregate A/B in [`../../7dtd-optimizer/docs/RESULTS.md`](RESULTS.md)
+aggregate A/B in [`../../7dtd-server-optimizer/docs/RESULTS.md`](RESULTS.md)
 §3. So the env lever eliminates the *natural* megapause; cutting the allocators at
 source (P4 etc.) further shrinks the heap the *forced* worst case would have to mark.
 
@@ -197,7 +197,7 @@ source (P4 etc.) further shrinks the heap the *forced* worst case would have to 
 
 The optimization campaign against this catalog concluded with the tick FULLY
 attributed (parent-minus-children residual 0.4% at the blood-moon ceiling - see
-`7dtd-optimizer/docs/RESULTS.md` §3h): **TickEntities 63%** (serial main-thread,
+`7dtd-server-optimizer/docs/RESULTS.md` §3h): **TickEntities 63%** (serial main-thread,
 frame-amortized, close-combat-bound - no worker pool exists to widen),
 **OnUpdateEntities 30%** (20 Hz-locked replication; stride lever = -45/-61/-70% at
 2/3/4, governor-managed), **chunk send 5%**, all else < 2%. PhysX ~0%. Frame rate

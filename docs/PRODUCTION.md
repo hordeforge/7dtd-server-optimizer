@@ -16,14 +16,14 @@ evidence ([RESULTS](RESULTS.md)).
 ## 1. Install
 
 ```bash
-cd 7dtd-optimizer
+cd 7dtd-server-container-optimizer
 make build
 make install DS="/path/to/7 Days to Die Dedicated Server"     # EfficientServer
-cd ../7dtd-apm
+cd ../7dtd-server-apm
 make bridge-build && make bridge-install                       # APM bridge (24/7-safe)
 ```
 
-Launch through `7dtd-optimizer/scripts/run_server.sh` (or replicate its env in your
+Launch through `7dtd-server-optimizer/scripts/run_server.sh` (or replicate its env in your
 service unit):
 
 ```bash
@@ -60,20 +60,20 @@ Apply config edits live: `es reload` (telnet/console). `es status` shows active 
   - `TickGuard: ... shed N farthest enemies` = past throttling; expect thinner hordes.
   - `SPIKE gmUpdateDuration=...` = frame spikes (rate-limited to 1/5 s).
 - **Telemetry** (no capture needed, 24/7-safe):
-  `Mods/7dtd-apm-bridge/telemetry/apm_app_latest.json`, refreshed every 30 s -
+  `Mods/7dtd-server-apm-bridge/telemetry/apm_app_latest.json`, refreshed every 30 s -
   `world.unityDeltaMs` (frame period; idle = frame target), `update.lateTicks`,
   `update.tickStallMsTotal`, `gc.gen2Collections`, `sections[]`.
-  Or run `7dtd-apm monitor` (headline `tps` is instantaneous; `tps_lifetime` is
+  Or run `7dtd-server-apm monitor` (headline `tps` is instantaneous; `tps_lifetime` is
   since-reset).
 - **Disk:** telemetry dir self-prunes (32 dumps, current-pid maps); capture sessions
   self-prune (`APM_KEEP_SESSIONS`, default 40).
 
 ## 4. Capturing on a live server
 
-Default `7dtd-apm capture` is production-safe: no jitmap burst (pass `--symbolize`
+Default `7dtd-server-apm capture` is production-safe: no jitmap burst (pass `--symbolize`
 ONLY on bench servers - it freezes a loaded main thread for tens of seconds), perf
 at 99 Hz (~1-2% CPU), dangerous probes opt-in. Raw sessions contain the server log
-stream (player names/IPs) - share only `7dtd-apm export` bundles, which are
+stream (player names/IPs) - share only `7dtd-server-apm export` bundles, which are
 scrubbed (cmdline/exe redacted, home path replaced).
 
 ## 5. After a game update

@@ -3,7 +3,7 @@
 **Hub:** [`README.md`](../README.md).  
 **Date:** 2026-08-02 (original); **remeasure 2026-08-06** below  
 **Game:** V 3.1.0 (b14) dedicated Navezgane  
-**Mods:** `0_TFP_Harmony`, `7dtd-apm-bridge` 2.0.0, `EfficientServer` 1.17.0  
+**Mods:** `0_TFP_Harmony`, `7dtd-server-apm-bridge` 2.0.0, `EfficientServer` 1.17.0  
 **Workload:** moderate matched pair (not full canonical-heavy-v2)
 
 ---
@@ -20,7 +20,7 @@ and path admission still default-off** (not the lever under test).
 | OFF | `session_20260806_160357_pid3639944` | Enabled=false |
 
 Loadgen: **passed** both arms (`workload.json` result.passed=true).  
-Compare: `7dtd-apm compare OFF ON` (A=OFF, B=ON).
+Compare: `7dtd-server-apm compare OFF ON` (A=OFF, B=ON).
 
 | Metric | ES ON | ES OFF | Δ ON vs OFF |
 |---|---:|---:|---:|
@@ -110,8 +110,8 @@ RE_WORLD_NAME=Navezgane RE_SERVER_MAX_PLAYERS=32 RE_MAX_ZOMBIES=128 \
   bash 7dtd-loadgen/scripts/start_dedicated_prefab.sh
 
 export SEVENDTD_TELNET_PASSWORD=retest DOTNET_ROOT=$HOME/.cache/dotnet-sdk
-cd 7dtd-apm
-uv run 7dtd-apm scenario run --clients 16 --actions 4000 --seconds 90 --warmup 45 \
+cd 7dtd-server-container-apm
+uv run 7dtd-server-apm scenario run --clients 16 --actions 4000 --seconds 90 --warmup 45 \
   --preset forensic --seed 20240802 \
   --bot-mix 'traverse:30,wander:25,combat:30,bait:15' \
   --spawn-entity 'zombieBoe,zombieArlene,zombieMoe,zombieBikerFeral' \
@@ -241,7 +241,7 @@ Honest notes: path admission did not improve frame at this load (+5.6 ms noise).
 
 ## Canonical-heavy-v2 (64 clients, forensic 150s, seed 20240717)
 
-Full profile from `7dtd-apm/plans/profile.canonical.json`.
+Full profile from `7dtd-server-apm/plans/profile.canonical.json`.
 
 | Knob | Value |
 |---|---|

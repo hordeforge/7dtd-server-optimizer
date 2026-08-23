@@ -40,8 +40,8 @@ resolve only inside the workspace:
 
 | Source | Role |
 |---|---|
-| `7dtd-research` | Stock-game reverse engineering (`docs/`) and regenerable IL dumps (`il/`, git-ignored) |
-| `7dtd-apm` | Profiler / APM bridge, capture, compare |
+| `7dtd-engine-research` | Stock-game reverse engineering (`docs/`) and regenerable IL dumps (`il/`, git-ignored) |
+| `7dtd-server-apm` | Profiler / APM bridge, capture, compare |
 | `7dtd-loadgen` | LiteNetLib bots and dedicated start helpers |
 | `MODDING_BEST_PRACTICES.md` | Workspace-root modding guide |
 

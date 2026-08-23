@@ -11,8 +11,8 @@ A/B session IDs + numbers, and verdict. Companion: graded backlog
 [`ALLOCATION_UPSTREAM.md`](ALLOCATION_UPSTREAM.md). Next-work map:
 [`PERF_RESEARCH_BRIEF.md`](PERF_RESEARCH_BRIEF.md).
 
-All A/B captures: `7dtd-apm capture --only all,alloc`, 150 s window, matched load,
-same world/seed, back-to-back restarts. Sessions under `~/.local/share/7dtd-apm/`.
+All A/B captures: `7dtd-server-apm capture --only all,alloc`, 150 s window, matched load,
+same world/seed, back-to-back restarts. Sessions under `~/.local/share/7dtd-server-apm/`.
 
 **Standing caveat:** absolute `ms_per_tick` drifts run-to-run (world state on
 restart), so only **within-campaign** (off vs on, same session pair) deltas are
@@ -471,7 +471,7 @@ throttle point**; 3-4 exist for headroom experiments, not production.
 stepped +40/round until frame > 55 ms twice): **64 players sustain ~147 endgame
 zombies at 20 TPS; sustained break by ~245** (coarse: the spawn overshot 147 -> 244,
 so the true edge is between). This is the operator number for the blood-moon regime.
-Curve + full section dumps: `~/.local/share/7dtd-apm/capacity_{curve,sections_*}.json`.
+Curve + full section dumps: `~/.local/share/7dtd-server-apm/capacity_{curve,sections_*}.json`.
 
 **Re-swept under the v1.13.0 SHIPPING defaults (2026-07-21, governor managing the
 levers dynamically instead of a static stride): 64 players sustain ~232 endgame
@@ -1066,7 +1066,7 @@ and ready, but a stable >4-bot cohort is required to measure the
 party-scaled horde, which the current host cannot sustain.
 
 **Re-observation COMPLETED (2026-08-10):** the join flake root cause was
-closed in 7dtd-research (`docs/network.md` §4.0: receive-thread
+closed in 7dtd-engine-research (`docs/network.md` §4.0: receive-thread
 `ConnectionRequestCheck` races `Clients.List`; `--ramp-ms` pacing avoids it).
 `validate_bloodmoon_path.py` (12 bots, GS 250, ramp) then completed:
 join **PASS** (12/12), genuine blood moon triggered (`BloodMoon starting for

@@ -16,7 +16,7 @@ lever only with APM before/after + a desync/fidelity check.
 serialization cost. Graded summary lives in
 [`OPTIMIZATION_CANDIDATES.md`](OPTIMIZATION_CANDIDATES.md) (B3, A4); measured
 exponents in [`measured-scaling.md`](measured-scaling.md)
-and the loop RE in [`../../7dtd-research/docs/network.md`](../../7dtd-research/docs/network.md).
+and the loop RE in [`../../7dtd-engine-research/docs/network.md`](../../7dtd-engine-research/docs/network.md).
 
 ---
 
@@ -243,7 +243,7 @@ though the server runs EAC-off like any C# mod (see FEATURES "Anti-cheat").
 Use the sibling projects, not in-mod tooling:
 - **Load:** `7dtd-loadgen` at 64 and 128 wander bots (network churn; no zombies -
   players are the driver). See the 128-player GC benchmark for the pattern.
-- **Measure:** `7dtd-apm capture --reset-bridge` → gross alloc MB/s,
+- **Measure:** `7dtd-server-apm capture --reset-bridge` → gross alloc MB/s,
   `fullCollections`, `ConnectionManager`/`NetEntityDistribution` per-call ms,
   late-tick overage; `apm scaling --by players` for the exponent.
 - **Fidelity gate:** scripted position-error check vs stock at fixed distances +

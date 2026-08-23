@@ -2,7 +2,7 @@
 
 **Hub:** [`README.md`](../README.md).  
 **Owns:** pathfinding optim notes.  
-**Not:** entity AI full map ([research entity-ai](../../7dtd-research/docs/entity-ai.md)).
+**Not:** entity AI full map ([research entity-ai](../../7dtd-engine-research/docs/entity-ai.md)).
 
 
 **Status:** P1 **BUILT + VALIDATED** (EfficientServer v1.3.0, `AstarGraphThrottlePatch`).
@@ -23,9 +23,9 @@ allocator, making P1 the highest impact-to-effort lever. Graded B12 in
 
 > **Grid magnitude (RE-pinned 2026-08-11):** the scan allocates a
 > `76 x 76` cell grid at height **320** (`AstarVoxelGrid.cGridXZSize` /
-> `cGridHeight`, [`7dtd-research/docs/raycast-pathing.md`](../../7dtd-research/docs/raycast-pathing.md))
+> `cGridHeight`, [`7dtd-engine-research/docs/raycast-pathing.md`](../../7dtd-engine-research/docs/raycast-pathing.md))
 > = ~1.85M voxel cells per grid per scan; `cConnectionPoolMax` **16** per node.
-> The RE constants are machine-pinned by `7dtd-research`'s
+> The RE constants are machine-pinned by `7dtd-engine-research`'s
 > `test_tuned_constants.py`.
 
 > **APM note (2026-07-18):** the alloc-attribution earlier reported noise
@@ -208,7 +208,7 @@ per-tick maintenance.
 
 Load: the canonical heavy standard (`plans/profile.canonical.json`, 64 players +
 ~300 zombies) - where `UpdateGraphs` was the top section. Measure with
-`7dtd-apm capture --reset-bridge`: `AstarManager.UpdateGraphs` section ms, tick
+`7dtd-server-apm capture --reset-bridge`: `AstarManager.UpdateGraphs` section ms, tick
 p99, gross alloc MB/s + `InitScan` large-alloc frequency; `apm compare` before/
 after. **Fidelity gate:** zombies must still path to players across fresh chunk
 edges and fast player movement - a scripted "AI reaches target within T" check +

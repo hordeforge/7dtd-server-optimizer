@@ -2,11 +2,11 @@
 
 **Hub:** [`README.md`](../README.md).  
 **Owns:** sim parallelism research notes.  
-**Not:** stock loop map ([research loop](../../7dtd-research/docs/loop.md)).
+**Not:** stock loop map ([research loop](../../7dtd-engine-research/docs/loop.md)).
 
 
 **Scope:** how the **sim** (entities, AI, path, combat, block ticks) can get faster, especially with threads. 
-**Context:** stock dedicated is main-loop heavy ([`ARCHITECTURE.md`](ARCHITECTURE.md)). Extreme scale: [`SCALE_1000x10000.md`](SCALE_1000x10000.md). Idea catalog: [`OPTIMIZATION_IDEAS.md`](OPTIMIZATION_IDEAS.md). OSS survey: [`../../7dtd-research/oss-tools/NOTES.md`](../../7dtd-research/oss-tools/NOTES.md). 
+**Context:** stock dedicated is main-loop heavy ([`ARCHITECTURE.md`](ARCHITECTURE.md)). Extreme scale: [`SCALE_1000x10000.md`](SCALE_1000x10000.md). Idea catalog: [`OPTIMIZATION_IDEAS.md`](OPTIMIZATION_IDEAS.md). OSS survey: [`../../7dtd-engine-research/oss-tools/NOTES.md`](../../7dtd-engine-research/oss-tools/NOTES.md). 
 **Not** a promise EfficientServer can do all of this via Harmony.
 
 **This doc owns:** less-work ranking, stage model, threading models, **extracting sim off main**, **additional threading policy**, **hot-path catalog**, Amdahl, tiers A-C, EfficientServer boundary.
@@ -31,14 +31,14 @@ Stock already does pieces of (2)-(4): `aiActiveScale`, `TickEntitiesSlice`, `Pat
 
 **io_uring is not on this list.** It is async disk/socket I/O for code that owns the I/O loop. It does not run EAI cheaper. Use it in host/ops tooling if at all; see [`OPTIMIZATION_IDEAS.md`](OPTIMIZATION_IDEAS.md) §3 and [`SCALE_1000x10000.md`](SCALE_1000x10000.md) §9-10 for main-sim levers vs I/O.
 
-**OSS signal:** public mods that tried Parallel EAI / parallel net send / unbounded path workers left that code commented out (IceCoffee). Live levers are “do less.” Details: [`../../7dtd-research/oss-tools/NOTES.md`](../../7dtd-research/oss-tools/NOTES.md).
+**OSS signal:** public mods that tried Parallel EAI / parallel net send / unbounded path workers left that code commented out (IceCoffee). Live levers are “do less.” Details: [`../../7dtd-engine-research/oss-tools/NOTES.md`](../../7dtd-engine-research/oss-tools/NOTES.md).
 
 ---
 
 ## 2. What stock sim looks like (constraint)
 
 ```text
-Unity frame (V3.0.1 RE - see ARCHITECTURE + 7dtd-research/docs/loop-gmupdate.md):
+Unity frame (V3.0.1 RE - see ARCHITECTURE + 7dtd-engine-research/docs/loop-gmupdate.md):
  GameManager.Update → gmUpdate (631 IL)
  managers / timer / EntityAsyncManager
  → UpdateTick (150 IL)
@@ -748,7 +748,7 @@ Next Harmony candidates that *move toward* a world where threads could matter **
 | This file: threads, extract, hot paths | **Here** |
 | 1k×10k data structures / single-host fantasy | [`SCALE_1000x10000.md`](SCALE_1000x10000.md) |
 | Host pin / storage | [`HOST_TUNING.md`](HOST_TUNING.md) |
-| OSS ecosystem evidence | [`../../7dtd-research/oss-tools/NOTES.md`](../../7dtd-research/oss-tools/NOTES.md) |
+| OSS ecosystem evidence | [`../../7dtd-engine-research/oss-tools/NOTES.md`](../../7dtd-engine-research/oss-tools/NOTES.md) |
 | Shipping feature groups | [`FEATURES.md`](FEATURES.md) |
 
 ---

@@ -15,7 +15,7 @@
 
 **Owns:** graded A/B/C candidates, hot-path notes, APM probes, experiment order, Harmony target list.
 
-**Does not own:** raw IL dumps (those stay under `7dtd-research/il/` as regenerable evidence).
+**Does not own:** raw IL dumps (those stay under `7dtd-engine-research/il/` as regenerable evidence).
 
 | Related | Role |
 |---|---|
@@ -23,8 +23,8 @@
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | Stock hot path RE summary |
 | [`SIM_PARALLELISM.md`](SIM_PARALLELISM.md) | Threads / extract / conductor |
 | [`HOST_TUNING.md`](HOST_TUNING.md) | Ops CCD/NUMA/storage |
-| [`../../7dtd-research/docs/loop.md`](../../7dtd-research/docs/loop.md) | Full dedicated loop map |
-| [`../../7dtd-research/docs/INDEX.md`](../../7dtd-research/docs/INDEX.md) | IL dump index |
+| [`../../7dtd-engine-research/docs/loop.md`](../../7dtd-engine-research/docs/loop.md) | Full dedicated loop map |
+| [`../../7dtd-engine-research/docs/INDEX.md`](../../7dtd-engine-research/docs/INDEX.md) | IL dump index |
 
 Game version pin: **V3.1.0** dedicated `Assembly-CSharp`. Do not redistribute game IL.
 
@@ -60,7 +60,7 @@ IL counts are **method size**, not runtime rank. Runtime rank needs APM.
 
 ### A7 benchmark (2026-07-18): GC guard vs incremental vs forced
 
-Measured on the same loads (7dtd-loadgen + 7dtd-apm, 150 s captures):
+Measured on the same loads (7dtd-loadgen + 7dtd-server-apm, 150 s captures):
 
 | load | config | gross MB/s | full GC | late ticks | overage |
 |---|---|:--:|:--:|:--:|:--:|
@@ -252,7 +252,7 @@ Correlate with: Full-tier entity count, path queue depth, players online, reside
 
 Seven window-scoped experiments on the V3.0.1 dedicated (RWG 4k, 128-slot),
 bot cohorts via `7dtd-loadgen`, 120 s deep captures via
-`7dtd-apm scenario run` with bridge stats reset at window start. Attribution =
+`7dtd-server-apm scenario run` with bridge stats reset at window start. Attribution =
 per-subsystem sum of instrumented managed section time (deep sections scaled
 by sample rate 16). Caveat: sections nest, so `frame_core`
 (`GameManager.UpdateTick`) is inclusive of the entity/AI buckets; chunk/net
@@ -321,7 +321,7 @@ allocation-reduction targets, not only the CPU targets.
    (`World.SaveWorldState` p95 8 ms, SaveRandomChunks steady): A7/Ops
    unchanged.
 
-Raw sessions: `~/.local/share/7dtd-apm/session_20260716_14*-15*` (labels in
+Raw sessions: `~/.local/share/7dtd-server-apm/session_20260716_14*-15*` (labels in
 `workload.json`); per-subsystem numbers in each session's
 `csharp_bridge.json` `attribution` block.
 
@@ -383,7 +383,7 @@ the levers (does not overturn them).
    wrong: the blocker was the loadgen's one-shot Y-adoption + superhuman step
    speed, since fixed.)
 
-Raw sessions: `~/.local/share/7dtd-apm/session_20260716_19*` (capture with
+Raw sessions: `~/.local/share/7dtd-server-apm/session_20260716_19*` (capture with
 `--only alloc,app,runtime` for gross allocation + churn attribution).
 
 ## 4d. Player-scaling wall (2026-07-17, ramp to 1000 clients)
@@ -471,7 +471,7 @@ entities too. So the two walls are genuinely distinct:
 
 Sessions: `session_20260717_{224604,225502,231311}_pid2415896` (114/306/452
 alive; the 1000-tier capture snapshotted 0 entities and was dropped);
-`apm scaling` output in `~/.local/share/7dtd-apm/zladder_scaling.json`.
+`apm scaling` output in `~/.local/share/7dtd-server-apm/zladder_scaling.json`.
 
 Method note: `NetConnectionSimple.taskSerialize` is **no longer instrumented**
 (2026-07-17) - it is a long-lived per-connection writer-thread task, so
@@ -482,7 +482,7 @@ byte counters instead.
 
 Raw sessions: the exponent fit used
 `session_20260717_{022851,015855,072731,081439,030120}_*` (15/20/41/100/498
-players); `apm scaling` output in `~/.local/share/7dtd-apm/ladder_scaling.json`.
+players); `apm scaling` output in `~/.local/share/7dtd-server-apm/ladder_scaling.json`.
 Forensic ~500-player capture: `session_20260717_0301*`.
 
 ## 5. Experiment order (if evidence agrees)
@@ -538,7 +538,7 @@ Each: feature flag, dedicated-only, soft-fail log, FEATURES fidelity notes.
 
 ## 8. Loop surfaces (cross-check)
 
-Every Grade A/B row anchors a method on the dedicated loop map ([`../../7dtd-research/docs/loop.md`](../../7dtd-research/docs/loop.md)).
+Every Grade A/B row anchors a method on the dedicated loop map ([`../../7dtd-engine-research/docs/loop.md`](../../7dtd-engine-research/docs/loop.md)).
 
 | Surface | Method anchors | Grade |
 |---|---|---|
@@ -555,15 +555,15 @@ Every Grade A/B row anchors a method on the dedicated loop map ([`../../7dtd-res
 
 | Evidence | Path |
 |---|---|
-| Frame / gmUpdate | `7dtd-research/il/loop-complete-v3.1.0/` |
-| Entity→AI→path | `7dtd-research/il/deep-v3.1.0/` |
-| EAI/MoveHelper constants | `7dtd-research/il/deeper-v3.1.0/` |
-| Large-method scan | `7dtd-research/docs/inventories/opt-scan.md` + `7dtd-research/il/opt-scan-v3.1.0/*_il.txt` |
-| Timer/AIDirector/net bands | `7dtd-research/il/gaps-v3.1.0/` |
-| MB inventory | `7dtd-research/il/frame-entries-v3.1.0/` |
-| Loop notes | `7dtd-research/docs/inventories/loop-complete.md` + `7dtd-research/il/loop-complete-v3.1.0/` |
+| Frame / gmUpdate | `7dtd-engine-research/il/loop-complete-v3.1.0/` |
+| Entity→AI→path | `7dtd-engine-research/il/deep-v3.1.0/` |
+| EAI/MoveHelper constants | `7dtd-engine-research/il/deeper-v3.1.0/` |
+| Large-method scan | `7dtd-engine-research/docs/inventories/opt-scan.md` + `7dtd-engine-research/il/opt-scan-v3.1.0/*_il.txt` |
+| Timer/AIDirector/net bands | `7dtd-engine-research/il/gaps-v3.1.0/` |
+| MB inventory | `7dtd-engine-research/il/frame-entries-v3.1.0/` |
+| Loop notes | `7dtd-engine-research/docs/inventories/loop-complete.md` + `7dtd-engine-research/il/loop-complete-v3.1.0/` |
 
-Regenerate dumps with the RE tooling in `../../7dtd-research/tools/` (see [`../../7dtd-research/tools/README.md`](../../7dtd-research/tools/README.md)). Optim **narrative** lives only under `7dtd-optimizer/docs/`.
+Regenerate dumps with the RE tooling in `../../7dtd-engine-research/tools/` (see [`../../7dtd-engine-research/tools/README.md`](../../7dtd-engine-research/tools/README.md)). Optim **narrative** lives only under `7dtd-server-optimizer/docs/`.
 
 ---
 
@@ -603,4 +603,4 @@ missing spatial index or a serial main-thread stage**. Spatial bucketing + off-t
 - **2026-07-19:** bottleneck audit (42 verified) consolidated into `bottlenecks.md`; §10 additions (SendPackage entityId-map = top new bang-for-buck, buffer presize+retain, off-sim chunk encode, spatial interest grid). GC megapause measured (479 ms @ 6.9 GB); allocation-reuse research documented.
 - **2026-07-17:** scale ladder (exp8, 99 entities) added; per-entity tick cost measured linear (~0.08 ms), 1000-AI extrapolation and GC-pause-as-lag conclusion recorded.
 - **2026-07-16 (later):** 4b measured-evidence campaign added; experiment order re-ranked (chunk streaming first).
-- **2026-07-16:** Moved from `7dtd-research/il/opt-scan-v3.0.1/` into optimizer project; merged deeper/gaps optim findings; IL folders keep dumps only.
+- **2026-07-16:** Moved from `7dtd-engine-research/il/opt-scan-v3.0.1/` into optimizer project; merged deeper/gaps optim findings; IL folders keep dumps only.

@@ -2,8 +2,8 @@
 
 **Owns:** the algorithm + data-structure used by each hot subsystem - what runs, in
 what complexity, on what structure. **Hub:** [`INDEX.md`](INDEX.md). Deep dives:
-loop [`loop.md`](../../7dtd-research/docs/loop.md); AI/path [`entity-ai.md`](../../7dtd-research/docs/entity-ai.md); net
-[`network.md`](../../7dtd-research/docs/network.md); world [`world-chunks.md`](../../7dtd-research/docs/world-chunks.md); scaling
+loop [`loop.md`](../../7dtd-engine-research/docs/loop.md); AI/path [`entity-ai.md`](../../7dtd-engine-research/docs/entity-ai.md); net
+[`network.md`](../../7dtd-engine-research/docs/network.md); world [`world-chunks.md`](../../7dtd-engine-research/docs/world-chunks.md); scaling
 [`measured-scaling.md`](measured-scaling.md); bottleneck ranking
 [`bottlenecks.md`](bottlenecks.md); allocation [`allocation-reuse.md`](allocation-reuse.md).
 
