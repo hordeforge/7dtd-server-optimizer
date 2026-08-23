@@ -209,22 +209,44 @@ namespace EfficientServer
                 + $"gcGuard={(Config.Gc != null && Config.Gc.SkipForcedCollect)}, gcIncremental={inc})");
         }
 
+        // Resolved-once host type. Dedicated-ness is fixed for the process lifetime
+        // (set by the server command line / prefs before mods load), so the answer
+        // never changes after the first successful read. This gate runs on every
+        // patch call, including per-entity-per-tick paths (updateTasks LOD,
+        // animator Update/LateUpdate gates) and the FastSend replication fan-out
+        // (~7 sends x entities x players per tick), so repeating the singleton
+        // read + exception scaffolding each time is pure overhead. A failed read
+        // is NOT cached: early during boot the game singleton may not exist yet,
+        // and the gate must stay fail-closed until a real answer exists.
+        static bool _dedicatedResolved;
+        static bool _isDedicated;
+
         public static bool ShouldRun()
         {
-            bool? isDedicated = null;
-            if (Config != null && Config.Enabled && Config.DedicatedOnly)
+            ServerPerfConfig cfg = Config;
+            bool? isDedicated;
+            if (cfg != null && cfg.Enabled && cfg.DedicatedOnly)
             {
-                try
+                if (!_dedicatedResolved)
                 {
-                    isDedicated = GameManager.IsDedicatedServer;
+                    try
+                    {
+                        _isDedicated = GameManager.IsDedicatedServer;
+                        _dedicatedResolved = true;
+                    }
+                    catch
+                    {
+                        // Fail closed: unknown host must not activate server-only patches.
+                        return false;
+                    }
                 }
-                catch
-                {
-                    // Fail closed: unknown host must not activate server-only patches.
-                    isDedicated = false;
-                }
+                isDedicated = _isDedicated;
             }
-            return ServerPerfConfig.ShouldRunFor(Active, Config?.Enabled ?? false, Config?.DedicatedOnly ?? false, isDedicated);
+            else
+            {
+                isDedicated = null; // host type not needed to decide
+            }
+            return ServerPerfConfig.ShouldRunFor(Active, cfg?.Enabled ?? false, cfg?.DedicatedOnly ?? false, isDedicated);
         }
 
         public static void Log(string msg)

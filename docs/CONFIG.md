@@ -375,7 +375,7 @@ horde.
 
 ## Diagnostics - never enable on a live server
 
-### `GcMegapauseTest` (false) + `WarmupSeconds` (60) + `GrowSeconds` (240)
+### `GcMegapauseTest` (false) + `WarmupSeconds` (60, clamp [0,3600]) + `GrowSeconds` (240, clamp [1,7200])
 Disables Boehm, grows the heap under load, then times one forced full collect to
 measure the worst-case freeze (measured 479 ms at 6.9 GB). A destructive probe for
 research only. `WarmupSeconds` clamps to [0, 3600] and `GrowSeconds` to [1, 7200]:
