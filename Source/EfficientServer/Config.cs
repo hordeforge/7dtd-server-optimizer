@@ -21,8 +21,9 @@ namespace EfficientServer
         public bool SkipTasksUnlessAlerted { get; set; } = true;
         // Mid-band entity-AI tick-striding: entities between MediumAiDistSq and
         // SkipTasksFarDistSq run the heavy updateTasks tail (path follow + EAI +
-        // the 1236-IL UpdateMoveHelper) only every Nth frame, striped by entity id
-        // so the per-tick entity cost is spread. 1 = off (every tick). CheckDespawn
+        // the 1236-IL UpdateMoveHelper) only every Nth tick, striped by entity id
+        // so the per-tick entity cost is spread. Counts TICKS (frame-rate
+        // independent; see TickClock). 1 = off (every tick). CheckDespawn
         // still runs every tick; alerted/targeting entities are never strided.
         public int MidTickStride { get; set; } = 1;
     }

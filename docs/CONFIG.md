@@ -58,7 +58,9 @@ sleeping/idle far zombies cost near zero. Alert/aggro always restores full AI.
 
 ### `MidTickStride` (default `1` = off, clamp [1,20])
 - **Mechanism:** mid-band entities run the heavy `updateTasks` tail (path follow +
-  EAI + `UpdateMoveHelper`) every Nth frame, striped by entityId so cost spreads.
+  EAI + `UpdateMoveHelper`) every Nth tick, striped by entityId so cost spreads.
+  Slots count TICKS on a dedicated clock (`UpdateTick` prefix), not render frames,
+  so striping stays exact at any `Server.TargetFps`.
   `CheckDespawn` still runs every tick; alerted entities never stride.
 - **Measured: no win** (RESULTS: the mid band is a thin shell - close entities need
   full AI, far ones are already skipped). Kept for experimentation.
@@ -229,7 +231,8 @@ human A/B (see RESULTS §3r for the null finding).
 
 ### `ResolveEveryNTicks` (default `4`, clamp [1,16])
 - **Mechanism:** each zombie fully resolves entity collision every Nth tick,
-  striped by entityId. `4` = vanilla's own response-stagger cadence family.
+  striped by entityId on the game-tick clock (exact at any `Server.TargetFps`).
+  `4` = vanilla's own response-stagger cadence family.
 - **Gameplay impact:** lower N is closer to vanilla; higher N trades collision
   fidelity for CPU. Disabled entirely while `CrowdCollisionLod.Enabled` is
   `false`.

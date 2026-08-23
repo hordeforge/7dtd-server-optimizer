@@ -15,7 +15,7 @@ quests, and multiplayer separation.
 **Mid-band tick-striding (v1.7.0, structural).** `UpdateTasksLodPatch` now has three
 bands on `aiClosestPlayerDistSq`: close = full rate; **mid (`MediumAiDistSq` <= d <
 `SkipTasksFarDistSq`) = run the heavy `updateTasks` tail every `AiLod.MidTickStride`-th
-frame, striped by entity id**; far = skip. The tail includes the 1236-IL
+tick, striped by entity id on a dedicated game-tick clock**; far = skip. The tail includes the 1236-IL
 `UpdateMoveHelper` that stock does not throttle via `aiActiveScale`, so at high zombie
 counts (the standard 64p+300z load, entity-axis dominated) this spreads the per-tick
 entity cost by up to the stride factor. `MidTickStride` default **1 = off** (every
@@ -141,9 +141,10 @@ write-barrier adds per-allocation overhead whose net value is workload-dependent
 guard removes the forced periodic collect, incremental mode shortens *every*
 collect including the churn-driven ones.
 
-Server frame rate is NOT the tick rate: `UpdateTick` runs per frame, but the full
-entity-sim/replication tick is gated at ~20 Hz regardless of fps (measured, RESULTS
-3k). `settargetfps <N>` sets the frame rate live but does not persist;
+Server frame rate is NOT the tick rate: `gmUpdate` runs per frame, but `UpdateTick`
+and the full entity-sim/replication tick it drives are gated at ~20 Hz regardless of
+fps (measured, RESULTS 3k). `settargetfps <N>` sets the frame rate live but does not
+persist;
 `Server.TargetFps` (v1.14.0) applies it at every game start. Measured: higher fps
 buys nothing - send timing and tick cadence are identical at fps 20 vs 60; the only
 effect is per-frame loop overhead (RESULTS 3k).

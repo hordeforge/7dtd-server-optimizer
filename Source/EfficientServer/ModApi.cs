@@ -58,7 +58,8 @@ namespace EfficientServer
                     typeof(Patches.EntityDistributionStridePatch),
                     typeof(Patches.GovernorPatch), typeof(Patches.TickGuardPatch),
                     typeof(Patches.BenchGodPatch), typeof(Patches.CrowdCollisionLodPatch),
-                    typeof(Patches.TargetFpsPatch), typeof(Patches.AnimatorLodPatch.UpdatePatch),
+                    typeof(Patches.TargetFpsPatch), typeof(Patches.TickClockPatch),
+                    typeof(Patches.AnimatorLodPatch.UpdatePatch),
                     typeof(Patches.AnimatorLodPatch.LateUpdatePatch),
                 };
                 int methods = 0, missing = 0;

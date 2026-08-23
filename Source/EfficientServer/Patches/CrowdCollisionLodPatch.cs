@@ -1,6 +1,5 @@
 using HarmonyLib;
 using KinematicCharacterController;
-using UnityEngine;
 
 namespace EfficientServer.Patches
 {
@@ -43,7 +42,11 @@ namespace EfficientServer.Patches
                 return;
             if (!(__instance is EntityEnemy))
                 return;
-            if ((Time.frameCount + __instance.entityId) % cfg.ResolveEveryNTicks == 0)
+            // Slot keyed on the TICK clock, not Time.frameCount: ccEntityCollision
+            // runs on the frame-rate-independent entity tick, and a frame-sourced
+            // modulo sampled at tick rate freezes whole id classes once
+            // Server.TargetFps > 20 (see TickClock).
+            if (TickClock.SlotOwn(__instance.entityId, cfg.ResolveEveryNTicks))
                 return; // this zombie's resolve tick: full collision
             var cck = __instance.m_characterController as CharacterControllerKinematic;
             KinematicCharacterMotor motor = cck != null ? cck.motor : null;

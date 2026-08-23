@@ -37,6 +37,11 @@
          wrap at int.MaxValue is exactly the kind of arithmetic that must be
          pinned by a test instead of trusted. -->
     <Compile Include="../EfficientServer/Patches/TickStride.cs" />
+    <!-- Game-type-free tick counter behind the per-entity LOD stripes; the
+         coverage invariant (every entity owns exactly one slot per stride
+         window, at any tick sampling) is what keeps distant zombies' AI and
+         collision resolution alive under Server.TargetFps > 20. -->
+    <Compile Include="../EfficientServer/Patches/TickClock.cs" />
   </ItemGroup>
 
   <ItemGroup>

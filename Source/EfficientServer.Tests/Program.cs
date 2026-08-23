@@ -383,6 +383,54 @@ namespace EfficientServer.Tests
             Check(!EfficientServer.Patches.TickStride.RunThisTick(ref sw, 3), "stride wrap: call 6 -> no run");
             Check(EfficientServer.Patches.TickStride.RunThisTick(ref sw, 3), "stride wrap: call 7 -> run (phase continues)");
 
+            // TickClock: the per-entity slot predicate behind the updateTasks
+            // mid-band stride and the crowd-collision resolve stagger. The invariant
+            // that matters is COVERAGE at any tick sampling rate: over any `stride`
+            // consecutive ticks, EVERY entityId owns exactly one slot. This is the
+            // property the previous Time.frameCount-based striping lost when
+            // Server.TargetFps > 20 made the frame counter jump F = fps/20 steps
+            // between ticks - whenever gcd(F, stride) > 1, whole residue classes of
+            // entity ids never satisfied the slot condition and their AI tail /
+            // neighbor-collision resolution silently never ran.
+            foreach (int strideLen in new[] { 2, 3, 4, 5, 8, 16 })
+            {
+                bool everyIdOwnsExactlyOncePerWindow = true;
+                for (int id = 0; id < 64 && everyIdOwnsExactlyOncePerWindow; id++)
+                    for (int t0 = 0; t0 < strideLen && everyIdOwnsExactlyOncePerWindow; t0++)
+                    {
+                        int owned = 0;
+                        for (int k = 0; k < strideLen; k++)
+                            if (EfficientServer.Patches.TickClock.OwnsSlot(id, t0 + k, strideLen)) owned++;
+                        if (owned != 1) everyIdOwnsExactlyOncePerWindow = false;
+                    }
+                Check(everyIdOwnsExactlyOncePerWindow,
+                    "tick clock slot coverage: every id owns exactly one slot per window of " + strideLen);
+            }
+            // Advance() steps Ticks by exactly one and SlotOwn reads the current
+            // index: pin a full cycle from the zero seed so the wrapper cannot
+            // drift off the pure predicate it wraps.
+            int cyc = EfficientServer.Patches.TickClock.Ticks;
+            bool cycleHeld = cyc == 0;
+            for (int t = 1; t <= 12 && cycleHeld; t++)
+            {
+                EfficientServer.Patches.TickClock.Advance();
+                if (EfficientServer.Patches.TickClock.Ticks != t) { cycleHeld = false; break; }
+                bool expected = t % 4 == 0; // id 0, stride 4 -> owns ticks 4, 8, 12
+                if (EfficientServer.Patches.TickClock.SlotOwn(0, 4) != expected) cycleHeld = false;
+            }
+            Check(cycleHeld, "tick clock Advance/SlotOwn track consecutive ticks from the zero seed");
+            // Signed-wrap boundary via the uint cast: with id=2 and stride=3 the
+            // sums 2+(int.MaxValue-1), 2+int.MaxValue, 2+int.MinValue cross zero as
+            // unsigned values 2147483648..50, whose residues mod 3 are 2, 0, 1 -
+            // so exactly the MIDDLE call owns its slot. A naive signed modulo
+            // would read (-2147483647) % 3 == -1 there and own nothing: the same
+            // frozen-id failure mode the cast exists to prevent.
+            var wrapT = int.MaxValue - 1;
+            Check(!EfficientServer.Patches.TickClock.OwnsSlot(2, wrapT, 3), "tick clock wrap: pre-wrap tick -> no run");
+            Check(EfficientServer.Patches.TickClock.OwnsSlot(2, wrapT + 1, 3),
+                "tick clock wrap: signed-negative sum still owns its uint slot");
+            Check(!EfficientServer.Patches.TickClock.OwnsSlot(2, wrapT + 2, 3), "tick clock wrap: post-wrap tick -> no run");
+
             // TickIntervalEma deterministic replay. The explicit-timestamp overload is
             // the pure transition function behind BOTH the governor's tier machine and
             // the tick guard's shed decision; driving it here with synthetic tick

@@ -1,6 +1,5 @@
 using System;
 using HarmonyLib;
-using UnityEngine;
 
 namespace EfficientServer.Patches
 {
@@ -9,9 +8,10 @@ namespace EfficientServer.Patches
     /// tail: path follow + EAI + the 1236-IL UpdateMoveHelper, which stock does NOT
     /// throttle via aiActiveScale). Three distance bands:
     ///   close (d &lt; MediumAiDistSq)                : full rate, every tick.
-    ///   mid   (MediumAiDistSq &lt;= d &lt; FarDistSq) : run every MidTickStride-th frame,
+    ///   mid   (MediumAiDistSq &lt;= d &lt; FarDistSq) : run every MidTickStride-th tick,
     ///                                                 striped by entity id (spreads the
-    ///                                                 per-tick entity cost).
+    ///                                                 per-tick entity cost; counts TICKS
+    ///                                                 via TickClock, not render frames).
     ///   far   (d &gt;= SkipTasksFarDistSq)           : skip the tail entirely.
     /// CheckDespawn (updateTasks' first step) still runs every tick in mid/far so far
     /// entities cannot accumulate. Alerted / targeting / investigating / active-sleeper
@@ -54,11 +54,14 @@ namespace EfficientServer.Patches
 
             if (mid)
             {
-                // Run this entity's heavy tail only on its stride frame; otherwise
+                // Run this entity's heavy tail only on its stride tick; otherwise
                 // fall through to the despawn-only skip below. Striping by entity id
-                // + frame spreads the mid-band cost evenly across `stride` frames.
-                if ((__instance.entityId + Time.frameCount) % cfg.MidTickStride == 0)
-                    return true; // this entity's turn this frame
+                // + tick count spreads the mid-band cost evenly across `stride`
+                // ticks at ANY frame rate (TickClock, not Time.frameCount: the tick
+                // is frame-rate independent, and a frame-sourced modulo sampled at
+                // tick rate freezes whole id classes once Server.TargetFps > 20).
+                if (TickClock.SlotOwn(__instance.entityId, cfg.MidTickStride))
+                    return true; // this entity's stride tick
             }
 
             // Mid off-frame or far: run only CheckDespawn (updateTasks' first step, so
