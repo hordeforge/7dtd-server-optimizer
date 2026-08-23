@@ -33,6 +33,10 @@
     <!-- Game-type-free clock seam: the EMA the governor and tick guard key off,
          driven here with explicit timestamps instead of a live Stopwatch. -->
     <Compile Include="../EfficientServer/Patches/TickIntervalEma.cs" />
+    <!-- Game-type-free stride gate shared by both cadence levers; the signed
+         wrap at int.MaxValue is exactly the kind of arithmetic that must be
+         pinned by a test instead of trusted. -->
+    <Compile Include="../EfficientServer/Patches/TickStride.cs" />
   </ItemGroup>
 
   <ItemGroup>

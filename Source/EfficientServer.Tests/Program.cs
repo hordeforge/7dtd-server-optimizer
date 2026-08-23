@@ -293,8 +293,11 @@ namespace EfficientServer.Tests
             Check(d2.TickGuard != null && !d2.TickGuard.Enabled, "default TickGuard.Enabled=false (removes entities)");
             var shed = LoadTemp("{\"TickGuard\":{\"ShedBatch\":9999,\"ShedAboveMs\":10}}");
             Check(shed.TickGuard.ShedBatch == 100, "TickGuard.ShedBatch 9999 -> 100 (clamp)");
-            Check(shed.TickGuard.ShedAboveMs >= 60f && shed.TickGuard.ShedAboveMs >= shed.Governor.OverBudgetMs + 5f,
-                "TickGuard.ShedAboveMs 10 -> floored above the governor band (last-resort floor)");
+            // Exact pin like the other dynamic-floor cases (ShedAboveMs 61 -> 205
+            // below): the floor here is deterministic from the inputs alone,
+            // max(60, default OverBudgetMs 57 + 5) = 62.
+            Check(shed.TickGuard.ShedAboveMs == 62f,
+                "TickGuard.ShedAboveMs 10 -> floored to exactly max(60, OverBudgetMs+5)=62");
             var gov = LoadTemp("{\"Governor\":{\"OverBudgetMs\":60,\"HealthyMs\":90}}");
             Check(gov.Governor.HealthyMs <= gov.Governor.OverBudgetMs - 5f,
                 "Governor hysteresis: HealthyMs forced below OverBudgetMs-5");
@@ -346,6 +349,39 @@ namespace EfficientServer.Tests
             Check(GovernorTiers.ThrottleLever(1, 200) == 2, "governor: graph cadence baseline 1 -> 2 (unchanged)");
             Check(GovernorTiers.ThrottleLever(100, 200) == 200, "governor: graph cadence baseline 100 -> 200 (ceiling)");
             Check(GovernorTiers.ThrottleLever(200, 200) == 200, "governor: graph cadence baseline 200 stays 200");
+
+            // TickStride: the one stride gate shared by both cadence levers.
+            // Semantics: exactly every Nth call owns the slot and the counter
+            // advances on EVERY call, run or not (a skipped tick must consume
+            // its slot, or a burst of missed ticks would collapse into one).
+            var s1 = 0;
+            Check(EfficientServer.Patches.TickStride.RunThisTick(ref s1, 1), "stride every=1 runs on call 1");
+            Check(EfficientServer.Patches.TickStride.RunThisTick(ref s1, 1), "stride every=1 runs on call 2");
+            var s4 = 0;
+            Check(!EfficientServer.Patches.TickStride.RunThisTick(ref s4, 4), "stride every=4: call 1 -> no run");
+            Check(!EfficientServer.Patches.TickStride.RunThisTick(ref s4, 4), "stride every=4: call 2 -> no run");
+            Check(!EfficientServer.Patches.TickStride.RunThisTick(ref s4, 4), "stride every=4: call 3 -> no run");
+            Check(EfficientServer.Patches.TickStride.RunThisTick(ref s4, 4), "stride every=4: call 4 -> run");
+            Check(s4 == 4, "stride counter advanced on non-run calls too (== 4 after four calls)");
+
+            // Signed-wrap boundary: the gate casts through uint so the counter
+            // wrapping past int.MaxValue keeps the same slot phase instead of
+            // going negative and flipping which ticks run (TickStride doc).
+            // Hand-derived expectation, not copied from a run: starting the
+            // counter at int.MaxValue-2 with every=3, the unsigned sequence
+            // 2147483646.. wraps to 2147483648.. and hits 0 mod 3 exactly on
+            // calls 1, 4 and 7. Naive signed modulo would return FALSE on call
+            // 4 (-2147483647 % 3 == -1), so this window genuinely pins the cast.
+            var sw = int.MaxValue - 2;
+            Check(EfficientServer.Patches.TickStride.RunThisTick(ref sw, 3), "stride wrap: call 1 (int.MaxValue-1) -> run");
+            Check(!EfficientServer.Patches.TickStride.RunThisTick(ref sw, 3), "stride wrap: call 2 (int.MaxValue) -> no run");
+            Check(!EfficientServer.Patches.TickStride.RunThisTick(ref sw, 3), "stride wrap: call 3 (int.MinValue) -> no run");
+            Check(sw == int.MinValue, "stride wrap: counter wrapped to int.MinValue after call 3");
+            Check(EfficientServer.Patches.TickStride.RunThisTick(ref sw, 3),
+                "stride wrap: call 4 (int.MinValue+1) still owns the slot (uint phase kept)");
+            Check(!EfficientServer.Patches.TickStride.RunThisTick(ref sw, 3), "stride wrap: call 5 -> no run");
+            Check(!EfficientServer.Patches.TickStride.RunThisTick(ref sw, 3), "stride wrap: call 6 -> no run");
+            Check(EfficientServer.Patches.TickStride.RunThisTick(ref sw, 3), "stride wrap: call 7 -> run (phase continues)");
 
             // TickIntervalEma deterministic replay. The explicit-timestamp overload is
             // the pure transition function behind BOTH the governor's tier machine and
@@ -458,9 +494,12 @@ namespace EfficientServer.Tests
             // Dedicated-only gate (ShouldRunFor): disabled config never runs.
             Check(!ServerPerfConfig.ShouldRunFor(false, true, true, true), "active=false -> no run");
             Check(!ServerPerfConfig.ShouldRunFor(true, false, true, true), "enabled=false -> no run");
-            // DedicatedOnly=false runs anywhere.
+            // DedicatedOnly=false runs anywhere, host confirmed or not: the
+            // operator explicitly opted out of the gate, so even a detected
+            // client must not silently deactivate the mod.
             Check(ServerPerfConfig.ShouldRunFor(true, true, false, null), "dedicatedOnly=false -> run (host unknown)");
             Check(ServerPerfConfig.ShouldRunFor(true, true, false, true), "dedicatedOnly=false -> run (host any)");
+            Check(ServerPerfConfig.ShouldRunFor(true, true, false, false), "dedicatedOnly=false -> run (confirmed client)");
             // DedicatedOnly=true requires a confirmed dedicated host.
             Check(ServerPerfConfig.ShouldRunFor(true, true, true, true), "dedicatedOnly=true + dedicated -> run");
             Check(!ServerPerfConfig.ShouldRunFor(true, true, true, false), "dedicatedOnly=true + client -> no run");
@@ -521,6 +560,11 @@ namespace EfficientServer.Tests
             Check(!faOff.FeatureActive("EntityDistributionStride"), "EntityDistributionEveryTicks 1 -> inactive");
             Check(!faOff.FeatureActive("ChunkSendThrottle"), "ChunkPackagesPerObserverPerTick 3 (vanilla) -> inactive");
             Check(!faOff.FeatureActive("TargetFps"), "TargetFps 0 -> inactive");
+            // Admission is an OR of two independent levers; faOn above only
+            // exercises the enqueue-cap side, so pin the drop-distance side too.
+            var dropOnly = LoadTemp("{\"Pathfinding\":{\"DropPathWhenFarDistSq\":2500}}");
+            Check(dropOnly.FeatureActive("PathAdmission"),
+                "DropPathWhenFarDistSq 2500 with cap 0 -> PathAdmission active");
 
             // Normalize bounds for the remaining knob groups, each with its own
             // range (floors differ: buffer 0, region-ms/syncs/stride 1). Exact
