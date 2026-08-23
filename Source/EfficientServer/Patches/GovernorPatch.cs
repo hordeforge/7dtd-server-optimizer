@@ -36,6 +36,10 @@ namespace EfficientServer.Patches
         static int _baseGraphEvery = -1;
         static int _baseEntityStride = -1;
 
+        // Period between the tier-2 re-sweeps that cover mid-emergency spawns
+        // (~5 s at the vanilla 20 TPS).
+        const int SweepPeriodTicks = 100;
+
         // Live state for `es status` / incident response: which tier is applied
         // RIGHT NOW (config alone cannot tell you this) and the smoothed tick
         // interval driving it.
@@ -66,7 +70,10 @@ namespace EfficientServer.Patches
                         SetLevel(2, cfg, emaMs);
                 }
                 // Periodic sweep while in tier 2 so mid-emergency spawns are covered.
-                if (_level == 2 && _overTicks % 100 == 0)
+                // _overTicks > 0 skips the entry tick: SetLevel(2) just swept the
+                // world and reset the counter, and 0 % period == 0 would re-run it
+                // immediately in the same tick.
+                if (_level == 2 && _overTicks > 0 && _overTicks % SweepPeriodTicks == 0)
                     AnimatorEmergency.Enter();
             }
             else if (emaMs < cfg.HealthyMs)

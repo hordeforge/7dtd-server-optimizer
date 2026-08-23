@@ -92,11 +92,11 @@ namespace EfficientServer.Patches
             // NOTE: calm-far LOD still uses enabled=false; emergency uses CullCompletely only.
             if (anim.enabled)
                 anim.enabled = false;
-            // Cast through uint like TickStride/TickClock: frameCount + entityId can
-            // cross int.MaxValue on a long-lived high-fps server, and a signed
-            // remainder would flip every entity's slot phase at that boundary.
-            bool slotFrame = unchecked((uint)(Time.frameCount + entity.entityId))
-                % (uint)cfg.FarStride == 0;
+            // Same wrap-safe striped-slot predicate TickClock's tests pin, driven by
+            // Time.frameCount instead of the tick clock (animator evaluation is
+            // per-frame, not per-tick). The uint cast inside keeps frameCount +
+            // entityId crossing int.MaxValue from flipping every entity's slot phase.
+            bool slotFrame = TickClock.OwnsSlot(entity.entityId, Time.frameCount, cfg.FarStride);
             if (!slotFrame)
                 return false; // no pump, no managed interpretation this frame
             if (pump)

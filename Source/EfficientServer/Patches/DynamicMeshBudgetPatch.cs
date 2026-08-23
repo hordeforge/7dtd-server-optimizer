@@ -30,10 +30,13 @@ namespace EfficientServer.Patches
             try
             {
                 CaptureStockOnce();
+                // No ad-hoc clamps here: ServerPerfConfig.Normalize owns these
+                // ranges (floors included), and every config reaching this method
+                // has passed through it.
                 DynamicMeshSettings.OnlyPlayerAreas = cfg.OnlyPlayerAreas;
                 DynamicMeshSettings.PlayerAreaChunkBuffer = cfg.PlayerAreaChunkBuffer;
-                DynamicMeshSettings.MaxRegionLoadMsPerFrame = Math.Max(1, cfg.MaxRegionLoadMsPerFrame);
-                DynamicMeshServer.MaxActiveSyncs = Math.Max(1, cfg.MaxActiveSyncs);
+                DynamicMeshSettings.MaxRegionLoadMsPerFrame = cfg.MaxRegionLoadMsPerFrame;
+                DynamicMeshServer.MaxActiveSyncs = cfg.MaxActiveSyncs;
                 _applied = true;
                 ModApi.Log(
                     "mesh budgets: OnlyPlayerAreas=" + DynamicMeshSettings.OnlyPlayerAreas +
