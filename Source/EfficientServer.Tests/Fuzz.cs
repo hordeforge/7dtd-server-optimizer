@@ -20,9 +20,17 @@ namespace EfficientServer.Tests
     //   StructureAware: schema-driven mutations of the serialized default
     //     config. Pure character soup almost never parses, so hostile VALUES
     //     (NaN, 1e999, wrong types) would otherwise never reach Normalize.
+    //     Single-knob rounds are followed by COMBINED rounds (1..4 knobs at
+    //     once plus whole-section type swaps): sibling-linked clamps
+    //     (HealthyMs vs OverBudgetMs, MediumScale vs FullScale, ShedAboveMs
+    //     over the governor band) can only misbehave when both sides of the
+    //     link are hostile together, and the per-section null-backfill lines
+    //     must be reachable by fuzzing, not only by fixtures.
     //   GarbageText: truncations of a real config, deep nesting, duplicate
     //     keys, lone surrogates, invalid UTF-8 and BOM-prefixed junk through
-    //     both the string path and the raw-byte read path.
+    //     both the string path and the raw-byte read path, plus valid-JSON
+    //     documents whose SHAPE is wrong for a config (top-level scalars and
+    //     arrays, trailing content, arrays where a section object belongs).
     //
     // Every failure line embeds the offending JSON, so an artifact becomes a
     // repro by pasting it as a LoadTemp fixture next to Main.
@@ -31,6 +39,7 @@ namespace EfficientServer.Tests
         public delegate void CheckFn(bool cond, string what);
 
         const int StructureIterations = 2000;
+        const int CombinedIterations = 1200;
         const int GarbageIterations = 1200;
 
         // Alphabet kept from the original hand-rolled soup target: JSON syntax
@@ -66,6 +75,52 @@ namespace EfficientServer.Tests
                 string? bad = Violations(loaded);
                 check(bad == null, "structure fuzz iter " + i + ": " + bad + " for: " + json);
             }
+
+            // Combined rounds: several hostile knobs at once. Normalize resolves
+            // sibling-linked ranges in a fixed order with clamped fallbacks, so
+            // the failure mode to hunt here is a fallback landing OUTSIDE a range
+            // a sibling shifted (e.g. HealthyMs's max moves with OverBudgetMs).
+            var sections = ReflectedSections();
+            check(sections.Count >= 10,
+                "structure fuzz: reflected section set covers the knob groups");
+            for (int i = 0; i < CombinedIterations; i++)
+            {
+                ModApi.Warnings.Clear();
+                var root = (JObject)seed.DeepClone();
+                int hits = 1 + rng.Next(4);
+                var done = new HashSet<int>();
+                for (int m = 0; m < hits; m++)
+                {
+                    int li = rng.Next(leaves.Count);
+                    if (!done.Add(li)) continue;
+                    Mutate(root, leaves[li], rng);
+                }
+                if (rng.Next(4) == 0)
+                {
+                    // Whole-section type swap: null exercises the per-section
+                    // backfill line, array/scalar the fail-soft conversion error.
+                    string sect = sections[rng.Next(sections.Count)];
+                    root[sect] = rng.Next(4) switch
+                    {
+                        0 => JValue.CreateNull(),
+                        1 => (JToken)new JArray { 1 },
+                        2 => rng.Next(2) == 0 ? (JToken)"abc" : (JToken)true,
+                        _ => new JValue(-1),
+                    };
+                }
+                string json = JsonConvert.SerializeObject(root);
+                ServerPerfConfig loaded;
+                try { loaded = load(json); }
+                catch (Exception ex)
+                {
+                    check(false, "combined fuzz iter " + i + ": Load threw "
+                        + ex.GetType().Name + " for: " + json);
+                    continue;
+                }
+                string? badCombined = Violations(loaded);
+                check(badCombined == null,
+                    "combined fuzz iter " + i + ": " + badCombined + " for: " + json);
+            }
         }
 
         public static void GarbageText(
@@ -81,6 +136,31 @@ namespace EfficientServer.Tests
                 ModApi.Warnings.Clear();
                 string json = GarbageCase(rng, defaultJson);
                 RunThroughLoadAndKeyScan(check, "garbage iter " + i, json, loadString);
+            }
+
+            // Valid JSON whose document shape is wrong for a config object:
+            // top-level scalars/arrays, trailing content, an array where a
+            // section object belongs, whitespace-only text. Truncation sweeps
+            // and character soup almost never synthesize these exactly, yet
+            // each takes a distinct failure branch (value-conversion error,
+            // reader error, silent null deserialization) that must stay
+            // fail-soft to defaults with FindUnknownKeys still returning a list.
+            string[] shapeCases =
+            {
+                "[]",
+                "[{\"Enabled\":false}]",
+                "\"text\"",
+                "-42",
+                "3.5e2",
+                "true",
+                "{\"AiLod\":[1,2]}",
+                "{}{}",
+                "   ",
+            };
+            foreach (string shape in shapeCases)
+            {
+                ModApi.Warnings.Clear();
+                RunThroughLoadAndKeyScan(check, "shape '" + shape + "'", shape, loadString);
             }
 
             // Raw-byte cases hit File.ReadAllText(path, UTF8), which string-level
@@ -208,6 +288,18 @@ namespace EfficientServer.Tests
                     leaves.Add(new[] { top.Name, sub.Name });
             }
             return leaves;
+        }
+
+        // Top-level knob-group names, from the schema like ReflectedLeaves, so a
+        // future section joins the combined fuzz automatically.
+        static List<string> ReflectedSections()
+        {
+            var names = new List<string>();
+            foreach (var top in typeof(ServerPerfConfig).GetProperties())
+                if (top.PropertyType.IsClass
+                    && top.PropertyType.Namespace == typeof(ServerPerfConfig).Namespace)
+                    names.Add(top.Name);
+            return names;
         }
 
         static JToken NodeAt(JObject root, string[] path)
