@@ -83,8 +83,10 @@ def cluster_players() -> list[int]:
     if len(ids) < 2:
         return ids
     anchor = ids[0]
-    for pid in ids[1:]:
-        B.telnet([f"teleportplayer {pid} {anchor}"], settle=0.4)
+    # One connection for the whole cohort: each telnet() call pays TCP setup +
+    # password + drain windows, so per-bot connections serialize into ~1.5 s
+    # of pure overhead per bot (same batching fast_spawn uses).
+    B.telnet([f"teleportplayer {pid} {anchor}" for pid in ids[1:]], settle=1.0)
     log(f"clustered {len(ids)} bots onto {anchor}")
     time.sleep(5)
     return ids
