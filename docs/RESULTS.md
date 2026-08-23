@@ -73,6 +73,7 @@ write-barrier tax.
 | 1.14.0-3 | Server.TargetFps (+enforcement; later measured no-effect - frame != tick); ambient-spectrum skip; anim/rig diagnostics |
 | 1.15.0 | Animator LOD (20 ms prize, exemption-limited to dispersed populations) |
 | 1.16.0/1 | Governor tier 2: animator emergency (~40% of the 64p frame); JobWorkerCount (measured null) |
+| 1.17.0 | Path admission (default off); crowd-collision LOD (null A/B, default off); animator emergency rewritten to `CullCompletely` (root-motion-safe exit) |
 
 ---
 

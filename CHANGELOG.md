@@ -44,10 +44,11 @@ So `EfficientServer-0.1.0.zip` logging `mod=1.17.0` is correct, not drift.
   them inactive until restart while every other group activated live. The
   re-apply is idempotent (Harmony replaces an identical patch method); the
   GC megapause diagnostic stays start-time-only by design.
-- Opt-in GC megapause diagnostic: `Gc.WarmupSeconds` is now clamped to
-  [0, 3600] and `GrowSeconds` to [1, 7200], and the sleep duration is computed
-  in long math. Previously an unclamped warmup above ~2.1M seconds wrapped the
-  milliseconds product negative and killed the probe with a misleading log.
+- Opt-in GC megapause diagnostic: `Diagnostics.WarmupSeconds` is now clamped to
+  [0, 3600] and `Diagnostics.GrowSeconds` to [1, 7200], and the sleep duration
+  is computed in long math. Previously an unclamped warmup above ~2.1M seconds
+  wrapped the milliseconds product negative and killed the probe with a
+  misleading log.
 
 ### Added
 - Supply-chain inventory: `make package` now embeds a deterministic CycloneDX
@@ -107,8 +108,9 @@ loading.
   (`Pathfinding.GraphUpdateEveryTicks`).
 - Path admission (v1.17.0): optional cap on non-priority path enqueues per
   tick and far-drop knob; both default off (vanilla).
-- Network single-target fast send (default off): O(1) recipient lookup for the
-  pure single-target send case; no wire change.
+- Network single-target fast send (default on, provably equivalent to the
+  vanilla scan): O(1) recipient lookup for the pure single-target send case;
+  no wire change.
 - Ambient light-spectrum skip (default on).
 - Adaptive load governor (default on; inert while healthy): engages measured
   throttles under overload; opt-in tier 2 animator emergency (v1.16.0/v1.17.0,

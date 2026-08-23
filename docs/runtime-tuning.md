@@ -31,11 +31,11 @@ that single call.
 | `GC_parallel` / `GC_init_parallel` | parallel marking (mark with multiple threads → shorter mark pause) |
 
 **Environment variables (EAC-SAFE - no mod, read by Boehm at process init):**
-`GC_ENABLE_INCREMENTAL`, `GC_PAUSE_TIME_TARGET` (ms), `GC_MARKERS` (marker thread
-count), `GC_FREE_SPACE_DIVISOR`, `GC_FULL_FREQUENCY`. Set these in the server
-launch environment to enable + tune incremental GC **with EAC still enforcing** -
-the only EAC-compatible route to this lever. Example:
-`GC_ENABLE_INCREMENTAL=1 GC_PAUSE_TIME_TARGET=5 GC_MARKERS=4 ./7DaysToDieServer...`
+classic Boehm dials include `GC_ENABLE_INCREMENTAL`, `GC_PAUSE_TIME_TARGET` (ms),
+`GC_MARKERS`, `GC_FREE_SPACE_DIVISOR`, `GC_FULL_FREQUENCY`. Setting them in the
+server launch environment is the only EAC-compatible route to this lever, but
+this build honors only a subset (verified string-table list below); e.g.
+`GC_ENABLE_INCREMENTAL=1 ./7DaysToDieServer...`
 
 **Honored GC env vars (verified in this build's `libmonobdwgc-2.0.so` string table):**
 `GC_FREE_SPACE_DIVISOR`, `GC_INITIAL_HEAP_SIZE`, `GC_MAXIMUM_HEAP_SIZE`,

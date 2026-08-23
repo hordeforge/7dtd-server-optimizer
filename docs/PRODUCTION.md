@@ -52,7 +52,7 @@ Apply config edits live: `es reload` (telnet/console). `es status` shows active 
 
 - **Log lines that matter** (server log):
   - `MISSING TARGET: ...` at boot = a lever is INACTIVE after a game update. Act.
-  - `Governor: ... THROTTLED / restored vanilla` = load crossed the band. Frequent
+  - `Governor: ... THROTTLED / restored baseline` = load crossed the band. Frequent
     flapping -> raise `CooldownTicks` or lower the load.
   - `Governor: ... ANIMATOR EMERGENCY / stepped down` = tier 2 (if enabled): all
     zombie animators culled (`CullCompletely`) during extreme overload (~40% frame
