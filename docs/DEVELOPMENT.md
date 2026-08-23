@@ -75,7 +75,7 @@ All optional; scripts fall back to defaults. The Makefile routes its documented
 
 | Variable | Read by | Default | Meaning |
 |---|---|---|---|
-| `SEVENDTD_DS_DIR` / make `DS=` | build.sh, install.sh, run_server.sh | `~/.local/share/Steam/steamapps/common/7 Days to Die Dedicated Server` | Dedicated install: game DLL refs, mod install target, launch dir |
+| `SEVENDTD_DS_DIR` / make `DS=` | build.sh, install.sh, run_server.sh, make `uninstall` | `~/.local/share/Steam/steamapps/common/7 Days to Die Dedicated Server` | Dedicated install: game DLL refs, mod install target, launch dir |
 | `SEVENDTD_GAME_DIR` | build.sh | client install path | Client fallback for game DLL refs |
 | `SEVENDTD_BUILD_BACKEND` | build.sh (`make build-mcs`) | auto (dotnet if SDK present) | `mcs` forces the Mono fallback compiler; `dotnet` forces the SDK path and fails hard without one |
 | `SEVENDTD_CONFIG` | run_server.sh | local `server/serverconfig.optimized.xml`, else tracked root `serverconfig.optimized.xml` | Dedicated server config XML |
@@ -84,7 +84,7 @@ All optional; scripts fall back to defaults. The Makefile routes its documented
 | `SEVENDTD_GC_INCREMENTAL` | run_server.sh | unset | Opt-in incremental GC (sets `GC_ENABLE_INCREMENTAL=1`) |
 | `DOTNET_ROOT` | build.sh, Makefile | Makefile picks the first existing of `~/.cache/dotnet-sdk`, `~/.dotnet`; direct build.sh runs fall back to `~/.cache/dotnet-sdk` only (and export it) | Local SDK location prepended to PATH |
 | `SOURCE_DATE_EPOCH` | package.sh | last commit time | Zip mtime epoch for reproducible packaging |
-| `VERSION` | package.sh | `git describe --tags --always` | Override for the zip version suffix (`EfficientServer-<VERSION>.zip`) |
+| `VERSION` | package.sh | `git describe --tags --always --dirty` | Override for the zip version suffix (`EfficientServer-<VERSION>.zip`); a modified tree keeps an explicit `-dirty` suffix instead of the clean release name |
 | `GC_FREE_SPACE_DIVISOR`, `GC_NPROCS`, `MONO_ENV_OPTIONS`, `MALLOC_ARENA_MAX` | run_server.sh | see script header | Boehm GC / Mono JIT tuning with A/B-measured defaults |
 | `GC_INITIAL_HEAP_SIZE`, `GC_USE_ENTIRE_HEAP` | run_server.sh | unset | Optional GC headroom knobs (see script comments) |
 | `GC_PAUSE_TIME_TARGET` | run_server.sh | unset | Forwarded ONLY together with `SEVENDTD_GC_INCREMENTAL`; ignored otherwise |

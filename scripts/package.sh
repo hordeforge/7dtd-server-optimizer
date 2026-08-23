@@ -19,11 +19,19 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 "$ROOT/scripts/build.sh"
 
-VERSION="${VERSION:-$(git -C "$ROOT" describe --tags --always 2>/dev/null || true)}"
+# --dirty is mandatory here: without it a modified working tree describes as
+# the clean tag and ships a different zip under the release name and SBOM
+# serial of the untouched release.
+VERSION="${VERSION:-$(git -C "$ROOT" describe --tags --always --dirty 2>/dev/null || true)}"
 VERSION="${VERSION#v}"
-if [[ -z "$VERSION" || "$VERSION" == *-* ]]; then
-  # No tag yet (or dirty/untagged describe): fall back to a short commit id.
-  VERSION="$(git -C "$ROOT" rev-parse --short HEAD)"
+if [[ -z "$VERSION" || "$VERSION" == *-* && "$VERSION" != *-dirty ]]; then
+  # No tag yet (or an annotated-tag distance like v1.17.0-3-gabc1234): fall
+  # back to a short commit id.
+  VERSION="$(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null || echo unknown)"
+fi
+if [[ ! "$VERSION" =~ ^[0-9A-Za-z._-]+$ ]]; then
+  echo "ERROR: unusable version '$VERSION' (set VERSION=x.y.z explicitly)" >&2
+  exit 1
 fi
 
 EPOCH="${SOURCE_DATE_EPOCH:-$(git -C "$ROOT" log -1 --pretty=%ct)}"

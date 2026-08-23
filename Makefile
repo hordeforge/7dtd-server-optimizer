@@ -75,8 +75,11 @@ test:
 	python3 $(ROOT)/scripts/gen_sbom.py --selftest
 install:
 	$(ROOT)/scripts/install.sh
+# $(SEVENDTD_DS_DIR), not $(DS): an exported SEVENDTD_DS_DIR overrides ?=, so
+# $(DS) would still hold the stock default and this could delete from a
+# directory install.sh never touched. The variable equals DS when DS was used.
 uninstall:
-	rm -rf "$(DS)/Mods/EfficientServer"
+	rm -rf "$(SEVENDTD_DS_DIR)/Mods/EfficientServer"
 run:
 	$(ROOT)/scripts/run_server.sh
 clean:
