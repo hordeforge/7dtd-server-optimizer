@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Text;
 using Newtonsoft.Json;
@@ -356,15 +357,30 @@ namespace EfficientServer
             return unknown;
         }
 
+        /// <summary>
+        /// The one case comparison for JSON-key-vs-property matching. Newtonsoft's
+        /// JsonPropertyCollection binds keys with StringComparer.OrdinalIgnoreCase,
+        /// so this guard must fold with exactly that rule. It must NOT use
+        /// BindingFlags.IgnoreCase: its comparison follows the host runtime's
+        /// culture rules (culture-sensitive on Mono/net48), so on a tr-TR locale a
+        /// key like "AILOD" or "PATHFINDING" would be folded apart from "AiLod" and
+        /// reported as unknown while Newtonsoft still binds it - a warning that
+        /// contradicts what actually loaded.
+        /// </summary>
+        internal static bool KeyNameMatches(string jsonKey, string propertyName) =>
+            string.Equals(jsonKey, propertyName, StringComparison.OrdinalIgnoreCase);
+
         static void CollectUnknown(JObject obj, Type schema, string prefix, List<string> unknown)
         {
             foreach (JProperty prop in obj.Properties())
             {
-                // var (not PropertyInfo): GetProperty is annotated nullable, so
-                // an explicit type fails CS8600 under the tests project's
-                // nullable context; var infers PropertyInfo? in both projects.
-                var known = schema.GetProperty(prop.Name,
-                    BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+                // var on purpose: FirstOrDefault carries [MaybeNull], so this infers
+                // PropertyInfo? under the tests project's nullable context while
+                // staying plain PropertyInfo for the net48/mcs build; an explicit
+                // annotated type cannot compile in both.
+                var known = schema
+                    .GetProperties(BindingFlags.Public | BindingFlags.Instance)
+                    .FirstOrDefault(p => KeyNameMatches(prop.Name, p.Name));
                 if (known == null)
                 {
                     unknown.Add(prefix.Length == 0 ? prop.Name : prefix + "." + prop.Name);

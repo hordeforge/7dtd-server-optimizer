@@ -121,6 +121,21 @@ namespace EfficientServer.Tests
                 "FindUnknownKeys: nested typo reported with dotted path");
             Check(ServerPerfConfig.FindUnknownKeys("{\"AiLod\":{\"ENABLED\":true}}").Count == 0,
                 "FindUnknownKeys: case-variant of real key binds, not reported");
+            // Case folding must be OrdinalIgnoreCase (what Newtonsoft's binding
+            // uses), not the host locale: under a tr-TR culture a culture-sensitive
+            // comparison folds 'i' and 'I' apart, which would report all-caps keys
+            // as unknown while Newtonsoft still binds them. All-caps variants of
+            // I-bearing names must therefore stay "known" here.
+            Check(ServerPerfConfig.FindUnknownKeys(
+                    "{\"PATHFINDING\":{\"GRAPHUPDATEEVERYTICKS\":8,\"MAXPATHENQUEUESPERTICK\":0}}").Count == 0,
+                "FindUnknownKeys: all-caps keys fold ordinally, independent of host locale");
+            Check(ServerPerfConfig.KeyNameMatches("AILOD", "AiLod"),
+                "KeyNameMatches: AILOD == AiLod under OrdinalIgnoreCase");
+            // And a key that only differs by a Unicode case twin (dotless ı U+0131,
+            // which Turkish folding maps to/from 'I') is NOT known: ordinal equality
+            // keeps it a reported typo.
+            Check(ServerPerfConfig.FindUnknownKeys("{\"pathf\u0131nding\":{}}")[0] == "pathf\u0131nding",
+                "FindUnknownKeys: dotless-ı spelling is a distinct key (ordinal, no locale folding)");
             Check(ServerPerfConfig.FindUnknownKeys("{ this is not json ][").Count == 0,
                 "FindUnknownKeys: malformed json -> empty, no throw");
             Check(ServerPerfConfig.FindUnknownKeys("").Count == 0,
@@ -133,6 +148,9 @@ namespace EfficientServer.Tests
             var caseBind = LoadTemp("{\"ailod\":{\"enabled\":false}}");
             Check(caseBind.AiLod.Enabled == false,
                 "case-variant key binds like Newtonsoft (value applied)");
+            var caseBindCaps = LoadTemp("{\"AILOD\":{\"ENABLED\":false}}");
+            Check(caseBindCaps.AiLod.Enabled == false,
+                "all-caps I-bearing key binds (guard stays in sync with the ordinal binder)");
 
             // Normalize: GraphUpdateEveryTicks clamps [1,200].
             var big = LoadTempTracked("{\"Pathfinding\":{\"GraphUpdateEveryTicks\":1000000}}");

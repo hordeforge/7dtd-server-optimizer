@@ -196,7 +196,7 @@ def selftest() -> int:
               "--lock", str(lock_file), "--out", str(out_a)])
         main(["--version", "1.2.3", "--commit", "deadbeef", "--epoch", "1700000000",
               "--lock", str(lock_file), "--out", str(out_b)])
-        a, b = out_a.read_text(), out_b.read_text()
+        a, b = out_a.read_text(encoding="utf-8"), out_b.read_text(encoding="utf-8")
         check(a == b, "identical inputs produce byte-identical output")
 
         bom = json.loads(a)
@@ -216,7 +216,7 @@ def selftest() -> int:
         out_c = Path(td) / "c.json"
         main(["--version", "1.2.3", "--commit", "deadbeef", "--epoch", "1700000001",
               "--lock", str(lock_file), "--out", str(out_c)])
-        c = json.loads(out_c.read_text())
+        c = json.loads(out_c.read_text(encoding="utf-8"))
         check(c["serialNumber"] == bom["serialNumber"],
               "serialNumber depends on version+commit, not epoch")
         check(c["metadata"]["timestamp"] != bom["metadata"]["timestamp"],
@@ -228,7 +228,7 @@ def selftest() -> int:
         out_d = Path(td) / "d.json"
         main(["--version", "0.0.0", "--commit", "x", "--epoch", "0",
               "--lock", str(empty_lock), "--out", str(out_d)])
-        d = json.loads(out_d.read_text())
+        d = json.loads(out_d.read_text(encoding="utf-8"))
         check(d["components"] == [] and d["dependencies"][0]["dependsOn"] == [],
               "empty dependency graph yields an empty but valid BOM")
 
