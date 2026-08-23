@@ -13,9 +13,14 @@ namespace EfficientServer.Patches
     /// one attached entity's client, no other filter mode) via the existing O(1)
     /// entityId map, then reuses the game's own per-client enqueue. Provably
     /// equivalent: entityId is unique per client, so vanilla also enqueues to exactly
-    /// one client, giving the identical send-queue refcount (one RegisterSendQueue +
-    /// one AddToSendQueue). Every other filter mode falls through to vanilla.
-    /// Server-internal, no wire change; code -> EAC-off.
+    /// one client, giving the identical send-queue refcount trace. That trace matters:
+    /// vanilla SendPackage does RegisterSendQueue (+1) BEFORE the filter loop, then an
+    /// UNCONDITIONAL SendQueueHandled (-1) after it (AddToSendQueue takes the queue's
+    /// own +1, released by the connection writer thread). Skipping the closing
+    /// Handled leaves one reference stuck above zero forever, so FreePackage never
+    /// fires and each short-circuited package is lost from the pool. The prefix below
+    /// replays all three steps exactly. Every other filter mode falls through to
+    /// vanilla. Server-internal, no wire change; code -> EAC-off.
     /// </summary>
     [HarmonyPatch(typeof(ConnectionManager), "SendPackage", new[]
     {
@@ -44,9 +49,15 @@ namespace EfficientServer.Patches
             ClientInfo client = clients.ForEntityId(_attachedToEntityId);
             if (client != null && client.loginDone && client.bAttachedToEntity)
             {
-                // One register + one enqueue == vanilla's single matched client.
+                // Vanilla's exact refcount trace for one matched client:
+                // register (+1, holds the package across the send decision),
+                // enqueue (AddToSendQueue takes the queue's own +1), then drop
+                // our hold (-1). Omitting the final Handled would strand the
+                // count above zero and leak every sent package out of the
+                // game's package pool.
                 _package.RegisterSendQueue();
                 client.SendPackage(_package);
+                _package.SendQueueHandled();
             }
             // else: no logged-in attached client for this id -> nothing sent (== vanilla)
             return false; // skip the O(clients) scan

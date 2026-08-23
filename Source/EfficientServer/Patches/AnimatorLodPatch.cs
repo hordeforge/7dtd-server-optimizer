@@ -92,7 +92,11 @@ namespace EfficientServer.Patches
             // NOTE: calm-far LOD still uses enabled=false; emergency uses CullCompletely only.
             if (anim.enabled)
                 anim.enabled = false;
-            bool slotFrame = (Time.frameCount + entity.entityId) % cfg.FarStride == 0;
+            // Cast through uint like TickStride/TickClock: frameCount + entityId can
+            // cross int.MaxValue on a long-lived high-fps server, and a signed
+            // remainder would flip every entity's slot phase at that boundary.
+            bool slotFrame = unchecked((uint)(Time.frameCount + entity.entityId))
+                % (uint)cfg.FarStride == 0;
             if (!slotFrame)
                 return false; // no pump, no managed interpretation this frame
             if (pump)
