@@ -216,6 +216,22 @@ namespace EfficientServer.Tests
             Check(fps.Server.TargetFps == 120, "Server.TargetFps 999 -> 120 (clamp)");
             var govStride = ServerPerfConfig.Load(WriteTemp("{\"Network\":{\"EntityDistributionEveryTicks\":9}}"));
             Check(govStride.Network.EntityDistributionEveryTicks == 4, "EntityDistributionEveryTicks 9 -> 4 (clamp)");
+
+            // Governor tier math: escalation doubles each lever from its CONFIGURED
+            // baseline (never below it - the old hard-coded stride 2 sped replication
+            // UP for operators tuned to a static base of 3+), and recovery maps back
+            // to that exact baseline. Ceilings mirror Normalize ([1,4] stride,
+            // [1,200] graph cadence).
+            Check(GovernorTiers.ThrottleLever(1, 4) == 2, "governor: stride baseline 1 -> 2 (default behavior unchanged)");
+            Check(GovernorTiers.ThrottleLever(2, 4) == 4, "governor: stride baseline 2 -> 4");
+            Check(GovernorTiers.ThrottleLever(3, 4) == 4, "governor: stride baseline 3 -> 4 (ceiling)");
+            Check(GovernorTiers.ThrottleLever(4, 4) == 4, "governor: stride baseline 4 stays 4 (no speed-up under load)");
+            for (int b = 1; b <= 4; b++)
+                Check(GovernorTiers.ThrottleLever(b, 4) >= b,
+                    "governor invariant: throttled stride >= configured baseline for base " + b);
+            Check(GovernorTiers.ThrottleLever(1, 200) == 2, "governor: graph cadence baseline 1 -> 2 (unchanged)");
+            Check(GovernorTiers.ThrottleLever(100, 200) == 200, "governor: graph cadence baseline 100 -> 200 (ceiling)");
+            Check(GovernorTiers.ThrottleLever(200, 200) == 200, "governor: graph cadence baseline 200 stays 200");
             var missing = ServerPerfConfig.Load(WriteTemp("{}"));
             Check(missing.Network != null && missing.Diagnostics != null, "missing Network/Diagnostics -> filled");
 

@@ -208,7 +208,9 @@ Opt-in Boehm incremental mode (collection in bounded slices). **Measured: margin
 - **Gameplay impact at 2 (10 Hz):** entity positions arrive up to 50 ms staler;
   clients interpolate, and 10 Hz is a console-game norm - but fast movers (feral
   sprinters) may rubber-band. **Needs a human-eye pass before enabling as the
-  static base.** The governor uses stride 2 dynamically under overload instead.
+  static base.** The governor dynamically doubles this value under overload
+  instead (capped at 4), so from the default base 1 it applies stride 2 and from
+  a static base of 3 it escalates to 4 - never faster than you configured.
 
 ---
 
@@ -300,8 +302,10 @@ Ships 0; experimenters only (RESULTS 3p).
 ### `Governor.Enabled` (default `true`, v1.13.0)
 - **Mechanism:** a `GameManager.UpdateTick` postfix tracks the tick-interval EMA
   (~32-tick horizon). Sustained EMA > `OverBudgetMs` for `WindowTicks` switches to
-  the THROTTLED state: replication stride 2 + pathfinding cadence x2. Sustained
-  EMA < `HealthyMs` switches back to vanilla. Transitions respect `CooldownTicks`
+  the THROTTLED state: both throttle levers double from your CONFIGURED baseline
+  (replication stride x2 capped 4, pathfinding cadence x2 capped 200), and full
+  recovery restores those baselines exactly. Sustained
+  EMA < `HealthyMs` switches back. Transitions respect `CooldownTicks`
   and are logged with the EMA that caused them.
 - **Measured:** engages autonomously past the capacity ceiling; cushioned a ~435
   zombie overload at 128 ms/frame vs 299 unthrottled; restored vanilla within

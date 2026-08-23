@@ -1,4 +1,3 @@
-using System;
 using System.Diagnostics;
 using HarmonyLib;
 
@@ -6,10 +5,12 @@ namespace EfficientServer.Patches
 {
     /// <summary>
     /// Adaptive load governor (default on). Watches the real tick interval and moves
-    /// the two proven throttle levers between their vanilla and throttled settings:
+    /// the two proven throttle levers between their configured baselines and doubled
+    /// throttled settings:
     ///
-    ///   - Network.EntityDistributionEveryTicks: 1 (20 Hz) <-> 2 (10 Hz, -45% on the
-    ///     replication wall, see RESULTS 3g)
+    ///   - Network.EntityDistributionEveryTicks: configured value <-> 2x (capped 4;
+    ///     from the default 1 that is 1 <-> 2 = 20 <-> 10 Hz, -45% on the replication
+    ///     wall, see RESULTS 3g)
     ///   - Pathfinding.GraphUpdateEveryTicks: configured value <-> 2x that value
     ///
     /// Sustained over-budget ticks (interval EMA > OverBudgetMs for WindowTicks)
@@ -18,9 +19,12 @@ namespace EfficientServer.Patches
     /// prevent oscillation. Every transition is logged so an operator can see exactly
     /// when and why fidelity was traded for tick rate.
     ///
-    /// The governor only ever moves between VANILLA and the measured throttled
-    /// settings of levers that ship in this mod - it introduces no new behavior, it
-    /// schedules existing, individually-validated ones.
+    /// The governor only moves levers between the OPERATOR'S CONFIGURED BASELINE and
+    /// a doubled, capped throttle value (<see cref="GovernorTiers"/>) - it introduces
+    /// no new behavior, it schedules existing, individually-validated ones. Baselines
+    /// are captured at first transition and restored on full recovery, so an
+    /// operator's non-vanilla steady state (e.g. EntityDistributionEveryTicks=3)
+    /// survives a governor cycle unchanged.
     /// </summary>
     [HarmonyPatch(typeof(GameManager), "UpdateTick")]
     public static class GovernorPatch
@@ -31,8 +35,9 @@ namespace EfficientServer.Patches
         static int _overTicks;
         static int _healthyTicks;
         static int _cooldown;
-        static int _level; // 0 = vanilla, 1 = throttled
+        static int _level; // 0 = baseline, 1 = throttled
         static int _baseGraphEvery = -1;
+        static int _baseEntityStride = -1;
 
         static void Postfix()
         {
@@ -85,8 +90,12 @@ namespace EfficientServer.Patches
         {
             PathfindingConfig path = ModApi.Config.Pathfinding;
             NetworkConfig net = ModApi.Config.Network;
+            // Baselines are captured once per config generation (reset by reload):
+            // the values the operator actually configured, which recovery restores.
             if (_baseGraphEvery < 0)
                 _baseGraphEvery = path.GraphUpdateEveryTicks;
+            if (_baseEntityStride < 0)
+                _baseEntityStride = net.EntityDistributionEveryTicks;
 
             int previous = _level;
             _level = level;
@@ -106,19 +115,19 @@ namespace EfficientServer.Patches
                 AnimatorEmergency.Exit();
             if (level == 1)
             {
-                net.EntityDistributionEveryTicks = 2;
-                path.GraphUpdateEveryTicks = Math.Min(200, _baseGraphEvery * 2);
+                net.EntityDistributionEveryTicks = GovernorTiers.ThrottleLever(_baseEntityStride, 4);
+                path.GraphUpdateEveryTicks = GovernorTiers.ThrottleLever(_baseGraphEvery, 200);
                 ModApi.Log(previous == 2
                     ? $"Governor: tick EMA {_emaMs:F1}ms < {cfg.HealthyMs}ms - stepped down from emergency to THROTTLED"
                     : $"Governor: tick EMA {_emaMs:F1}ms > {cfg.OverBudgetMs}ms - THROTTLED "
-                      + $"(replication 10 Hz, graph updates /{path.GraphUpdateEveryTicks})");
+                      + $"(replication /{net.EntityDistributionEveryTicks}, graph updates /{path.GraphUpdateEveryTicks})");
             }
             else
             {
-                net.EntityDistributionEveryTicks = 1;
+                net.EntityDistributionEveryTicks = _baseEntityStride;
                 path.GraphUpdateEveryTicks = _baseGraphEvery;
-                ModApi.Log($"Governor: tick EMA {_emaMs:F1}ms < {cfg.HealthyMs}ms - restored vanilla "
-                    + $"(replication 20 Hz, graph updates /{_baseGraphEvery})");
+                ModApi.Log($"Governor: tick EMA {_emaMs:F1}ms < {cfg.HealthyMs}ms - restored baseline "
+                    + $"(replication /{_baseEntityStride}, graph updates /{_baseGraphEvery})");
             }
         }
 
@@ -126,9 +135,9 @@ namespace EfficientServer.Patches
         /// Re-base the governor after <see cref="ModApi.ReloadConfig"/> swaps the
         /// config object. The governor mutates Pathfinding.GraphUpdateEveryTicks and
         /// Network.EntityDistributionEveryTicks IN PLACE as its throttle channel, so
-        /// a reload would otherwise desync it: the cached _baseGraphEvery still held
-        /// the previous object's value and the next step-down would clobber the
-        /// operator's reloaded GraphUpdateEveryTicks with it, while a reload mid-tier
+        /// a reload would otherwise desync it: the cached baselines still held the
+        /// previous object's values and the next step-down would clobber the
+        /// operator's reloaded values with them, while a reload mid-tier
         /// silently dropped the applied throttles (fresh object carries operator
         /// values) until the next transition. Main-thread only (console/telnet/web
         /// commands queue through SdtdConsole's main-thread drain, same thread as the
@@ -137,8 +146,9 @@ namespace EfficientServer.Patches
         public static void OnConfigReloaded()
         {
             _baseGraphEvery = -1;
+            _baseEntityStride = -1;
             if (_level <= 0)
-                return; // vanilla tier: the fresh object is already correct
+                return; // baseline tier: the fresh object is already correct
 
             GovernorConfig cfg = ModApi.Config != null ? ModApi.Config.Governor : null;
             if (cfg == null || !cfg.Enabled)
@@ -149,21 +159,23 @@ namespace EfficientServer.Patches
                 if (_level >= 2)
                     AnimatorEmergency.Exit();
                 _level = 0;
-                ModApi.Log("config reloaded: governor disabled - levers left at reloaded (vanilla) values");
+                ModApi.Log("config reloaded: governor disabled - levers left at reloaded (baseline) values");
                 return;
             }
 
-            // Active tier (1 or 2): re-apply the tier-1 throttle values onto the new
-            // object so throttling stays coherent across the swap. Tier 2 keeps those
-            // same lever values (SetLevel(2) never touches them). Tick-health windows
-            // and cooldown describe recent tick history, not config state - keep them.
+            // Active tier (1 or 2): re-capture the baselines from the new object and
+            // re-apply the tier-1 throttle values so throttling stays coherent across
+            // the swap. Tier 2 keeps those same lever values (SetLevel(2) never
+            // touches them). Tick-health windows and cooldown describe recent tick
+            // history, not config state - keep them.
             PathfindingConfig path = ModApi.Config.Pathfinding;
             NetworkConfig net = ModApi.Config.Network;
             _baseGraphEvery = path.GraphUpdateEveryTicks;
-            net.EntityDistributionEveryTicks = 2;
-            path.GraphUpdateEveryTicks = Math.Min(200, _baseGraphEvery * 2);
+            _baseEntityStride = net.EntityDistributionEveryTicks;
+            net.EntityDistributionEveryTicks = GovernorTiers.ThrottleLever(_baseEntityStride, 4);
+            path.GraphUpdateEveryTicks = GovernorTiers.ThrottleLever(_baseGraphEvery, 200);
             ModApi.Log($"config reloaded: governor tier {_level} re-applied to new config "
-                + $"(replication 10 Hz, graph updates /{path.GraphUpdateEveryTicks})");
+                + $"(replication /{net.EntityDistributionEveryTicks}, graph updates /{path.GraphUpdateEveryTicks})");
         }
     }
 }

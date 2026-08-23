@@ -300,8 +300,10 @@ autonomously. Default off because it removes entities - a real gameplay trade
 ## Adaptive load governor (v1.12.0, default ON since v1.13.0; tier 2 in v1.16.0)
 
 `GovernorPatch` (config `Governor.*`) watches the tick-interval EMA and moves the
-proven throttle levers between vanilla and throttled (replication stride 2 + doubled
-graph cadence) with hysteresis and a cooldown, logging every transition. Validated
+proven throttle levers between your configured baseline and doubled values
+(replication stride x2 capped 4 + graph cadence x2 capped 200) with hysteresis and a
+cooldown, logging every transition; full recovery restores the baselines exactly.
+Validated
 live: engages under a 435-zombie overload (cushioning 299 -> 128 ms/frame), restores
 vanilla within seconds of the load clearing. It schedules existing levers only.
 Note the recovery threshold must sit ABOVE 50 ms - the healthy loop idles at exactly

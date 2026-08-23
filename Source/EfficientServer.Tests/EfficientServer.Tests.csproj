@@ -21,8 +21,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Test the real source directly; no game-type coupling in Config.cs. -->
+    <!-- Test the real source directly; no game-type coupling in these files. -->
     <Compile Include="../EfficientServer/Config.cs" />
+    <Compile Include="../EfficientServer/GovernorTiers.cs" />
   </ItemGroup>
 
   <ItemGroup>

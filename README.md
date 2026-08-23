@@ -48,8 +48,9 @@ on every push and PR.
 - **At a breaking load** (vanilla tick-starved), the pathfinding throttle alone is
   **-28.5% ms/tick**, pulling the server from failing back to healthy.
 - **Adaptive governor** (default on, inert while healthy): under overload it engages
-  the measured throttles (replication stride 2 = -45% on that wall, doubled graph
-  cadence), cushioning a 435-zombie overload at 128 vs 299 ms/frame and
+  the measured throttles (each lever doubled from its configured baseline: stride 2
+  = -45% on that wall, doubled graph cadence), cushioning a 435-zombie overload at
+  128 vs 299 ms/frame and
   self-restoring. **Raises sustained blood-moon capacity from ~147 to ~232 endgame
   zombies at 64 players (+58%).**
 - **TickGuard** (opt-in): last-resort shedding of the farthest zombies - a 522-zombie
