@@ -60,7 +60,14 @@ ARM = os.environ.get("ES_ARM", "")  # "on" or "off" = matched-arm mode (fresh se
 # quarantined by the NEXT run (es_cfg_guard) instead of clobbering later edits.
 # Matched-arm mode never snapshots: the caller owns the config between arms.
 ES_SWAP = ConfigSwap(ES_CFG, [("Enabled",)], log=log)
-LOG_GLOB = Path(os.environ.get("SEVENDTD_LOGDIR", str(Path.home() / ".cache" / "7dtd-loadgen")))
+# Where the loadgen-booted server writes its Unity log: mirror the sibling's
+# own resolution exactly (start_dedicated_prefab.sh USERDATA), NOT
+# SEVENDTD_LOGDIR (that names run_server.sh's output dir, which has no effect
+# on a loadgen-booted server).
+LOG_GLOB = Path(
+    os.environ.get("RE_DEDICATED_USERDATA")
+    or str(Path.home() / ".cache" / "7dtd-loadgen")
+)
 
 
 def latest_server_log() -> Path | None:

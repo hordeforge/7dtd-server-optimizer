@@ -23,7 +23,15 @@ namespace EfficientServer
             try
             {
                 ModPath = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? "";
-                Config = ServerPerfConfig.Load(ServerPerfConfig.DefaultPathBesideAssembly());
+                // Name the exact file that was consulted BEFORE loading, so an
+                // operator who edited a copy in the wrong place sees why their knobs
+                // did not apply (missing file = built-in defaults, not an error).
+                string cfgPath = ServerPerfConfig.DefaultPathBesideAssembly();
+                bool cfgFound = File.Exists(cfgPath);
+                Config = ServerPerfConfig.Load(cfgPath);
+                Log(cfgFound
+                    ? "config: " + cfgPath
+                    : "NO CONFIG FILE at " + cfgPath + " - built-in defaults applied");
                 if (!Config.Enabled)
                 {
                     Log("disabled by config; patches are installed so reload can enable it");

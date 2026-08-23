@@ -25,11 +25,15 @@ sys.path.insert(0, str(LOADGEN_ROOT / "scripts"))
 import bloodmoon_profile as B  # noqa: E402
 from es_cfg_guard import ConfigSwap  # noqa: E402
 
+# Canonical here is SEVENDTD_DS_DIR (same var as build/install/run and the
+# Makefile's DS=); SEVENDTD_SERVER_DIR is also accepted because that is the
+# 7dtd-loadgen sibling's spelling (start_dedicated_prefab.sh), so one export
+# drives both trees. An empty value falls through to the next candidate
+# instead of selecting the current directory.
 DS = Path(
-    os.environ.get(
-        "SEVENDTD_SERVER_DIR",
-        str(Path.home() / ".local/share/Steam/steamapps/common/7 Days to Die Dedicated Server"),
-    )
+    os.environ.get("SEVENDTD_DS_DIR")
+    or os.environ.get("SEVENDTD_SERVER_DIR")
+    or str(Path.home() / ".local/share/Steam/steamapps/common/7 Days to Die Dedicated Server")
 )
 ES_CFG = DS / "Mods/EfficientServer/Config/efficientserver.json"
 OUT_DIR = Path(os.environ.get("VALIDATE_OUT", str(OPT_ROOT / "server" / "logs")))

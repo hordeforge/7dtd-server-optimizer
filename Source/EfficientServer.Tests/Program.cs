@@ -343,8 +343,8 @@ namespace EfficientServer.Tests
                 gaps.Add(40.0 + seqRng.NextDouble() * 80.0); // 40..120 ms mixed load
             var replayA = new EfficientServer.Patches.TickIntervalEma();
             var replayB = new EfficientServer.Patches.TickIntervalEma();
-            double clockMs = 0.0, prevA = replayA.Value, noOvershoot = true;
-            bool tracesIdentical = true;
+            double clockMs = 0.0, prevA = replayA.Value;
+            bool tracesIdentical = true, noOvershoot = true;
             for (int i = 0; i < gaps.Count; i++)
             {
                 clockMs += gaps[i];
@@ -353,9 +353,15 @@ namespace EfficientServer.Tests
                 // Hysteresis depends on the smoother never overshooting the current
                 // gap: each step closes strictly less than the full distance to the
                 // sample (|new - dt| == |old - dt| * 31/32), so the EMA cannot ring.
-                double distBefore = Math.Abs(prevA - gaps[i]);
-                double distAfter = Math.Abs(a - gaps[i]);
-                if (!(distAfter < distBefore || distAfter == 0.0)) { noOvershoot = false; break; }
+                // i == 0 is exempt: that first advance only records the baseline
+                // (asserted above) and averages no gap yet, so its distance is
+                // expected to be unchanged, not shrunk.
+                if (i > 0)
+                {
+                    double distBefore = Math.Abs(prevA - gaps[i]);
+                    double distAfter = Math.Abs(a - gaps[i]);
+                    if (!(distAfter < distBefore || distAfter == 0.0)) { noOvershoot = false; break; }
+                }
                 prevA = a;
             }
             Check(tracesIdentical, "tick EMA same-seed replay is bitwise identical across instances");

@@ -4,7 +4,9 @@
 **Owns:** every config option in minute detail - exact mechanism, gameplay impact,
 measured performance gain, default + rationale.
 **Not:** the A/B evidence trail (session IDs, curves): [RESULTS](RESULTS.md).
-File: `Config/efficientserver.json` beside the mod DLL. Every lever is individually
+File: `Config/efficientserver.json` beside the mod DLL. Init logs the exact
+file consulted (`config: <path>`; a missing file logs `NO CONFIG FILE at ...
+- built-in defaults applied` instead of failing). Every lever is individually
 toggleable; a matched-but-disabled patch logs `(matched but config-disabled)` at init.
 Unknown keys are NAMED and ignored at load (`config unknown key 'X' ignored ...`),
 so a typo cannot silently leave a knob at its default; missing keys keep their

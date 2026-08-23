@@ -75,11 +75,14 @@ All optional; scripts fall back to defaults. The Makefile routes its documented
 
 | Variable | Read by | Default | Meaning |
 |---|---|---|---|
-| `SEVENDTD_DS_DIR` / make `DS=` | build.sh, install.sh, run_server.sh, make `uninstall` | `~/.local/share/Steam/steamapps/common/7 Days to Die Dedicated Server` | Dedicated install: game DLL refs, mod install target, launch dir |
+| `SEVENDTD_DS_DIR` / make `DS=` | build.sh, install.sh, run_server.sh, make `uninstall`, harness scripts (`measure_es_onoff.py`, `validate_*`) | `~/.local/share/Steam/steamapps/common/7 Days to Die Dedicated Server` | Dedicated install: game DLL refs, mod install target, launch dir. Harnesses also accept `SEVENDTD_SERVER_DIR` (the 7dtd-loadgen sibling's spelling) |
 | `SEVENDTD_GAME_DIR` | build.sh | client install path | Client fallback for game DLL refs |
 | `SEVENDTD_BUILD_BACKEND` | build.sh (`make build-mcs`) | auto (dotnet if SDK present) | `mcs` forces the Mono fallback compiler; `dotnet` forces the SDK path and fails hard without one |
 | `SEVENDTD_CONFIG` | run_server.sh | local `server/serverconfig.optimized.xml`, else tracked root `serverconfig.optimized.xml` | Dedicated server config XML |
 | `SEVENDTD_LOGDIR` | run_server.sh | `server/logs` | Server log directory |
+| `VALIDATE_OUT` | harness scripts (`measure_es_onoff.py`, `validate_*`) | `server/logs` | Directory for harness JSON reports |
+| `SEVENDTD_TELNET_PASSWORD` | harness scripts (telnet via 7dtd-loadgen) | `retest` | Telnet password of the bench dedicated server (local test servers only) |
+| `RE_DEDICATED_USERDATA` | measure_es_onoff.py | `~/.cache/7dtd-loadgen` | 7dtd-loadgen dedicated userdata dir; also where the Unity-log lookup globs `server_prefab_*.txt`. Owned by 7dtd-loadgen (`start_dedicated_prefab.sh`) |
 | `SEVENDTD_CPU_AFFINITY` | run_server.sh | unset (no pinning) | `taskset -c` mask for the whole process; silently skipped when `taskset` is absent; see HOST_TUNING.md (measured loss on naive pinning) |
 | `SEVENDTD_GC_INCREMENTAL` | run_server.sh | unset | Opt-in incremental GC (sets `GC_ENABLE_INCREMENTAL=1`) |
 | `DOTNET_ROOT` | build.sh, Makefile | Makefile picks the first existing of `~/.cache/dotnet-sdk`, `~/.dotnet`; direct build.sh runs fall back to `~/.cache/dotnet-sdk` only (and export it) | Local SDK location prepended to PATH |
