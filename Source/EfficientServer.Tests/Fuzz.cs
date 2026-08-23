@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Text;
 using Newtonsoft.Json;
@@ -180,8 +181,11 @@ namespace EfficientServer.Tests
                 case 1: return "Infinity";
                 case 2: return "-Infinity";
                 case 3: return "1e999";
-                case 4: return int.MinValue.ToString();
-                default: return (rng.NextDouble() * 8e30 - 4e30).ToString("R");
+                case 4: return int.MinValue.ToString(CultureInfo.InvariantCulture);
+                // Invariant: a comma-decimal host culture would emit "1,5E+30",
+                // which is not a JSON number and silently turns this case into
+                // a parse-error fixture instead of an extreme-value one.
+                default: return (rng.NextDouble() * 8e30 - 4e30).ToString("R", CultureInfo.InvariantCulture);
             }
         }
 
