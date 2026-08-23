@@ -275,6 +275,19 @@ def _selftest() -> int:
         s3.restore()
         check("begin is sticky until restored", _read_doc(cfg)["Enabled"] is True)
 
+        # 6. live file deleted between begin and restore -> full backup restore
+        # (not just managed keys, which would produce a truncated config).
+        s4 = mk()
+        s4.begin()
+        snapshot = _canonical(_read_doc(cfg))
+        cfg.unlink()
+        s4.restore()
+        check(
+            "missing live config restored from full backup",
+            cfg.is_file() and _canonical(_read_doc(cfg)) == snapshot,
+        )
+        check("backup consumed after missing-live restore", not s4.bak.exists())
+
     if failures:
         print(f"FAIL: {len(failures)} es_cfg_guard selftest check(s)", file=sys.stderr)
         return 1
