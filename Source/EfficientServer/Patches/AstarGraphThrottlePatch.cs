@@ -1,4 +1,3 @@
-using System.Threading;
 using HarmonyLib;
 
 namespace EfficientServer.Patches
@@ -41,10 +40,7 @@ namespace EfficientServer.Patches
             if (!ModApi.ShouldRun() || cfg == null) return true;
             int every = cfg.GraphUpdateEveryTicks;
             if (every <= 1) return true; // 1 = vanilla, run every tick (no throttle)
-            // Cast through uint so the signed wrap at ~3.4 years uptime stays a clean
-            // monotonic sequence for the modulo instead of going negative.
-            uint t = unchecked((uint)Interlocked.Increment(ref _tick));
-            return (t % (uint)every) == 0;
+            return TickStride.RunThisTick(ref _tick, every);
         }
     }
 }

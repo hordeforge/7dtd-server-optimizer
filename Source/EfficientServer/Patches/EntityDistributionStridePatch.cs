@@ -1,4 +1,3 @@
-using System.Threading;
 using HarmonyLib;
 
 namespace EfficientServer.Patches
@@ -27,11 +26,7 @@ namespace EfficientServer.Patches
             NetworkConfig cfg = ModApi.Config != null ? ModApi.Config.Network : null;
             if (!ModApi.ShouldRun() || cfg == null || cfg.EntityDistributionEveryTicks <= 1)
                 return true;
-            // Cast through uint so the signed wrap at ~3.4 years uptime stays a
-            // clean monotonic sequence for the modulo instead of flipping the
-            // stride phase (same convention as AstarGraphThrottlePatch).
-            uint t = unchecked((uint)Interlocked.Increment(ref _tick));
-            return (t % (uint)cfg.EntityDistributionEveryTicks) == 0;
+            return TickStride.RunThisTick(ref _tick, cfg.EntityDistributionEveryTicks);
         }
     }
 }

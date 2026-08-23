@@ -70,13 +70,17 @@ namespace EfficientServer.Patches
             // is logged with heap and ceiling: recurring lines mean the ceiling
             // sits below the working set and must be raised.
             long ceilingMB = SafetyCeilingMB(cfg);
-            if (ceilingMB > 0 && GC.GetTotalMemory(false) > ceilingMB * 1024L * 1024L)
+            if (ceilingMB > 0)
             {
-                _safetyCollects++;
-                ModApi.Warn("gc guard safety collect fired: heap "
-                    + (GC.GetTotalMemory(false) / 1024L / 1024L) + " MB > ceiling " + ceilingMB
-                    + " MB (STW pause now; total fires " + _safetyCollects + ")");
-                GC.Collect();
+                long heapBytes = GC.GetTotalMemory(false);
+                if (heapBytes > ceilingMB * 1024L * 1024L)
+                {
+                    _safetyCollects++;
+                    ModApi.Warn("gc guard safety collect fired: heap "
+                        + (heapBytes / 1024L / 1024L) + " MB > ceiling " + ceilingMB
+                        + " MB (STW pause now; total fires " + _safetyCollects + ")");
+                    GC.Collect();
+                }
             }
         }
 

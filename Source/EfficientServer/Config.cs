@@ -315,19 +315,7 @@ namespace EfficientServer
                     ModApi.Warn("config unknown key '" + key + "' ignored (no such option; check spelling)");
                 var loaded = JsonConvert.DeserializeObject<ServerPerfConfig>(json);
                 if (loaded == null) return new ServerPerfConfig();
-                if (loaded.AiLod == null) loaded.AiLod = new AiLodConfig();
-                if (loaded.SkipOnDedicated == null) loaded.SkipOnDedicated = new SkipConfig();
-                if (loaded.DynamicMesh == null) loaded.DynamicMesh = new DynamicMeshConfig();
-                if (loaded.Gc == null) loaded.Gc = new GcConfig();
-                if (loaded.Pathfinding == null) loaded.Pathfinding = new PathfindingConfig();
-                if (loaded.Network == null) loaded.Network = new NetworkConfig();
-                if (loaded.WorldTransfer == null) loaded.WorldTransfer = new WorldTransferConfig();
-                if (loaded.Server == null) loaded.Server = new ServerConfig();
-                if (loaded.AnimatorLod == null) loaded.AnimatorLod = new AnimatorLodConfig();
-                if (loaded.CrowdCollisionLod == null) loaded.CrowdCollisionLod = new CrowdCollisionLodConfig();
-                if (loaded.Governor == null) loaded.Governor = new GovernorConfig();
-                if (loaded.TickGuard == null) loaded.TickGuard = new TickGuardConfig();
-                if (loaded.Diagnostics == null) loaded.Diagnostics = new DiagnosticsConfig();
+                BackfillNullSections(loaded);
                 loaded.Normalize();
                 return loaded;
             }
@@ -370,6 +358,30 @@ namespace EfficientServer
         internal static bool KeyNameMatches(string jsonKey, string propertyName) =>
             string.Equals(jsonKey, propertyName, StringComparison.OrdinalIgnoreCase);
 
+        // The one nested-section predicate, shared by FindUnknownKeys' walk and
+        // Load's null-section backfill so both agree on what counts as a knob
+        // group and a new section cannot be covered by one and missed by the other.
+        static bool IsConfigSectionType(Type t) =>
+            t.IsClass && t != typeof(string) && t.Namespace == typeof(ServerPerfConfig).Namespace;
+
+        /// <summary>
+        /// JSON null for a section binds as a null reference; rebuild every such
+        /// knob group from its built-in default so no downstream code can hit a
+        /// hole. Reflection over <see cref="IsConfigSectionType"/>, so a newly
+        /// added section is covered without remembering another line here (the
+        /// tests assert every section backfilled).
+        /// </summary>
+        static void BackfillNullSections(ServerPerfConfig c)
+        {
+            foreach (PropertyInfo prop in typeof(ServerPerfConfig)
+                .GetProperties(BindingFlags.Public | BindingFlags.Instance))
+            {
+                if (!IsConfigSectionType(prop.PropertyType)) continue;
+                if (prop.GetValue(c) != null) continue;
+                prop.SetValue(c, Activator.CreateInstance(prop.PropertyType));
+            }
+        }
+
         static void CollectUnknown(JObject obj, Type schema, string prefix, List<string> unknown)
         {
             foreach (JProperty prop in obj.Properties())
@@ -387,8 +399,7 @@ namespace EfficientServer
                     continue;
                 }
                 Type t = known.PropertyType;
-                bool nestedConfig = t.IsClass && t != typeof(string) && t.Namespace == typeof(ServerPerfConfig).Namespace;
-                if (nestedConfig && prop.Value.Type == JTokenType.Object)
+                if (IsConfigSectionType(t) && prop.Value.Type == JTokenType.Object)
                     CollectUnknown((JObject)prop.Value, t, prefix.Length == 0 ? prop.Name : prefix + "." + prop.Name, unknown);
             }
         }
