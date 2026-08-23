@@ -11,7 +11,7 @@ Workspace root guide: [`../MODDING_BEST_PRACTICES.md`](../MODDING_BEST_PRACTICES
 |---|---|
 | Reviewed Harmony patches (AI LOD, task throttle, dedicated skips, mesh budgets) | Profiler / APM (use `7dtd-apm`) |
 | `config/efficientserver.json` feature groups | Load generation (use `7dtd-loadgen`) |
-| Cecil RE dump helpers under `tools/` | Terrain / RealEarth |
+| Config/version gates + validators under `scripts/` | Terrain / RealEarth |
 | Dedicated install/run scripts | CCD/NUMA/affinity (host ops only; see `docs/HOST_TUNING.md`) |
 | Graded optim docs under `docs/` | Shipping cracked mods or redistributing game IL |
 
