@@ -1,0 +1,11 @@
+# Everything textual is LF on every platform: CRLF working trees break the
+# bash scripts and the Makefile, and reproducible packaging copies
+# ModInfo.xml / config JSON into the zip exactly as checked out, so mixed
+# endings would break the "two builds of the same tree zip byte-identically"
+# property across contributor machines.
+* text=auto eol=lf
+
+# Never normalize these (none tracked today; guards future assets).
+*.dll binary
+*.zip binary
+*.png binary
