@@ -48,6 +48,7 @@ acceptance (`docs/FEATURES.md` fidelity checks).
 | `scripts/check_config_doc.py` | a `ServerPerfConfig` field exists but is not documented in `docs/CONFIG.md`, or `config/efficientserver.json` has keys absent from `Config.cs` | document the field (mechanism, gameplay impact, measured gain) or fix the key typo |
 | `scripts/check_version.py` | versions disagree across `ModInfo.xml` / `AssemblyInfo.cs`, docs claim a version newer than shipped, or the changelog lacks the shipped version | bump `Source/EfficientServer/ModInfo.xml` and `AssemblyInfo.cs` together and add the matching `CHANGELOG.md` entry in the same change |
 | `scripts/es_cfg_guard.py --selftest` | the config backup/restore guard broke its own protocol | fix the script; its selftest is the spec |
+| `scripts/gen_sbom.py --selftest` | the SBOM generator broke (determinism, lock parsing, CycloneDX structure) | fix the script; its selftest is the spec |
 
 ## PR expectations beyond the gates
 

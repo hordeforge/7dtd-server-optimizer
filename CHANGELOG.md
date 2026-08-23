@@ -37,6 +37,16 @@ So `EfficientServer-0.1.0.zip` logging `mod=1.17.0` is correct, not drift.
   in long math. Previously an unclamped warmup above ~2.1M seconds wrapped the
   milliseconds product negative and killed the probe with a misleading log.
 
+### Added
+- Supply-chain inventory: `make package` now embeds a deterministic CycloneDX
+  1.5 SBOM at `EfficientServer/bom.json` in every release zip, generated from
+  the committed `packages.lock.json` graph (component versions plus NuGet
+  content hashes; game-provided libraries are marked not-bundled). All inputs
+  are in-tree values, so it stays byte-identical across rebuilds and inside
+  the `make verify-reproducible` guarantee. A selftest gate
+  (`scripts/gen_sbom.py --selftest`) runs in `make test`. See the new
+  "Supply chain" section in `SECURITY.md`.
+
 ### Changed
 - Internal refactor: feature-gating keys shared between config parsing and
   ModApi startup notes; no config schema or behavior change.

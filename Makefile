@@ -72,6 +72,7 @@ test:
 	python3 $(ROOT)/scripts/check_config_doc.py
 	python3 $(ROOT)/scripts/check_version.py
 	python3 $(ROOT)/scripts/es_cfg_guard.py --selftest
+	python3 $(ROOT)/scripts/gen_sbom.py --selftest
 install:
 	$(ROOT)/scripts/install.sh
 uninstall:

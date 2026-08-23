@@ -34,6 +34,17 @@ STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT
 cp -a "$ROOT/dist/EfficientServer" "$STAGE/"
 
+# Supply-chain inventory inside the zip: a deterministic CycloneDX SBOM built
+# from the committed packages.lock.json graph. All inputs are in-tree values,
+# so it stays byte-identical across rebuilds (verify_reproducible.sh proves
+# this). Written before permission/mtime normalization below.
+python3 "$ROOT/scripts/gen_sbom.py" \
+  --version "$VERSION" \
+  --commit "$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || echo unknown)" \
+  --epoch "$EPOCH" \
+  --lock "$ROOT/Source/EfficientServer.Tests/packages.lock.json" \
+  --out "$STAGE/EfficientServer/bom.json"
+
 # Normalize all filesystem-dependent metadata before archiving.
 find "$STAGE" -type d -exec chmod 755 {} +
 find "$STAGE/EfficientServer" -type f -exec chmod 644 {} +

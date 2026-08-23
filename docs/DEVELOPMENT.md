@@ -126,12 +126,20 @@ package run also writes `dist/EfficientServer-<version>.buildinfo.txt`
 artifact records the environment that produced it; the buildinfo lives
 outside the zip to keep artifacts byte-identical.
 
+Each zip also embeds `EfficientServer/bom.json`, a deterministic CycloneDX 1.5
+SBOM generated from the committed `packages.lock.json` by `gen_sbom.py`
+(component versions plus NuGet content hashes; game-provided libraries are
+marked not-bundled). It is part of the reproducibility guarantee above. The
+supply-chain posture this documents: [`SECURITY.md`](../SECURITY.md),
+"Supply chain".
+
 ### Validation tooling (scripts/)
 
 | Script | Role |
 |---|---|
 | `check_config_doc.py` | Regression gate (in `make test`): every `ServerPerfConfig` field must be documented in CONFIG.md |
 | `check_version.py` | Regression gate (in `make test`): ModInfo (source+dist) == AssemblyVersion, no doc claims a future minor |
+| `gen_sbom.py` | Release SBOM generator (called by `package.sh`; selftest in `make test`): deterministic CycloneDX 1.5 inventory from packages.lock.json |
 | `verify_reproducible.sh` (`make verify-reproducible`) | Rebuild-and-compare proof of the packaging reproducibility claim: same-tree repackage, full recompile, out-of-tree path variation; needs a game install |
 | `validate_anim_path_admission.py` | Live A/B: animator-emergency + path-admission against real bots/zombies (telnet + loadgen); see RESULTS |
 | `validate_bloodmoon_path.py` | Live blood-moon path-admission A/B: real director-spawned horde, baseline vs path knobs on; writes a JSON report |

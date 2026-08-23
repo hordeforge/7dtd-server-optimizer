@@ -43,5 +43,28 @@ vulnerabilities:
   damage-immune until restart. Nothing in code refuses it on a live server;
   see `docs/THREAT_MODEL.md` R3.
 
+## Supply chain
+
+What ships and how it is protected:
+
+- The mod bundles no third-party code. Every game DLL reference
+  (`Assembly-CSharp`, `0Harmony`, `Newtonsoft.Json`, Unity modules, and so on)
+  is resolved from the dedicated server's own `Managed/` directory with
+  `Private=false`; the zip contains only `EfficientServer.dll`,
+  `ModInfo.xml`, the default config, and the SBOM below.
+- The single NuGet dependency (`Newtonsoft.Json` for the test harness) is
+  exact-pinned in the csproj, hash-pinned in a committed
+  `packages.lock.json`, and restored with `dotnet restore --locked-mode` by
+  `make test`, so a changed dependency fails instead of floating.
+- Every release zip carries a deterministic CycloneDX 1.5 SBOM at
+  `EfficientServer/bom.json` (generated from that lock file by
+  `scripts/gen_sbom.py`), so scanners and deployers can inventory exactly what
+  shipped without unpacking assumptions.
+- Packaging is reproducible (`make verify-reproducible`) and each run records
+  artifact SHA-256, source epoch, commit, and compiler in
+  `dist/EfficientServer-*.buildinfo.txt`.
+- CI actions are pinned to commit SHAs (not mutable tags) and the workflow
+  token is read-only.
+
 The full model, including entry points, trust boundaries, assets, threats per
 boundary, and ranked gaps: [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md).
