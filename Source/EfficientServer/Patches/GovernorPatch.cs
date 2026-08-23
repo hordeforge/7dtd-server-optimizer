@@ -171,6 +171,17 @@ namespace EfficientServer.Patches
                 return;
             }
 
+            // Tier 2 is opt-in, so flipping AnimatorEmergency off mid-emergency must
+            // release the rigs NOW (reload applies live). Without this the postfix's
+            // periodic tier-2 sweep would keep re-entering CullCompletely despite the
+            // flag being false; step down to tier 1, which keeps the throttle levers.
+            if (_level >= 2 && !cfg.AnimatorEmergency)
+            {
+                AnimatorEmergency.Exit();
+                _level = 1;
+                ModApi.Log("config reloaded: AnimatorEmergency off - stepped down from emergency to THROTTLED");
+            }
+
             // Active tier (1 or 2): re-capture the baselines from the new object and
             // re-apply the tier-1 throttle values so throttling stays coherent across
             // the swap. Tier 2 keeps those same lever values (SetLevel(2) never

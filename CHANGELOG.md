@@ -24,6 +24,18 @@ So `EfficientServer-0.1.0.zip` logging `mod=1.17.0` is correct, not drift.
 ## [Unreleased]
 
 ### Fixed
+- The apply-once knobs (`Server.TargetFps`, `Server.JobWorkerCount`,
+  `DynamicMesh.*` budgets) now undo their effect when a reload disables them:
+  reloading to `TargetFps: 0`, `JobWorkerCount: 0`, or
+  `DynamicMesh.Enabled: false` - or setting `Enabled: false` for the emergency
+  "all levers inert" procedure - restores the pre-mod values instead of
+  silently keeping the applied override until restart. These knobs also gate on
+  ShouldRun now like every sibling GameStartDone action, so a mod disabled at
+  startup no longer applies them at all.
+- Turning `Governor.AnimatorEmergency` off mid-tier-2 via `es reload` now steps
+  down to tier 1 and restores the rigs immediately (the flag is opt-in).
+  Previously the reloaded flag was ignored while tier 2 stayed engaged and the
+  periodic sweep kept re-entering CullCompletely until tick recovery.
 - `es reload` now fully honors the "re-enable without a restart" contract for
   the two apply-once groups it missed: the imperative dedicated skips
   (dynamic music, water splash, environment audio, ambient light spectrum)
