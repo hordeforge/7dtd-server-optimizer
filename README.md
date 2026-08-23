@@ -1,20 +1,18 @@
-# 7dtd-optimizer
+# 🔥 Crucible (7DTD EfficientServer)
+
+> **Part of [HordeForge](https://github.com/hordeforge)** — High-Performance Systems Engineering for 7 Days to Die.
 
 ![CI](https://github.com/hordeforge/7dtd-server-optimizer/actions/workflows/ci.yml/badge.svg)
 
-EfficientServer is a focused Harmony optimization mod for 7 Days to Die
-dedicated servers. It owns only reviewed runtime changes: AI level-of-detail,
-distant task throttling, dedicated-only work suppression, bounded dynamic mesh
-behavior, pathfinding and network throttles, and an adaptive overload governor
-with opt-in emergency shedding.
+**EfficientServer** is an adaptive overload governor and Harmony optimization mod for 7 Days to Die dedicated servers. It owns reviewed runtime performance changes: AI level-of-detail, distant task throttling, dedicated-only work suppression, bounded dynamic mesh behavior, pathfinding/network throttles, and emergency load shedding.
 
 > **Workspace context:** this repo is part of a private `7dtd` workspace.
-> Docs link to sibling repos (`7dtd-research`, `7dtd-apm`, `7dtd-loadgen`)
+> Docs link to sibling repos (`7dtd-engine-research`, `7dtd-server-apm`, `7dtd-loadgen`)
 > and workspace files that are not public. Those links resolve only inside
 > the workspace; on the public GitHub page they 404.
 
 It intentionally contains no profiler and no load generator. Install the
-standalone bridge from sibling `7dtd-apm` for managed instrumentation, and use
+standalone bridge from sibling `7dtd-server-apm` for managed instrumentation, and use
 sibling `7dtd-loadgen` for repeatable clients.
 
 ```bash
@@ -105,9 +103,9 @@ Docs:
 - Aggressive / unsafe optimization catalog: [`docs/aggressive-optimizations.md`](docs/aggressive-optimizations.md)
 - Perf research brief (RE + APM → optimizer backlog): [`docs/PERF_RESEARCH_BRIEF.md`](docs/PERF_RESEARCH_BRIEF.md)
 - V3.1.0 APM / loadgen evidence baseline: [`docs/V310_APM_BASELINE.md`](docs/V310_APM_BASELINE.md)
-- OSS tools survey (research): [`../7dtd-research/oss-tools/NOTES.md`](../7dtd-research/oss-tools/NOTES.md)
-- Dedicated game loop RE map: [`../7dtd-research/docs/loop.md`](../7dtd-research/docs/loop.md)
-- RE dump index: [`../7dtd-research/docs/INDEX.md`](../7dtd-research/docs/INDEX.md)
+- OSS tools survey (research): [`../7dtd-engine-research/oss-tools/NOTES.md`](../7dtd-engine-research/oss-tools/NOTES.md)
+- Dedicated game loop RE map: [`../7dtd-engine-research/docs/loop.md`](../7dtd-engine-research/docs/loop.md)
+- RE dump index: [`../7dtd-engine-research/docs/INDEX.md`](../7dtd-engine-research/docs/INDEX.md)
 - Backlog: [`TODO.md`](TODO.md)
 
 ## Supported versions and troubleshooting
