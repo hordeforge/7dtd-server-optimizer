@@ -102,7 +102,10 @@ namespace EfficientServer.Patches
             {
                 // Tier 2 keeps the tier-1 throttles active (early return below),
                 // so a mid-tier-2 reload must re-apply those tier-1 values too.
-                ModApi.Log($"Governor: tick EMA {emaMs:F1}ms > {cfg.EmergencyOverMs}ms despite throttles "
+                // WARNING, not info: tier 2 globally degrades combat fidelity and is
+                // opt-in, so firing means the operator both opted in AND the server
+                // is past the emergency threshold - exactly what grepping WRN finds.
+                ModApi.Warn($"Governor: tick EMA {emaMs:F1}ms > {cfg.EmergencyOverMs}ms despite throttles "
                     + "- ANIMATOR EMERGENCY CullCompletely (combat timing degrades; clients see no visual change)");
                 AnimatorEmergency.Enter();
                 return;

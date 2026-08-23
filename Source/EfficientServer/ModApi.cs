@@ -91,31 +91,48 @@ namespace EfficientServer
 
         public static void ReloadConfig()
         {
-            Config = ServerPerfConfig.Load(ServerPerfConfig.DefaultPathBesideAssembly());
-            // The governor holds state derived from the PREVIOUS config object
-            // (cached vanilla base + in-place throttle levers); re-base it before
-            // anything reads the new object mid-tier.
-            Patches.GovernorPatch.OnConfigReloaded();
-            // Re-run the apply-once knobs so "reload takes effect immediately" holds
-            // for them too (idempotent; they log only real changes).
-            Patches.DynamicMeshBudgetPatch.ApplyBudgets();
-            Patches.GameStartPatch.ApplyTargetFps();
-            Patches.GameStartPatch.ApplyJobWorkers();
-            // The imperative skip group is installed at GameStartDone ONLY when the
-            // then-current config was enabled (ApplyOptional early-outs otherwise),
-            // so a disabled->enabled reload must install it here or the contract
-            // above ("patches are installed so reload can enable it") silently fails
-            // for music/splash/env-audio/spectrum skips until restart. Idempotent:
-            // Harmony replaces an existing patch by MethodInfo instead of stacking,
-            // and SkipIfDedicated live-gates on ShouldRun either way.
-            // GcIncremental joins for the same reason: its one-shot guard is what
-            // makes late-enable possible (disable stays impossible by design).
-            // Both calls self-guard on Enabled/ShouldRun. The megapause diagnostic
-            // is deliberately NOT re-run here: it blocks threads for minutes on
-            // purpose, so it stays a start-time-only lever.
-            Patches.DedicatedSkipPatch.ApplyOptional(new Harmony(HarmonyId + ".optional"));
-            GcIncremental.Apply(Config != null ? Config.Gc : null);
-            Log("config reloaded; enabled=" + Config.Enabled);
+            string path = ServerPerfConfig.DefaultPathBesideAssembly();
+            Config = ServerPerfConfig.Load(path);
+            try
+            {
+                // The governor holds state derived from the PREVIOUS config object
+                // (cached vanilla base + in-place throttle levers); re-base it before
+                // anything reads the new object mid-tier.
+                Patches.GovernorPatch.OnConfigReloaded();
+                // Re-run the apply-once knobs so "reload takes effect immediately" holds
+                // for them too (idempotent; they log only real changes).
+                Patches.DynamicMeshBudgetPatch.ApplyBudgets();
+                Patches.GameStartPatch.ApplyTargetFps();
+                Patches.GameStartPatch.ApplyJobWorkers();
+                // The imperative skip group is installed at GameStartDone ONLY when the
+                // then-current config was enabled (ApplyOptional early-outs otherwise),
+                // so a disabled->enabled reload must install it here or the contract
+                // above ("patches are installed so reload can enable it") silently fails
+                // for music/splash/env-audio/spectrum skips until restart. Idempotent:
+                // Harmony replaces an existing patch by MethodInfo instead of stacking,
+                // and SkipIfDedicated live-gates on ShouldRun either way.
+                // GcIncremental joins for the same reason: its one-shot guard is what
+                // makes late-enable possible (disable stays impossible by design).
+                // Both calls self-guard on Enabled/ShouldRun. The megapause diagnostic
+                // is deliberately NOT re-run here: it blocks threads for minutes on
+                // purpose, so it stays a start-time-only lever.
+                Patches.DedicatedSkipPatch.ApplyOptional(new Harmony(HarmonyId + ".optional"));
+                GcIncremental.Apply(Config != null ? Config.Gc : null);
+            }
+            catch (Exception ex)
+            {
+                // Load already swapped the config object, so after a failed apply the
+                // state is "new values live, some levers not applied". Log that with
+                // the mod prefix (the game's own command-exception dump is unprefixed),
+                // then rethrow so the caller's success echo never prints over a
+                // partial apply.
+                Error("config reload apply failed [" + ex.GetType().Name
+                    + "] - new config loaded, some levers may not have applied: " + ex);
+                throw;
+            }
+            Log("config reloaded; enabled=" + Config.Enabled
+                + (File.Exists(path) ? ""
+                    : " (NO CONFIG FILE at " + path + " - built-in defaults applied)"));
         }
 
         // A patch can IL-match yet be inert because its config toggle is off. Say so
@@ -209,7 +226,8 @@ namespace EfficientServer
 
         // Recoverable problems an operator must notice when grepping the log for
         // WARNING: config corrections, skipped/missing optional targets, failed
-        // applies that fell back to vanilla behavior.
+        // applies that fell back to vanilla behavior, and engaged opt-in emergency
+        // levers (governor tier-2 animator emergency, tick-guard entity sheds).
         public static void Warn(string msg)
         {
             Emit(global::Log.Warning, msg);

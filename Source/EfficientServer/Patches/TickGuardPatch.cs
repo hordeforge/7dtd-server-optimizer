@@ -87,7 +87,11 @@ namespace EfficientServer.Patches
             for (int i = 0; i < shed; i++)
                 world.RemoveEntity(Scratch[i].entity.entityId, EnumRemoveEntityReason.Despawned);
             ShedTotal += shed;
-            ModApi.Log($"TickGuard: tick EMA {emaMs:F1}ms > {cfg.ShedAboveMs}ms - shed {shed} "
+            // WARNING, not info: shedding removes entities (a real gameplay impact)
+            // and only fires while the tick is collapsing, rate-bounded by
+            // CooldownTicks - the channel an operator greps when players report
+            // vanished hordes.
+            ModApi.Warn($"TickGuard: tick EMA {emaMs:F1}ms > {cfg.ShedAboveMs}ms - shed {shed} "
                 + $"farthest enemies ({enemies} -> {enemies - shed}, lifetime {ShedTotal})");
             Scratch.Clear();
         }
