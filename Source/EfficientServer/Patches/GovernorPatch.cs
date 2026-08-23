@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using HarmonyLib;
 
 namespace EfficientServer.Patches
@@ -29,9 +28,7 @@ namespace EfficientServer.Patches
     [HarmonyPatch(typeof(GameManager), "UpdateTick")]
     public static class GovernorPatch
     {
-        static readonly Stopwatch Clock = Stopwatch.StartNew();
-        static double _lastTickMs;
-        static double _emaMs = 50.0;
+        static readonly TickIntervalEma TickEma = new TickIntervalEma();
         static int _overTicks;
         static int _healthyTicks;
         static int _cooldown;
@@ -43,7 +40,7 @@ namespace EfficientServer.Patches
         // RIGHT NOW (config alone cannot tell you this) and the smoothed tick
         // interval driving it.
         public static int Level { get { return _level; } }
-        public static double EmaMs { get { return _emaMs; } }
+        public static double EmaMs { get { return TickEma.Value; } }
 
         static void Postfix()
         {
@@ -51,39 +48,32 @@ namespace EfficientServer.Patches
             if (!ModApi.ShouldRun() || cfg == null || !cfg.Enabled)
                 return;
 
-            double now = Clock.Elapsed.TotalMilliseconds;
-            if (_lastTickMs > 0)
-            {
-                double interval = now - _lastTickMs;
-                // EMA over ~32 ticks: cheap, smooths spawn spikes without hiding trends.
-                _emaMs += (interval - _emaMs) / 32.0;
-            }
-            _lastTickMs = now;
+            double emaMs = TickEma.Advance();
             if (_cooldown > 0) _cooldown--;
 
-            if (_emaMs > cfg.OverBudgetMs)
+            if (emaMs > cfg.OverBudgetMs)
             {
                 _healthyTicks = 0;
                 _overTicks++;
                 if (_cooldown == 0 && _overTicks >= cfg.WindowTicks)
                 {
                     if (_level == 0)
-                        SetLevel(1, cfg);
+                        SetLevel(1, cfg, emaMs);
                     // Tier 2 (opt-in): throttling did not fix it and the EMA is past
                     // the emergency threshold - shut down zombie animators (~40% of
                     // the saturated 64p frame, RESULTS 3o + fence check).
-                    else if (_level == 1 && cfg.AnimatorEmergency && _emaMs > cfg.EmergencyOverMs)
-                        SetLevel(2, cfg);
+                    else if (_level == 1 && cfg.AnimatorEmergency && emaMs > cfg.EmergencyOverMs)
+                        SetLevel(2, cfg, emaMs);
                 }
                 // Periodic sweep while in tier 2 so mid-emergency spawns are covered.
                 if (_level == 2 && _overTicks % 100 == 0)
                     AnimatorEmergency.Enter();
             }
-            else if (_emaMs < cfg.HealthyMs)
+            else if (emaMs < cfg.HealthyMs)
             {
                 _overTicks = 0;
                 if (++_healthyTicks >= cfg.WindowTicks && _level > 0 && _cooldown == 0)
-                    SetLevel(_level - 1, cfg); // step down one tier at a time
+                    SetLevel(_level - 1, cfg, emaMs); // step down one tier at a time
             }
             else
             {
@@ -92,7 +82,7 @@ namespace EfficientServer.Patches
             }
         }
 
-        static void SetLevel(int level, GovernorConfig cfg)
+        static void SetLevel(int level, GovernorConfig cfg, double emaMs)
         {
             PathfindingConfig path = ModApi.Config.Pathfinding;
             NetworkConfig net = ModApi.Config.Network;
@@ -112,7 +102,7 @@ namespace EfficientServer.Patches
             {
                 // Tier 2 keeps the tier-1 throttles active (early return below),
                 // so a mid-tier-2 reload must re-apply those tier-1 values too.
-                ModApi.Log($"Governor: tick EMA {_emaMs:F1}ms > {cfg.EmergencyOverMs}ms despite throttles "
+                ModApi.Log($"Governor: tick EMA {emaMs:F1}ms > {cfg.EmergencyOverMs}ms despite throttles "
                     + "- ANIMATOR EMERGENCY CullCompletely (combat timing degrades; clients see no visual change)");
                 AnimatorEmergency.Enter();
                 return;
@@ -121,20 +111,29 @@ namespace EfficientServer.Patches
                 AnimatorEmergency.Exit();
             if (level == 1)
             {
-                net.EntityDistributionEveryTicks = GovernorTiers.ThrottleLever(_baseEntityStride, 4);
-                path.GraphUpdateEveryTicks = GovernorTiers.ThrottleLever(_baseGraphEvery, 200);
+                ApplyThrottledLevers(path, net);
                 ModApi.Log(previous == 2
-                    ? $"Governor: tick EMA {_emaMs:F1}ms < {cfg.HealthyMs}ms - stepped down from emergency to THROTTLED"
-                    : $"Governor: tick EMA {_emaMs:F1}ms > {cfg.OverBudgetMs}ms - THROTTLED "
+                    ? $"Governor: tick EMA {emaMs:F1}ms < {cfg.HealthyMs}ms - stepped down from emergency to THROTTLED"
+                    : $"Governor: tick EMA {emaMs:F1}ms > {cfg.OverBudgetMs}ms - THROTTLED "
                       + $"(replication /{net.EntityDistributionEveryTicks}, graph updates /{path.GraphUpdateEveryTicks})");
             }
             else
             {
                 net.EntityDistributionEveryTicks = _baseEntityStride;
                 path.GraphUpdateEveryTicks = _baseGraphEvery;
-                ModApi.Log($"Governor: tick EMA {_emaMs:F1}ms < {cfg.HealthyMs}ms - restored baseline "
+                ModApi.Log($"Governor: tick EMA {emaMs:F1}ms < {cfg.HealthyMs}ms - restored baseline "
                     + $"(replication /{_baseEntityStride}, graph updates /{_baseGraphEvery})");
             }
+        }
+
+        // The one place that maps baseline -> doubled lever values. Shared by the
+        // escalate path and the mid-tier config reload so they cannot drift apart.
+        static void ApplyThrottledLevers(PathfindingConfig path, NetworkConfig net)
+        {
+            net.EntityDistributionEveryTicks =
+                GovernorTiers.ThrottleLever(_baseEntityStride, GovernorTiers.EntityStrideMax);
+            path.GraphUpdateEveryTicks =
+                GovernorTiers.ThrottleLever(_baseGraphEvery, GovernorTiers.GraphUpdateMax);
         }
 
         /// <summary>
@@ -178,8 +177,7 @@ namespace EfficientServer.Patches
             NetworkConfig net = ModApi.Config.Network;
             _baseGraphEvery = path.GraphUpdateEveryTicks;
             _baseEntityStride = net.EntityDistributionEveryTicks;
-            net.EntityDistributionEveryTicks = GovernorTiers.ThrottleLever(_baseEntityStride, 4);
-            path.GraphUpdateEveryTicks = GovernorTiers.ThrottleLever(_baseGraphEvery, 200);
+            ApplyThrottledLevers(path, net);
             ModApi.Log($"config reloaded: governor tier {_level} re-applied to new config "
                 + $"(replication /{net.EntityDistributionEveryTicks}, graph updates /{path.GraphUpdateEveryTicks})");
         }

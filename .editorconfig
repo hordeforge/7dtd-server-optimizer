@@ -1,0 +1,32 @@
+# Editor + build-time formatting contract, aligned with 7dtd-loadgen.
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+indent_style = space
+indent_size = 4
+# Hard cap so two copies of the code fit side-by-side. Editors guide; the
+# compiler does not wrap lines, so this is a convention, not a build error.
+max_line_length = 100
+
+# GNU make requires tab indentation in recipes.
+[Makefile]
+indent_style = tab
+
+[*.md]
+trim_trailing_whitespace = false
+
+# XML project files use two-space indent.
+[*.{csproj,props,targets,config}]
+indent_size = 2
+
+[*.py]
+indent_size = 4
+
+[*.sh]
+indent_size = 4
+
+[*.json]
+indent_size = 2

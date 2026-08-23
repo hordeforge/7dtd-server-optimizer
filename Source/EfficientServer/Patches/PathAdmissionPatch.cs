@@ -1,4 +1,3 @@
-using System;
 using HarmonyLib;
 using UnityEngine;
 
@@ -33,11 +32,6 @@ namespace EfficientServer.Patches
         public static long DroppedCapTotal { get { return _droppedCapTotal; } }
         public static long DroppedFarTotal { get { return _droppedFarTotal; } }
 
-        // Alert probe failure = API drift; admit everything (safe direction) but
-        // say so once: this fires per FindPath call and silent admission would
-        // leave the whole feature inert with zero signal.
-        static bool _alertProbeWarned;
-
         // Return false to skip the original FindPath (drop this request).
         static bool Prefix(EntityAlive __instance)
         {
@@ -51,24 +45,10 @@ namespace EfficientServer.Patches
             if (__instance == null || __instance is EntityPlayer)
                 return true;
 
-            // Never starve combat / investigation / sleeper wakeup pathing.
-            try
-            {
-                if (__instance.GetAttackTarget() != null) return true;
-                if (__instance.HasInvestigatePosition) return true;
-                if (__instance.GetAlertTicks() > 0) return true;
-                if (__instance.IsSleeper && !__instance.IsSleeperPassive) return true;
-            }
-            catch (Exception ex)
-            {
-                if (!_alertProbeWarned)
-                {
-                    _alertProbeWarned = true;
-                    ModApi.Warn("path admission alert check failed [" + ex.GetType().Name + "]: " + ex.Message
-                        + " - every path now admits (admission INACTIVE) until restart");
-                }
-                return true; // API drift -> admit rather than break AI
-            }
+            // Never starve combat / investigation / sleeper wakeup pathing (the
+            // shared probe fails open to "alerted" on API drift).
+            if (AiAlertGate.IsAlertedOrBusy(__instance))
+                return true;
 
             if (dropFarSq > 0f && __instance.aiClosestPlayerDistSq >= dropFarSq)
             {

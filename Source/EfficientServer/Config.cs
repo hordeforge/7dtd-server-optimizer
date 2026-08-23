@@ -84,7 +84,8 @@ namespace EfficientServer
         // 1 = vanilla (run every tick, no throttle); >1 = throttle to (20/N) Hz.
         // It does NOT enable or disable pathfinding itself - path compute and the
         // scan drain always run. Named for exactly what it controls so it cannot be
-        // misread as an on/off switch.
+        // misread as an on/off switch. Clamp ceiling is GovernorTiers.GraphUpdateMax,
+        // the same cap the governor's doubled throttle uses.
         public int GraphUpdateEveryTicks { get; set; } = 4;
 
         // Rescan dead-zone in SQUARED grid units: a follow-graph is queued for a
@@ -385,10 +386,11 @@ namespace EfficientServer
             DynamicMesh.PlayerAreaChunkBuffer = IntRange("DynamicMesh.PlayerAreaChunkBuffer", DynamicMesh.PlayerAreaChunkBuffer, 0, 64);
             DynamicMesh.MaxRegionLoadMsPerFrame = IntRange("DynamicMesh.MaxRegionLoadMsPerFrame", DynamicMesh.MaxRegionLoadMsPerFrame, 1, 1000);
             DynamicMesh.MaxActiveSyncs = IntRange("DynamicMesh.MaxActiveSyncs", DynamicMesh.MaxActiveSyncs, 1, 128);
-            // 1 = vanilla; cap generously (200 = ~0.1 Hz) so a fat-finger like 1e6
-            // (nav graphs repositioning once per ~14 h) is clamped and logged, not
-            // silently accepted. A legitimate low-pop tune (e.g. 40) still passes.
-            Pathfinding.GraphUpdateEveryTicks = IntRange("Pathfinding.GraphUpdateEveryTicks", Pathfinding.GraphUpdateEveryTicks, 1, 200);
+            // 1 = vanilla; cap at GovernorTiers.GraphUpdateMax (~0.1 Hz) so a
+            // fat-finger like 1e6 (nav graphs repositioning once per ~14 h) is
+            // clamped and logged, not silently accepted. A legitimate low-pop tune
+            // (e.g. 40) still passes.
+            Pathfinding.GraphUpdateEveryTicks = IntRange("Pathfinding.GraphUpdateEveryTicks", Pathfinding.GraphUpdateEveryTicks, 1, GovernorTiers.GraphUpdateMax);
             Pathfinding.MoveRescanThresholdSq = FiniteRange("Pathfinding.MoveRescanThresholdSq", Pathfinding.MoveRescanThresholdSq, 100f, 10000f, 100f);
             // 0 = unlimited / off. Cap admits high enough for a full BM wave of
             // non-priority wander requests without clipping combat (combat bypasses).
@@ -400,7 +402,8 @@ namespace EfficientServer
             // floor of 1 is a correctness guard, not just a tuning bound.
             WorldTransfer.ChunkPackagesPerObserverPerTick = IntRange("WorldTransfer.ChunkPackagesPerObserverPerTick", WorldTransfer.ChunkPackagesPerObserverPerTick, 1, 32);
             // 4 = 5 Hz replication, already aggressive; anything higher is unplayable.
-            Network.EntityDistributionEveryTicks = IntRange("Network.EntityDistributionEveryTicks", Network.EntityDistributionEveryTicks, 1, 4);
+            // Same ceiling the governor's doubled throttle uses (GovernorTiers).
+            Network.EntityDistributionEveryTicks = IntRange("Network.EntityDistributionEveryTicks", Network.EntityDistributionEveryTicks, 1, GovernorTiers.EntityStrideMax);
             CrowdCollisionLod.ResolveEveryNTicks = IntRange("CrowdCollisionLod.ResolveEveryNTicks", CrowdCollisionLod.ResolveEveryNTicks, 1, 16);
             AnimatorLod.FullRateDistSq = FiniteRange("AnimatorLod.FullRateDistSq", AnimatorLod.FullRateDistSq, 100f, 1000000f, 400f);
             AnimatorLod.FarStride = IntRange("AnimatorLod.FarStride", AnimatorLod.FarStride, 1, 10);

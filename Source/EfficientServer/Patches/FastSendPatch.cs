@@ -34,8 +34,8 @@ namespace EfficientServer.Patches
             if (!ModApi.ShouldRun() || cfg == null || !cfg.FastSingleTargetSend) return true;
             if (_package == null) return true;
             // Pure single-target only: one attached entity, no other filter mode.
-            if (_attachedToEntityId < 0 || _allButAttachedToEntityId != -1
-                || _entitiesInRangeOfEntity != -1 || _onlyClientsAttachedToAnEntity
+            if (_attachedToEntityId < 0 || _allButAttachedToEntityId >= 0
+                || _entitiesInRangeOfEntity >= 0 || _onlyClientsAttachedToAnEntity
                 || _onlyClientsNotAttachedToAnEntity || _entitiesInRangeOfWorldPos.HasValue)
                 return true;
 

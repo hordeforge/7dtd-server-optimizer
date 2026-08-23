@@ -15,6 +15,12 @@ namespace EfficientServer
     /// </summary>
     internal static class GovernorTiers
     {
+        // Lever ceilings. Shared with ServerPerfConfig.Normalize, which clamps the
+        // operator's configured baseline to the same range, so the doubled throttle
+        // value can never sit outside what a hand-written config could express.
+        public const int EntityStrideMax = 4;
+        public const int GraphUpdateMax = 200;
+
         public static int ThrottleLever(int baseValue, int maxValue)
             => Math.Min(maxValue, Math.Max(baseValue, baseValue * 2));
     }

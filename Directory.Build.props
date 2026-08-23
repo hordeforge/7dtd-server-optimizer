@@ -1,0 +1,14 @@
+<Project>
+  <!-- Shared analyzer/compiler strictness for all projects in this tree.
+       Both flags are proven clean by the current build: 0 warnings under
+       TreatWarningsAsErrors, no IDE0055 formatting violations under
+       EnforceCodeStyleInBuild (rules from .editorconfig). Any future warning
+       fails the build instead of scrolling by unread. -->
+  <PropertyGroup>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <!-- Pinned so an SDK update cannot silently change the enabled analyzer
+         set; a bump must be reviewed like any dependency change. -->
+    <AnalysisLevel>latest</AnalysisLevel>
+  </PropertyGroup>
+</Project>

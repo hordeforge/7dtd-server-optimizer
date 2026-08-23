@@ -30,11 +30,9 @@ namespace EfficientServer.Patches
         public static long SkippedFarTotal { get { return _skippedFarTotal; } }
         public static long StridedOffTotal { get { return _stridedOffTotal; } }
 
-        // The alert probe failing is API drift: without it every entity would be
-        // treated as unalerted and strided/skipped regardless of combat state.
-        // Fall back to full-rate AI and say so ONCE (this fires per entity per
-        // tick, so per-call logging would flood).
-        static bool _alertProbeWarned;
+        // The CheckDespawn fallback failing is API drift: without it far entities
+        // would never despawn. Fall back to full-rate AI and say so ONCE (this
+        // fires per entity per tick, so per-call logging would flood).
         static bool _despawnWarned;
 
         static bool Prefix(EntityAlive __instance)
@@ -49,28 +47,10 @@ namespace EfficientServer.Patches
             bool mid = !far && cfg.MidTickStride > 1 && d >= cfg.MediumAiDistSq;
             if (!far && !mid) return true; // close band (or striding off): full rate
 
-            if (cfg.SkipTasksUnlessAlerted)
-            {
-                // Keep full AI if hunting / investigating / recently alerted.
-                try
-                {
-                    if (__instance.GetAttackTarget() != null) return true;
-                    if (__instance.HasInvestigatePosition) return true;
-                    if (__instance.GetAlertTicks() > 0) return true;
-                    if (__instance.IsSleeper && !__instance.IsSleeperPassive) return true;
-                    // blood-moon / ferals stay active even far out if already chasing
-                }
-                catch (Exception ex)
-                {
-                    if (!_alertProbeWarned)
-                    {
-                        _alertProbeWarned = true;
-                        ModApi.Warn("AI LOD alert check failed [" + ex.GetType().Name + "]: " + ex.Message
-                            + " - every entity now counts as alerted; mid/far throttling is INACTIVE until restart");
-                    }
-                    return true;
-                }
-            }
+            // Keep full AI when hunting / investigating / recently alerted (the
+            // shared probe also covers API drift by failing open to "alerted").
+            if (cfg.SkipTasksUnlessAlerted && AiAlertGate.IsAlertedOrBusy(__instance))
+                return true;
 
             if (mid)
             {

@@ -287,7 +287,7 @@ def main() -> int:
         time.sleep(2)
         off = sample_health("anim_off")
         report["phases"]["anim_off"] = off
-        off_state_txt, off_rows = animstate_snapshot()
+        _, off_rows = animstate_snapshot()
         report["animstate_off_n"] = len(off_rows)
         report["animstate_off_cull_modes"] = sorted({r.get("cull") for r in off_rows})
         cull_ok = any(
@@ -304,7 +304,7 @@ def main() -> int:
         time.sleep(3)
         on = sample_health("anim_restored")
         report["phases"]["anim_restored"] = on
-        on_state_txt, on_rows = animstate_snapshot()
+        _, on_rows = animstate_snapshot()
         report["animstate_on_n"] = len(on_rows)
         moving = [r for r in on_rows if r.get("vel", 0) > 0.05]
         moving_dp = [r for r in moving if r.get("dp", 0) > 0.001]

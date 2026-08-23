@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Diagnostics;
 using HarmonyLib;
 using UnityEngine;
 
@@ -23,15 +22,13 @@ namespace EfficientServer.Patches
     [HarmonyPatch(typeof(GameManager), "UpdateTick")]
     public static class TickGuardPatch
     {
-        static readonly Stopwatch Clock = Stopwatch.StartNew();
-        static double _lastTickMs;
-        static double _emaMs = 50.0;
+        static readonly TickIntervalEma TickEma = new TickIntervalEma();
         static int _overTicks;
         static int _cooldown;
         static readonly List<(float distSq, Entity entity)> Scratch = new List<(float, Entity)>();
 
         // Live state for `es status`: current tick EMA and lifetime shed count.
-        public static double EmaMs { get { return _emaMs; } }
+        public static double EmaMs { get { return TickEma.Value; } }
         public static long ShedTotal { get; private set; }
 
         static void Postfix()
@@ -40,13 +37,10 @@ namespace EfficientServer.Patches
             if (!ModApi.ShouldRun() || cfg == null || !cfg.Enabled)
                 return;
 
-            double now = Clock.Elapsed.TotalMilliseconds;
-            if (_lastTickMs > 0)
-                _emaMs += (now - _lastTickMs - _emaMs) / 32.0;
-            _lastTickMs = now;
+            double emaMs = TickEma.Advance();
             if (_cooldown > 0) { _cooldown--; return; }
 
-            if (_emaMs <= cfg.ShedAboveMs)
+            if (emaMs <= cfg.ShedAboveMs)
             {
                 _overTicks = 0;
                 return;
@@ -56,10 +50,10 @@ namespace EfficientServer.Patches
 
             _overTicks = 0;
             _cooldown = cfg.CooldownTicks;
-            Shed(cfg);
+            Shed(cfg, emaMs);
         }
 
-        static void Shed(TickGuardConfig cfg)
+        static void Shed(TickGuardConfig cfg, double emaMs)
         {
             World world = GameManager.Instance != null ? GameManager.Instance.World : null;
             if (world == null) return;
@@ -92,7 +86,7 @@ namespace EfficientServer.Patches
             for (int i = 0; i < shed; i++)
                 world.RemoveEntity(Scratch[i].entity.entityId, EnumRemoveEntityReason.Despawned);
             ShedTotal += shed;
-            ModApi.Log($"TickGuard: tick EMA {_emaMs:F1}ms > {cfg.ShedAboveMs}ms - shed {shed} "
+            ModApi.Log($"TickGuard: tick EMA {emaMs:F1}ms > {cfg.ShedAboveMs}ms - shed {shed} "
                 + $"farthest enemies ({enemies} -> {enemies - shed}, lifetime {ShedTotal})");
             Scratch.Clear();
         }
