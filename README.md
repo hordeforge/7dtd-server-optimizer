@@ -37,7 +37,10 @@ Packaged builds are attached to GitHub releases (see the Releases page;
 release: [`CHANGELOG.md`](CHANGELOG.md)). Packaging is
 reproducible: sorted entries, normalized mtimes/permissions, no owner data;
 timestamps honor `SOURCE_DATE_EPOCH` (falling back to the last commit time),
-so two builds of the same tree zip byte-identically. CI runs `make test`
+so two builds of the same tree zip byte-identically. `make verify-reproducible`
+proves it by rebuilding from scratch at a second path and comparing hashes,
+and every package run records its toolchain in
+`dist/EfficientServer-*.buildinfo.txt`. CI runs `make test`
 on every push and PR.
 
 ## Measured impact (v1.17.x)

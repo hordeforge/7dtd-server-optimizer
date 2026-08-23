@@ -14,11 +14,13 @@ ifneq ($(DOTNET_ROOT),)
   export PATH := $(DOTNET_ROOT):$(PATH)
 endif
 
-.PHONY: build build-mcs test install uninstall run clean package
+.PHONY: build build-mcs test install uninstall run clean package verify-reproducible
 build:
 	$(ROOT)/scripts/build.sh
 package:
 	$(ROOT)/scripts/package.sh
+verify-reproducible:
+	$(ROOT)/scripts/verify_reproducible.sh
 build-mcs:
 	SEVENDTD_BUILD_BACKEND=mcs $(ROOT)/scripts/build.sh
 test:

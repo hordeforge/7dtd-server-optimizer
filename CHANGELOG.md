@@ -36,6 +36,11 @@ So `EfficientServer-0.1.0.zip` logging `mod=1.17.0` is correct, not drift.
   `global.json`, hardened shell scripts; the ES on/off measurement helper now
   tail-reads APM logs instead of rescanning whole files. Nothing here changes
   the shipped DLL surface.
+- `make verify-reproducible` automates the rebuild-and-compare check of the
+  packaging reproducibility claim (same-tree repackage, full recompile,
+  out-of-tree path variation), and `make package` now writes a buildinfo file
+  (toolchain, commit, epoch, zip sha256) next to the zip so release artifacts
+  record the environment that produced them.
 - Removed the vendored `scripts/dotnet-install.sh` bootstrap.
 - Dependency audit: dropped the unused `MemoryPack` game-DLL reference (no
   source usage, compile-verified against both build backends); the test

@@ -118,7 +118,13 @@ compiles against the shipped `Assembly-CSharp.dll`, which the repo does not
 redistribute (AGENTS.md rule 6). GitHub Actions therefore runs the test gate
 but not the package build. The zip is reproducible (sorted entries,
 SOURCE_DATE_EPOCH-normalized mtimes, stripped owner data); verify with
-two `make package` runs and `sha256sum dist/EfficientServer-*.zip`.
+`make verify-reproducible`, which packages twice, recompiles from scratch at
+a copied tree path, and compares hashes (the manual equivalent:
+two `make package` runs plus `sha256sum dist/EfficientServer-*.zip`). Each
+package run also writes `dist/EfficientServer-<version>.buildinfo.txt`
+(toolchain versions, commit, epoch, zip hash) next to the zip so any release
+artifact records the environment that produced it; the buildinfo lives
+outside the zip to keep artifacts byte-identical.
 
 ### Validation tooling (scripts/)
 
@@ -126,6 +132,7 @@ two `make package` runs and `sha256sum dist/EfficientServer-*.zip`.
 |---|---|
 | `check_config_doc.py` | Regression gate (in `make test`): every `ServerPerfConfig` field must be documented in CONFIG.md |
 | `check_version.py` | Regression gate (in `make test`): ModInfo (source+dist) == AssemblyVersion, no doc claims a future minor |
+| `verify_reproducible.sh` (`make verify-reproducible`) | Rebuild-and-compare proof of the packaging reproducibility claim: same-tree repackage, full recompile, out-of-tree path variation; needs a game install |
 | `validate_anim_path_admission.py` | Live A/B: animator-emergency + path-admission against real bots/zombies (telnet + loadgen); see RESULTS |
 | `validate_bloodmoon_path.py` | Live blood-moon path-admission A/B: real director-spawned horde, baseline vs path knobs on; writes a JSON report |
 | `measure_es_onoff.py` | Live whole-mod ES on/off APM compare; `ES_ARM=on|off` = matched-arm mode (fresh server per arm) |
