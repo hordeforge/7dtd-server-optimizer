@@ -31,6 +31,14 @@ SCALAR_TYPES = {"bool", "int", "float", "string", "double", "long"}
 CLASS_BLOCK = re.compile(r"^ {4}(?:public |internal )?(?:sealed )?class (\w+)\n    \{\n(.*?)^    \}", re.M | re.S)
 PROP_DECL = re.compile(r"public (\w+) (\w+) \{ get; set; \}")
 
+USAGE = """\
+usage: check_config_doc.py [-h | --help]
+
+Gate: every ServerPerfConfig field must be documented in docs/CONFIG.md and
+every key in config/efficientserver.json must exist in Config.cs. Wired into
+`make test`. Takes no options besides -h/--help.\
+"""
+
 
 def parse_cs_schema(src: str) -> dict[str, dict]:
     """class name -> {'scalars': set(names), 'sections': {name: class type}}."""
@@ -75,26 +83,34 @@ def main() -> int:
 
     missing = [f for f in fields if f not in doc_names]
     if missing:
-        print(f"FAIL: {len(missing)} config field(s) undocumented in {CONFIG_MD.name}:")
+        print(f"FAIL: {len(missing)} config field(s) undocumented in {CONFIG_MD.name}:", file=sys.stderr)
         for m in missing:
-            print(f"  {m}")
+            print(f"  {m}", file=sys.stderr)
         return 1
     print(f"OK: all {len(fields)} config fields documented in {CONFIG_MD.name}")
 
     try:
         data = json.loads(CONFIG_JSON.read_text(encoding="utf-8"))
     except (OSError, ValueError) as ex:
-        print(f"FAIL: {CONFIG_JSON.name} is not valid JSON: {ex}")
+        print(f"FAIL: {CONFIG_JSON.name} is not valid JSON: {ex}", file=sys.stderr)
         return 1
     problems = unknown_json_keys(parse_cs_schema(src), data)
     if problems:
-        print(f"FAIL: {len(problems)} unknown key(s) in {CONFIG_JSON.relative_to(ROOT)}:")
+        print(f"FAIL: {len(problems)} unknown key(s) in {CONFIG_JSON.relative_to(ROOT)}:", file=sys.stderr)
         for p in problems:
-            print(f"  {p}")
+            print(f"  {p}", file=sys.stderr)
         return 1
     print(f"OK: all shipped config keys match Config.cs ({len(data)} top-level)")
     return 0
 
 
 if __name__ == "__main__":
+    argv = sys.argv[1:]
+    if argv in (["-h"], ["--help"]):
+        print(USAGE)
+        raise SystemExit(0)
+    if argv:
+        print(f"check_config_doc.py: unrecognized arguments: {' '.join(argv)}", file=sys.stderr)
+        print(USAGE, file=sys.stderr)
+        raise SystemExit(2)
     sys.exit(main())

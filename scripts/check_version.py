@@ -26,6 +26,15 @@ ASSEMBLY = ROOT / "Source" / "EfficientServer" / "AssemblyInfo.cs"
 CHANGELOG = ROOT / "CHANGELOG.md"
 DOCS = ROOT / "docs"
 
+USAGE = """\
+usage: check_version.py [-h | --help]
+
+Gate: ModInfo.xml, AssemblyInfo.cs and the dist ModInfo must carry consistent
+versions, docs must not claim a version newer than shipped, and CHANGELOG.md
+must mention the shipped version. Wired into `make test`. Takes no options
+besides -h/--help.\
+"""
+
 
 def modinfo_version(path: Path) -> str | None:
     m = re.search(r'Version\s+value="([0-9.]+)"', path.read_text(encoding="utf-8"))
@@ -70,13 +79,21 @@ def main() -> int:
         fails.append(f"CHANGELOG.md missing or has no entry for shipped mod version {mi}")
 
     if fails:
-        print("FAIL:")
+        print("FAIL:", file=sys.stderr)
         for f in fails:
-            print(f"  {f}")
+            print(f"  {f}", file=sys.stderr)
         return 1
     print(f"OK: versions consistent (ModInfo {mi}, Assembly {asm}, dist {di})")
     return 0
 
 
 if __name__ == "__main__":
+    argv = sys.argv[1:]
+    if argv in (["-h"], ["--help"]):
+        print(USAGE)
+        raise SystemExit(0)
+    if argv:
+        print(f"check_version.py: unrecognized arguments: {' '.join(argv)}", file=sys.stderr)
+        print(USAGE, file=sys.stderr)
+        raise SystemExit(2)
     sys.exit(main())

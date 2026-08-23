@@ -35,6 +35,8 @@ make test   # config harness + config-doc coverage + version-consistency gates
 make build
 make install DS="/path/to/7 Days to Die Dedicated Server"
 make run DS="/path/to/7 Days to Die Dedicated Server"
+make uninstall DS="/path/to/7 Days to Die Dedicated Server"
+make package   # reproducible dist/EfficientServer-<version>.zip
 make clean
 # optional Mono mcs path:
 make build-mcs

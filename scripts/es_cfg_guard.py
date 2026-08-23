@@ -33,9 +33,19 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import sys
 from pathlib import Path
 
 STALE_SUFFIX = ".stale"
+
+USAGE = """\
+usage: es_cfg_guard.py [--selftest] [-h | --help]
+
+Backup/restore guard library for the installed EfficientServer config
+(imported by the bench harnesses), plus a self-test of that protocol.
+  --selftest  run the protocol self-test (default with no arguments)
+  -h, --help  show this help\
+"""
 
 
 def _read_doc(path: Path) -> dict:
@@ -182,8 +192,10 @@ def _selftest() -> int:
     failures: list[str] = []
 
     def check(name: str, cond: bool) -> None:
-        print(("PASS: " if cond else "FAIL: ") + name)
-        if not cond:
+        if cond:
+            print("PASS: " + name)
+        else:
+            print("FAIL: " + name, file=sys.stderr)
             failures.append(name)
 
     keys = [
@@ -264,11 +276,19 @@ def _selftest() -> int:
         check("begin is sticky until restored", _read_doc(cfg)["Enabled"] is True)
 
     if failures:
-        print(f"FAIL: {len(failures)} es_cfg_guard selftest check(s)")
+        print(f"FAIL: {len(failures)} es_cfg_guard selftest check(s)", file=sys.stderr)
         return 1
     print("PASS: es_cfg_guard selftest")
     return 0
 
 
 if __name__ == "__main__":
+    argv = sys.argv[1:]
+    if argv in (["-h"], ["--help"]):
+        print(USAGE)
+        raise SystemExit(0)
+    if argv and argv != ["--selftest"]:
+        print(f"es_cfg_guard.py: unrecognized arguments: {' '.join(argv)}", file=sys.stderr)
+        print(USAGE, file=sys.stderr)
+        raise SystemExit(2)
     raise SystemExit(_selftest())

@@ -384,6 +384,10 @@ def main() -> int:
         report["verdicts"]["overall"] = "PASS" if code == 0 else "FAIL"
         log(f"=== VERDICTS: {json.dumps(report['verdicts'])} ===")
 
+    except KeyboardInterrupt:
+        # Same contract as the sibling harnesses: quiet 130, report still
+        # written by the finally below.
+        return 130
     except Exception as e:
         log(f"FAIL exception: {e}")
         report["error"] = repr(e)
