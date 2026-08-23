@@ -286,6 +286,14 @@ def main() -> int:
                 log("WARN: APM bridge silent; no numeric verdict (check 7dtd-apm-bridge installed)")
     except KeyboardInterrupt:
         code = 130
+    except Exception as e:
+        # Same contract as the sibling validate_* harnesses: record the failure
+        # in the report instead of dying on a bare traceback; the finally below
+        # still restores the config and writes the report.
+        log(f"FAIL exception: {e}")
+        report["error"] = repr(e)
+        report["verdict"] = "ERROR"
+        code = 4
     finally:
         toggle_mode = ARM not in ("on", "off")
         ES_SWAP.restore()

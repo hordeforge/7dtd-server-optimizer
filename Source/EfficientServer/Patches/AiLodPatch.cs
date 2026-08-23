@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using HarmonyLib;
 using UnityEngine;
@@ -11,6 +12,10 @@ namespace EfficientServer.Patches
     [HarmonyPatch(typeof(World), nameof(World.EntityActivityUpdate))]
     public static class AiLodPatch
     {
+        // Cloth suppression failure is model API variance; the LOD scale itself is
+        // unaffected. Cosmetic-only, but a permanently silent catch here would hide
+        // the drift, so warn once (per-entity-per-tick rate forbids per-call logs).
+        static bool _clothWarned;
         static void Postfix(World __instance)
         {
             if (!ModApi.ShouldRun()) return;
@@ -55,9 +60,16 @@ namespace EfficientServer.Patches
                         e.emodel.ClothSimOn(near, false);
                         if (!near) e.emodel.JiggleOn(false);
                     }
-                    catch
+                    catch (Exception ex)
                     {
-                        // model API variance across versions
+                        // model API variance across versions: keep the LOD scale,
+                        // drop only the cloth toggle, and name the failure once.
+                        if (!_clothWarned)
+                        {
+                            _clothWarned = true;
+                            ModApi.Warn("AI LOD cloth toggle failed [" + ex.GetType().Name + "]: " + ex.Message
+                                + " - cloth suppression skipped (LOD scale unaffected)");
+                        }
                     }
                 }
             }

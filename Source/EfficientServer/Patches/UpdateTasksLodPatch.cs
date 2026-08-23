@@ -1,3 +1,4 @@
+using System;
 using HarmonyLib;
 using UnityEngine;
 
@@ -29,6 +30,13 @@ namespace EfficientServer.Patches
         public static long SkippedFarTotal { get { return _skippedFarTotal; } }
         public static long StridedOffTotal { get { return _stridedOffTotal; } }
 
+        // The alert probe failing is API drift: without it every entity would be
+        // treated as unalerted and strided/skipped regardless of combat state.
+        // Fall back to full-rate AI and say so ONCE (this fires per entity per
+        // tick, so per-call logging would flood).
+        static bool _alertProbeWarned;
+        static bool _despawnWarned;
+
         static bool Prefix(EntityAlive __instance)
         {
             if (!ModApi.ShouldRun()) return true;
@@ -52,8 +60,14 @@ namespace EfficientServer.Patches
                     if (__instance.IsSleeper && !__instance.IsSleeperPassive) return true;
                     // blood-moon / ferals stay active even far out if already chasing
                 }
-                catch
+                catch (Exception ex)
                 {
+                    if (!_alertProbeWarned)
+                    {
+                        _alertProbeWarned = true;
+                        ModApi.Warn("AI LOD alert check failed [" + ex.GetType().Name + "]: " + ex.Message
+                            + " - every entity now counts as alerted; mid/far throttling is INACTIVE until restart");
+                    }
                     return true;
                 }
             }
@@ -71,7 +85,17 @@ namespace EfficientServer.Patches
             // far wandering-horde / bloodmoon / expired entities still despawn), skip
             // the expensive path follow + EAI + move-helper.
             try { __instance.CheckDespawn(); }
-            catch { return true; } // API drift -> let stock run rather than leak
+            catch (Exception ex)
+            {
+                // API drift -> let stock run rather than leak; say so once.
+                if (!_despawnWarned)
+                {
+                    _despawnWarned = true;
+                    ModApi.Warn("AI LOD CheckDespawn failed [" + ex.GetType().Name + "]: " + ex.Message
+                        + " - falling back to full stock updateTasks for all entities until restart");
+                }
+                return true;
+            }
             if (far) _skippedFarTotal++; else _stridedOffTotal++;
             return false;
         }

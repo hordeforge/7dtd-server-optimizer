@@ -52,8 +52,11 @@ namespace EfficientServer.Patches
             int mask = motor.CollidableLayers;
             if ((mask & AliveEntityLayerBit) == 0)
                 return; // already stripped (shouldn't happen; avoid double-save)
-            motor.CollidableLayers = mask & ~AliveEntityLayerBit;
+            // Save BEFORE stripping: the Finalizer runs even if this prefix or the
+            // setter throws, and restoring from __state is the only way back - so
+            // the saved mask must already be in place when the mutation happens.
             __state = mask;
+            motor.CollidableLayers = mask & ~AliveEntityLayerBit;
         }
 
         static void Finalizer(Entity __instance, int __state)

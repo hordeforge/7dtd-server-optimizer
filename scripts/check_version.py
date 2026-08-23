@@ -48,12 +48,28 @@ def norm(v: str) -> tuple[int, ...]:
 def main() -> int:
     fails = []
 
-    mi = modinfo_version(MODINFO)
-    if mi is None:
-        fails.append("ModInfo.xml: no Version value")
-    di = modinfo_version(DIST_MODINFO) if DIST_MODINFO.exists() else None
+    # A gate must report a missing input as a FAIL line, not die on a traceback
+    # hiding which of its checks could not run.
+    def read_or(path: Path) -> str | None:
+        try:
+            return path.read_text(encoding="utf-8")
+        except OSError as ex:
+            fails.append(f"{path.name}: unreadable ({ex})")
+            return None
 
-    asm_m = re.search(r'AssemblyVersion\("([0-9.]+)"\)', ASSEMBLY.read_text(encoding="utf-8"))
+    mi_src = read_or(MODINFO)
+    mi = modinfo_version(MODINFO) if mi_src is not None else None
+    if mi_src is not None and mi is None:
+        fails.append("ModInfo.xml: no Version value")
+    di = None
+    di_src = read_or(DIST_MODINFO) if DIST_MODINFO.exists() else None
+    if di_src is not None:
+        di = modinfo_version(DIST_MODINFO)
+
+    asm_src = read_or(ASSEMBLY)
+    asm_m = (
+        re.search(r'AssemblyVersion\("([0-9.]+)"\)', asm_src) if asm_src is not None else None
+    )
     asm = asm_m.group(1) if asm_m else None
 
     if mi and asm:
@@ -75,7 +91,8 @@ def main() -> int:
                 if minor > shipped[1]:
                     fails.append(f"{f.name}: claims v1.{minor} > shipped {mi}")
 
-    if mi and (CHANGELOG.exists() is False or mi not in CHANGELOG.read_text(encoding="utf-8")):
+    changelog_src = read_or(CHANGELOG) if CHANGELOG.exists() else None
+    if mi and (changelog_src is None or mi not in changelog_src):
         fails.append(f"CHANGELOG.md missing or has no entry for shipped mod version {mi}")
 
     if fails:

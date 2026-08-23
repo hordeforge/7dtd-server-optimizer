@@ -200,6 +200,14 @@ def main() -> int:
         log(f"=== VERDICTS: {json.dumps(report['verdicts'])} ===")
     except KeyboardInterrupt:
         return 130
+    except Exception as e:
+        # Same contract as the sibling harnesses: record the failure in the
+        # report instead of dying on a bare traceback; the finally below still
+        # restores the config and writes the report.
+        log(f"FAIL exception: {e}")
+        report["error"] = repr(e)
+        report["verdicts"]["overall"] = "ERROR"
+        return 4
     finally:
         CFG_SWAP.restore()
         out = OUT_DIR / f"bloodmoon_path_{time.strftime('%Y%m%d_%H%M%S')}.json"

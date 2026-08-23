@@ -173,8 +173,17 @@ class ConfigSwap:
             return
         try:
             live = _read_doc(self.cfg)
-        except Exception:
-            live = {}
+        except Exception as e:
+            # Unreadable live JSON: rebuilding from {} would write back ONLY the
+            # managed keys and destroy every other operator setting, so fall
+            # back to the exact snapshot instead.
+            shutil.copy2(self.bak, self.cfg)
+            self.bak.unlink()
+            self._log(
+                f"config guard: live config unreadable ({e}); "
+                "restored full backup"
+            )
+            return
         for kp in self.keys:
             present, value = self._get(bak_doc, kp)
             self._set(live, kp, present, value)
@@ -287,6 +296,20 @@ def _selftest() -> int:
             cfg.is_file() and _canonical(_read_doc(cfg)) == snapshot,
         )
         check("backup consumed after missing-live restore", not s4.bak.exists())
+
+        # 7. live file UNREADABLE (corrupt JSON) between begin and restore ->
+        # full backup restore too: key-scoped restore onto {} would silently
+        # drop every non-managed operator key.
+        s5 = mk()
+        s5.begin()
+        snapshot = _canonical(_read_doc(cfg))
+        cfg.write_text("{ this is not json ][", encoding="utf-8")
+        s5.restore()
+        check(
+            "corrupt live config restored from full backup",
+            _canonical(_read_doc(cfg)) == snapshot,
+        )
+        check("backup consumed after corrupt-live restore", not s5.bak.exists())
 
     if failures:
         print(f"FAIL: {len(failures)} es_cfg_guard selftest check(s)", file=sys.stderr)
