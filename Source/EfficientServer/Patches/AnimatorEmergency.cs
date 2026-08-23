@@ -104,10 +104,8 @@ namespace EfficientServer.Patches
         /// <summary>
         /// Restore every live enemy animator's saved (or healthy default)
         /// culling mode. Does not toggle enabled, does not Rebind.
-        /// <paramref name="bare"/> is retained for console A/B compatibility and
-        /// is ignored for culling restore (no Rebind path exists here).
         /// </summary>
-        public static int RestoreAllEnemyAnimators(bool bare = false)
+        public static int RestoreAllEnemyAnimators()
         {
             World world = GameManager.Instance != null ? GameManager.Instance.World : null;
             if (world == null) return 0;
@@ -139,23 +137,11 @@ namespace EfficientServer.Patches
                     // Ensure enabled stayed true (never force-disable in this path).
                     if (!anim.enabled)
                         anim.enabled = true;
-                    if (!bare)
-                        anim.Update(0f);
+                    anim.Update(0f);
                     restored++;
                 }
             }
             return restored;
-        }
-
-        /// <summary>
-        /// True when this animator is under emergency CullCompletely (or any
-        /// active emergency session). Used by AnimatorLod so it does not re-enable
-        /// or fight culling.
-        /// </summary>
-        public static bool IsEmergencyCulled(Animator anim)
-        {
-            if (!Active || anim == null) return false;
-            return anim.cullingMode == AnimatorCullingMode.CullCompletely;
         }
     }
 }

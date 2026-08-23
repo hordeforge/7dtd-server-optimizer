@@ -27,8 +27,8 @@ namespace EfficientServer.Patches
         static int _cooldown;
         static readonly List<(float distSq, Entity entity)> Scratch = new List<(float, Entity)>();
 
-        // Live state for `es status`: current tick EMA and lifetime shed count.
-        public static double EmaMs { get { return TickEma.Value; } }
+        // Live state for `es status`: lifetime shed count (the tick EMA is shown
+        // once, from the governor's identical instance).
         public static long ShedTotal { get; private set; }
 
         static void Postfix()

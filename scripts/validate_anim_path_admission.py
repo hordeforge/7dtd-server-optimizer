@@ -160,22 +160,17 @@ def animstate_snapshot() -> tuple[str, list[dict]]:
     return text, parse_animstate(text)
 
 
-def write_path_config(max_cap: int, drop_far: float) -> dict:
-    """Rewrite EfficientServer path knobs on disk; return prior values."""
+def write_path_config(max_cap: int, drop_far: float) -> None:
+    """Rewrite EfficientServer path knobs on disk."""
     if not ES_CFG.is_file():
         raise FileNotFoundError(f"missing {ES_CFG}")
     # Snapshot once per run (idempotent); restore happens in main()'s finally.
     CFG_SWAP.begin()
     cfg = json.loads(ES_CFG.read_text(encoding="utf-8"))
     pf = cfg.setdefault("Pathfinding", {})
-    prior = {
-        "MaxPathEnqueuesPerTick": pf.get("MaxPathEnqueuesPerTick", 0),
-        "DropPathWhenFarDistSq": pf.get("DropPathWhenFarDistSq", 0),
-    }
     pf["MaxPathEnqueuesPerTick"] = max_cap
     pf["DropPathWhenFarDistSq"] = drop_far
     ES_CFG.write_text(json.dumps(cfg, indent=2) + "\n", encoding="utf-8")
-    return prior
 
 
 def fast_spawn(target: int) -> int:
@@ -245,11 +240,6 @@ def main() -> int:
         CFG_SWAP.begin()
         if not SKIP_START:
             log(f"=== start server (players={PLAYERS} zombies={ZOMBIES}) ===")
-            # bloodmoon start_server ignores BM_* for env; set env then call
-            os.environ["BM_PLAYERS"] = str(PLAYERS)
-            os.environ["BM_ZOMBIES"] = str(ZOMBIES)
-            B.PLAYERS = PLAYERS
-            B.ZOMBIES = ZOMBIES
             B.start_server()
         ensure_server_ready()
 

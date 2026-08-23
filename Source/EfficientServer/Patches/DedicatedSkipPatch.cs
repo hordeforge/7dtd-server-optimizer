@@ -75,8 +75,6 @@ namespace EfficientServer.Patches
             {
                 try
                 {
-                    var t = asm.GetType(fullOrName, false);
-                    if (t != null) return t;
                     foreach (var tt in asm.GetTypes())
                     {
                         if (tt.Name == fullOrName || tt.FullName == fullOrName)

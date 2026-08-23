@@ -148,9 +148,8 @@ class ConfigSwap:
         """Snapshot the live file for later restore (idempotent once begun)."""
         if self._begun and self.bak.is_file():
             return
+        # Resolve any backup a killed earlier run left before snapshotting.
         self.recover()
-        if self._begun and self.bak.is_file():
-            return
         if not self.cfg.is_file():
             raise FileNotFoundError(f"missing {self.cfg}")
         _write_atomic(self.bak, self.cfg.read_bytes())

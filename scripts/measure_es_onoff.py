@@ -92,12 +92,10 @@ def latest_server_log() -> Path | None:
     # Pick newest by mtime, not name sort: the zero-padded timestamp sorts
     # chronologically only within one world-name prefix, so logs from different
     # world names interleaved in the same dir would misorder by name.
-    def newest(paths: list[Path]) -> list[Path]:
-        return sorted(paths, key=lambda p: p.stat().st_mtime)
-
-    cands = newest(LOG_GLOB.glob("server_prefab_*.txt")) if LOG_GLOB.is_dir() else []
+    by_mtime = lambda paths: sorted(paths, key=lambda p: p.stat().st_mtime)
+    cands = by_mtime(LOG_GLOB.glob("server_prefab_*.txt")) if LOG_GLOB.is_dir() else []
     if not cands:
-        cands = newest(DS.glob("logs/server_prefab_*.txt"))
+        cands = by_mtime(DS.glob("logs/server_prefab_*.txt"))
     return cands[-1] if cands else None
 
 
@@ -225,8 +223,6 @@ def main() -> int:
         else:
             ES_SWAP.begin()
         if not SKIP_START:
-            os.environ["BM_PLAYERS"] = str(PLAYERS)
-            os.environ["BM_ZOMBIES"] = str(ZOMBIES)
             if ARM in ("on", "off"):
                 set_enabled_before_boot(ARM == "on")
             B.start_server()

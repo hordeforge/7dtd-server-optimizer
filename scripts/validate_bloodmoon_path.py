@@ -147,7 +147,6 @@ def main() -> int:
         # only these harness-owned knobs are reverted.
         CFG_SWAP.begin()
         if not SKIP_START:
-            os.environ["BM_PLAYERS"] = str(PLAYERS)
             B.start_server()
         ensure_server_ready()
 

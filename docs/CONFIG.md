@@ -405,9 +405,9 @@ would wrap the millisecond product negative and kill the probe.
 tick EMA, lifetime shed/drop counters from the silent hot-path gates); `es reload`
 re-reads `efficientserver.json` and applies it LIVE (all patches read the config
 object per call - no restart needed). Diagnostics (BENCH ONLY, gameplay breaks while active):
-`es animoff` / `es animon [bare]` toggle all enemy Animators (used to measure the
-19.9 ms animator slice; skips corpses; `bare` = enable+pump without Rebind/param
-re-push; restore is verified complete - live 2026-08-09 runs at 8p/32p/64p
+`es animoff` / `es animon` toggle all enemy animators' culling mode
+(used to measure the
+19.9 ms animator slice; skips corpses; restore is verified complete - live 2026-08-09 runs at 8p/32p/64p
 restored every rig with root motion intact, the old RESULTS 3s root-motion wedge
 is refuted by the current restore path); `es animstate` prints a per-zombie
 animator truth table

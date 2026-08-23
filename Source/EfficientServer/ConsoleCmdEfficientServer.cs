@@ -35,7 +35,7 @@ namespace EfficientServer
                     break;
                 case "animoff":
                 case "animon":
-                    AnimProbe(sub, _params);
+                    AnimProbe(sub);
                     break;
                 case "animstate":
                     AnimState();
@@ -84,7 +84,7 @@ namespace EfficientServer
             OutputRuntime();
         }
 
-        static void AnimProbe(string sub, List<string> _params)
+        static void AnimProbe(string sub)
         {
             // DIAGNOSTIC probe / emergency path: set enemy Animator.cullingMode to
             // CullCompletely (keeps enabled=true so root-motion can restore). Same
@@ -101,11 +101,9 @@ namespace EfficientServer
             }
             else
             {
-                // bare is accepted for CLI compat but culling restore ignores it.
-                bool bare = ConsoleCommandUtil.Arg(_params, 1) == "bare";
                 Patches.AnimatorEmergency.Exit();
                 ConsoleCommandUtil.Output(
-                    $"animprobe: EXIT emergency (bare={bare}); "
+                    "animprobe: EXIT emergency; "
                     + "check 'es animstate' for dp>0 on moving zombies");
             }
         }
