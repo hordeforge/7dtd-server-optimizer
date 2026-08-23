@@ -132,6 +132,8 @@ can never sit below the real working set (which would fire every frame).
 ### `Incremental` (false) / `IncrementalPauseTargetMs` (0)
 Opt-in Boehm incremental mode (collection in bounded slices). **Measured: marginal**
 (churn is invariant; slice count rises as pause length falls). Off by default.
+One-way per process: the collector mode is a P/Invoke that cannot be undone, so
+`es reload` applies a late enable but a disable needs a restart.
 
 ---
 

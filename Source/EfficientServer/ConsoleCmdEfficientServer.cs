@@ -25,7 +25,8 @@ namespace EfficientServer
             {
                 case "reload":
                     // ReloadConfig re-bases the governor and re-applies the start-time
-                    // knobs (mesh budgets, target fps, job workers) - single choke point.
+                    // knobs (mesh budgets, target fps, job workers, dedicated skips,
+                    // GC incremental) - single choke point.
                     ModApi.ReloadConfig();
                     SdtdConsole.Instance.Output(ModApi.LogPrefix + "config reloaded");
                     Status();

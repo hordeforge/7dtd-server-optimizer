@@ -24,6 +24,14 @@ So `EfficientServer-0.1.0.zip` logging `mod=1.17.0` is correct, not drift.
 ## [Unreleased]
 
 ### Fixed
+- `es reload` now fully honors the "re-enable without a restart" contract for
+  the two apply-once groups it missed: the imperative dedicated skips
+  (dynamic music, water splash, environment audio, ambient light spectrum)
+  and opt-in GC incremental mode. Previously both were installed at game start
+  only if the config was already enabled, so a disabled->enabled reload left
+  them inactive until restart while every other group activated live. The
+  re-apply is idempotent (Harmony replaces an identical patch method); the
+  GC megapause diagnostic stays start-time-only by design.
 - Opt-in GC megapause diagnostic: `Gc.WarmupSeconds` is now clamped to
   [0, 3600] and `GrowSeconds` to [1, 7200], and the sleep duration is computed
   in long math. Previously an unclamped warmup above ~2.1M seconds wrapped the

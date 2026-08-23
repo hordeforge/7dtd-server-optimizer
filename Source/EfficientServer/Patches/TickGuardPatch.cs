@@ -27,8 +27,9 @@ namespace EfficientServer.Patches
         static int _cooldown;
         static readonly List<(float distSq, Entity entity)> Scratch = new List<(float, Entity)>();
 
-        // Live state for `es status`: lifetime shed count (the tick EMA is shown
-        // once, from the governor's identical instance).
+        // Live state for `es status`: lifetime shed count (the tick EMA shown in
+        // `es status` comes from the governor's equivalent instance - see
+        // TickIntervalEma for why each holder steps its own copy).
         public static long ShedTotal { get; private set; }
 
         static void Postfix()

@@ -101,6 +101,20 @@ namespace EfficientServer
             Patches.DynamicMeshBudgetPatch.ApplyBudgets();
             Patches.GameStartPatch.ApplyTargetFps();
             Patches.GameStartPatch.ApplyJobWorkers();
+            // The imperative skip group is installed at GameStartDone ONLY when the
+            // then-current config was enabled (ApplyOptional early-outs otherwise),
+            // so a disabled->enabled reload must install it here or the contract
+            // above ("patches are installed so reload can enable it") silently fails
+            // for music/splash/env-audio/spectrum skips until restart. Idempotent:
+            // Harmony replaces an existing patch by MethodInfo instead of stacking,
+            // and SkipIfDedicated live-gates on ShouldRun either way.
+            // GcIncremental joins for the same reason: its one-shot guard is what
+            // makes late-enable possible (disable stays impossible by design).
+            // Both calls self-guard on Enabled/ShouldRun. The megapause diagnostic
+            // is deliberately NOT re-run here: it blocks threads for minutes on
+            // purpose, so it stays a start-time-only lever.
+            Patches.DedicatedSkipPatch.ApplyOptional(new Harmony(HarmonyId + ".optional"));
+            GcIncremental.Apply(Config != null ? Config.Gc : null);
             Log("config reloaded; enabled=" + Config.Enabled);
         }
 
