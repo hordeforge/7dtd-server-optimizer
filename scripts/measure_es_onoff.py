@@ -36,7 +36,7 @@ import sys
 import time
 from pathlib import Path
 
-from es_cfg_guard import ConfigSwap
+from es_cfg_guard import ConfigSwap, write_atomic
 from harness_common import (
     DS,
     ES_CFG,
@@ -196,7 +196,8 @@ def set_config_enabled(on: bool, live_reload: bool) -> None:
     (matched-arm mode: the fresh server starts with the arm's setting)."""
     cfg = json.loads(ES_CFG.read_text(encoding="utf-8"))
     cfg["Enabled"] = on
-    ES_CFG.write_text(json.dumps(cfg, indent=2) + "\n", encoding="utf-8")
+    # Atomic: same kill-mid-write hazard write_path_config guards against.
+    write_atomic(ES_CFG, json.dumps(cfg, indent=2) + "\n")
     if not live_reload:
         log(f"ES Enabled={on} set before boot (matched-arm mode)")
         return
@@ -290,7 +291,13 @@ def main() -> int:
         code = 4
     finally:
         toggle_mode = ARM not in ("on", "off")
-        ES_SWAP.restore()
+        # Each cleanup step is isolated so one failure cannot skip the rest:
+        # a restore error must not leak the bot cohort (it keeps loading the
+        # server until its own wall clock expires) or lose the report.
+        try:
+            ES_SWAP.restore()
+        except Exception as e:
+            log(f"WARN: config restore failed ({e}); backup kept for next run")
         if toggle_mode:
             # Best effort only: the sampled server may already be gone.
             try:

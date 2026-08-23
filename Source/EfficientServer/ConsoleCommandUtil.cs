@@ -5,11 +5,12 @@ namespace EfficientServer
 {
     internal static class ConsoleCommandUtil
     {
-        public static string Arg(List<string> args, int index, bool lower = false)
+        // Subcommand/argument matching is case-insensitive everywhere, so the
+        // lookup folds case itself; both callers are subcommand words.
+        public static string Arg(List<string> args, int index)
         {
             if (args == null || index < 0 || index >= args.Count) return "";
-            string value = (args[index] ?? "").Trim();
-            return lower ? value.ToLowerInvariant() : value;
+            return (args[index] ?? "").Trim().ToLowerInvariant();
         }
 
         /// <summary>

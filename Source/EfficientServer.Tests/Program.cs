@@ -32,16 +32,12 @@ namespace EfficientServer.Tests
             Console.WriteLine("FAIL: " + what);
         }
 
+        // Scratch JSON blob, removed before returning: Load reads it
+        // synchronously, so nothing needs it afterwards. Without this every
+        // run leaks ~500 fuzz + ~40 fixture files into the temp dir.
         static string WriteTemp(string json)
-        {
-            string p = Path.Combine(Path.GetTempPath(), "es_cfg_" + Guid.NewGuid().ToString("N") + ".json");
-            File.WriteAllText(p, json);
-            return p;
-        }
+            => WriteTempBytes(System.Text.Encoding.UTF8.GetBytes(json));
 
-        // Load from a scratch JSON blob and remove the file before returning:
-        // Load reads it synchronously, so nothing needs it afterwards. Without
-        // this every run leaks ~500 fuzz + ~40 fixture files into the temp dir.
         static ServerPerfConfig LoadTemp(string json)
         {
             string p = WriteTemp(json);

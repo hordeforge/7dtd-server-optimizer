@@ -22,7 +22,7 @@ namespace EfficientServer
 
         public override void Execute(List<string> _params, CommandSenderInfo _senderInfo)
         {
-            string sub = ConsoleCommandUtil.Arg(_params, 0, lower: true);
+            string sub = ConsoleCommandUtil.Arg(_params, 0);
             if (sub.Length == 0) sub = "status";
             switch (sub)
             {
@@ -189,7 +189,7 @@ namespace EfficientServer
         {
             // BENCH ONLY: player damage immunity so synthetic bots survive
             // endgame hordes and the load stays an active siege (RESULTS 3q).
-            string arg = ConsoleCommandUtil.Arg(_params, 1, lower: true);
+            string arg = ConsoleCommandUtil.Arg(_params, 1);
             bool changed = arg == "on" || arg == "off";
             if (arg == "on") Patches.BenchGodPatch.BenchGod = true;
             else if (arg == "off") Patches.BenchGodPatch.BenchGod = false;

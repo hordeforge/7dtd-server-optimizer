@@ -344,11 +344,16 @@ def main() -> int:
         report["verdicts"]["overall"] = "ERROR"
         code = 4
     finally:
+        # Isolated per step: a restore failure must not skip the reload, and
+        # neither cleanup failure may go unlogged or skip bot teardown.
         try:
             CFG_SWAP.restore()
+        except Exception as e:
+            log(f"WARN: config restore failed ({e}); backup kept for next run")
+        try:
             B.telnet(["es reload", "es animon"], settle=1.0)
         except Exception:
-            pass
+            pass  # best effort; the server may already be gone
         teardown_bots(bots)
         # Default: leave dedicated running so multi-phase/tool-timeout runs can resume.
         # Set VALIDATE_KILL_SERVER=1 to tear down.

@@ -172,7 +172,12 @@ def main() -> int:
         report["verdicts"]["overall"] = "ERROR"
         return 4
     finally:
-        CFG_SWAP.restore()
+        # Isolated so a restore failure cannot skip bot teardown (a leaked
+        # cohort keeps loading the server) or the report write.
+        try:
+            CFG_SWAP.restore()
+        except Exception as e:
+            log(f"WARN: config restore failed ({e}); backup kept for next run")
         teardown_bots(bots)
         write_report("bloodmoon_path", report)
     return 0

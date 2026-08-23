@@ -32,7 +32,6 @@ from __future__ import annotations
 
 import json
 import os
-import shutil
 import sys
 from pathlib import Path
 
@@ -60,6 +59,19 @@ def _write_atomic(path: Path, data: bytes) -> None:
     tmp = path.with_name(path.name + f".tmp{os.getpid()}")
     tmp.write_bytes(data)
     os.replace(tmp, path)
+
+
+def write_atomic(path: Path, data: str) -> None:
+    """Replace ``path`` with ``data`` atomically (temp file + rename), UTF-8.
+
+    The crash-safe twin of ``Path.write_text``: a kill mid-write cannot leave a
+    truncated file behind. Anything rewriting the LIVE installed config must go
+    through this (the guard's own writes already do), or a tool-timeout SIGKILL
+    reintroduces exactly the truncated-JSON state the backup/restore protocol
+    exists to prevent - and the next run then quarantines the backup instead of
+    being able to finish a restore.
+    """
+    _write_atomic(path, data.encode("utf-8"))
 
 
 class ConfigSwap:
@@ -166,7 +178,7 @@ class ConfigSwap:
             self._log(f"config guard: RESTORE FAILED, backup kept ({e})")
             return
         if not self.cfg.is_file():
-            shutil.copy2(self.bak, self.cfg)
+            _write_atomic(self.cfg, self.bak.read_bytes())
             self.bak.unlink()
             self._log("config guard: live config was missing; restored full backup")
             return
@@ -176,7 +188,7 @@ class ConfigSwap:
             # Unreadable live JSON: rebuilding from {} would write back ONLY the
             # managed keys and destroy every other operator setting, so fall
             # back to the exact snapshot instead.
-            shutil.copy2(self.bak, self.cfg)
+            _write_atomic(self.cfg, self.bak.read_bytes())
             self.bak.unlink()
             self._log(
                 f"config guard: live config unreadable ({e}); "
@@ -318,6 +330,19 @@ def _selftest() -> int:
             _canonical(_read_doc(cfg)) == snapshot,
         )
         check("backup consumed after corrupt-live restore", not s5.bak.exists())
+
+        # 8. public atomic write: create, overwrite, exact bytes, no temp litter.
+        wa = root / "atomic.json"
+        write_atomic(wa, '{"k": 1}\n')
+        write_atomic(wa, '{"k": 2}\n')
+        check(
+            "atomic write creates and overwrites",
+            wa.read_text(encoding="utf-8") == '{"k": 2}\n',
+        )
+        check(
+            "atomic write leaves no temp files",
+            [p.name for p in root.iterdir() if ".tmp" in p.name] == [],
+        )
 
     if failures:
         print(f"FAIL: {len(failures)} es_cfg_guard selftest check(s)", file=sys.stderr)

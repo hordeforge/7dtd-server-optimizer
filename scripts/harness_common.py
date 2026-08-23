@@ -27,7 +27,7 @@ sys.path.insert(0, str(LOADGEN_ROOT / "scripts"))
 # is exempted per-file in ruff.toml instead of inline noqa noise.
 import bloodmoon_profile as B
 
-from es_cfg_guard import ConfigSwap
+from es_cfg_guard import ConfigSwap, write_atomic
 
 # Canonical here is SEVENDTD_DS_DIR (same var as build/install/run and the
 # Makefile's DS=); SEVENDTD_SERVER_DIR is also accepted because that is the
@@ -85,7 +85,10 @@ def write_path_config(max_cap: int, drop_far: float) -> None:
     pf = cfg.setdefault("Pathfinding", {})
     pf["MaxPathEnqueuesPerTick"] = max_cap
     pf["DropPathWhenFarDistSq"] = drop_far
-    ES_CFG.write_text(json.dumps(cfg, indent=2) + "\n", encoding="utf-8")
+    # Atomic: these runs are routinely killed by tool timeouts mid-write; a
+    # truncated live JSON would leave the mod booting on built-in defaults and
+    # make the next run quarantine the backup instead of finishing a restore.
+    write_atomic(ES_CFG, json.dumps(cfg, indent=2) + "\n")
 
 
 def write_report(prefix: str, report: dict) -> Path:

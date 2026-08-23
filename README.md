@@ -3,6 +3,10 @@
 > **Part of [HordeForge](https://github.com/hordeforge)** — High-Performance Systems Engineering for 7 Days to Die.
 
 ![CI](https://github.com/hordeforge/7dtd-server-optimizer/actions/workflows/ci.yml/badge.svg)
+![license](https://img.shields.io/github/license/hordeforge/7dtd-server-optimizer)
+![release](https://img.shields.io/github/v/release/hordeforge/7dtd-server-optimizer)
+![languages](https://img.shields.io/github/languages/count/hordeforge/7dtd-server-optimizer)
+![top language](https://img.shields.io/github/languages/top/hordeforge/7dtd-server-optimizer)
 
 **EfficientServer** is an adaptive overload governor and Harmony optimization mod for 7 Days to Die dedicated servers. It owns reviewed runtime performance changes: AI level-of-detail, distant task throttling, dedicated-only work suppression, bounded dynamic mesh behavior, pathfinding/network throttles, and emergency load shedding.
 

@@ -38,7 +38,11 @@ namespace EfficientServer.Patches
         {
             try
             {
-                Type t = FindType(typeName);
+                // Harmony's own all-assembly lookup (same Name-or-FullName rule as
+                // this file's old hand-rolled scan; verified equivalent against the
+                // shipped 0Harmony for every type named below). Returns null when
+                // absent instead of throwing.
+                Type t = AccessTools.TypeByName(typeName);
                 if (t == null)
                 {
                     // Soft note (not "MISSING TARGET"): some of these presentation
@@ -67,26 +71,6 @@ namespace EfficientServer.Patches
         static bool SkipIfDedicated()
         {
             return !ModApi.ShouldRun();
-        }
-
-        static Type FindType(string fullOrName)
-        {
-            foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
-            {
-                try
-                {
-                    foreach (var tt in asm.GetTypes())
-                    {
-                        if (tt.Name == fullOrName || tt.FullName == fullOrName)
-                            return tt;
-                    }
-                }
-                catch
-                {
-                    // ReflectionTypeLoadException on some assemblies
-                }
-            }
-            return null;
         }
     }
 }
