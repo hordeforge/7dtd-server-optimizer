@@ -48,6 +48,14 @@ from harness_common import (
     write_report,
 )
 
+USAGE = """\
+usage: measure_es_onoff.py [-h | --help]
+
+Live whole-mod comparison, configured entirely through environment variables
+(BM_PLAYERS, BM_ZOMBIES, BM_GAMESTAGE, BM_HOLD_SAMPLE_S, SKIP_SERVER_START,
+ES_ARM; see the module docstring above). Takes no options besides -h/--help.\
+"""
+
 PLAYERS = int(os.environ.get("BM_PLAYERS", "32"))
 ZOMBIES = int(os.environ.get("BM_ZOMBIES", "250"))
 GAMESTAGE = int(os.environ.get("BM_GAMESTAGE", "250"))
@@ -288,4 +296,12 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    argv = sys.argv[1:]
+    if argv in (["-h"], ["--help"]):
+        print(USAGE)
+        raise SystemExit(0)
+    if argv:
+        print(f"measure_es_onoff.py: unrecognized arguments: {' '.join(argv)}", file=sys.stderr)
+        print(USAGE, file=sys.stderr)
+        raise SystemExit(2)
     sys.exit(main())

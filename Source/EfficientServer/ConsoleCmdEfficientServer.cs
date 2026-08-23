@@ -7,15 +7,18 @@ namespace EfficientServer
     /// Operator console command (auto-discovered by the game's console from loaded
     /// assemblies). Every patch reads the live config object per call, so a file
     /// reload takes effect immediately - no restart. Usage (console or telnet):
+    ///   es status   - print active lever values plus live counters
     ///   es reload   - re-read Config/efficientserver.json and apply it
-    ///   es status   - print the active lever values
+    ///   diagnostics - animoff | animon | animstate | rigoff | rigon | benchgod on|off
     /// </summary>
     public class ConsoleCmdEfficientServer : ConsoleCmdAbstract
     {
         public override string[] getCommands() => new[] { "efficientserver", "es" };
         public override string getDescription() =>
-            "EfficientServer: 'es reload' re-reads the config (applies live), "
-            + "'es status' shows active levers plus live governor/gate counters";
+            "EfficientServer control: 'es status' shows active levers plus live "
+            + "counters, 'es reload' re-reads the config (applies live); diagnostics: "
+            + "'es animoff' | 'es animon' | 'es animstate' | 'es rigoff' | 'es rigon' | "
+            + "'es benchgod on|off'";
 
         public override void Execute(List<string> _params, CommandSenderInfo _senderInfo)
         {

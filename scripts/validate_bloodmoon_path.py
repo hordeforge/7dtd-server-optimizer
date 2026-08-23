@@ -36,6 +36,15 @@ from harness_common import (
     write_report,
 )
 
+USAGE = """\
+usage: validate_bloodmoon_path.py [-h | --help]
+
+Live blood-moon path-admission A/B, configured entirely through environment
+variables (BM_PLAYERS, BM_GAMESTAGE, PATH_CAP, PATH_DROP_FAR_SQ,
+BM_HOLD_SAMPLE_S, SKIP_SERVER_START; see the module docstring above). Takes
+no options besides -h/--help.\
+"""
+
 PLAYERS = int(os.environ.get("BM_PLAYERS", "12"))
 GAMESTAGE = int(os.environ.get("BM_GAMESTAGE", "250"))
 PATH_CAP = int(os.environ.get("PATH_CAP", "64"))
@@ -168,4 +177,12 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    argv = sys.argv[1:]
+    if argv in (["-h"], ["--help"]):
+        print(USAGE)
+        raise SystemExit(0)
+    if argv:
+        print(f"validate_bloodmoon_path.py: unrecognized arguments: {' '.join(argv)}", file=sys.stderr)
+        print(USAGE, file=sys.stderr)
+        raise SystemExit(2)
     sys.exit(main())

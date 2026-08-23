@@ -159,7 +159,9 @@ def selftest() -> int:
             print(f"PASS: {what}")
         else:
             ok = False
-            print(f"FAIL: {what}")
+            # Same convention as the other gates: failures go to stderr so a
+            # stderr-only capture still sees them.
+            print(f"FAIL: {what}", file=sys.stderr)
 
     check(
         content_hash_hex("ungWv48Bz+pBQUDeXa4iI7ADYaOWF3qctBD/YfIAFa0=")
@@ -250,7 +252,11 @@ def selftest() -> int:
                   for h in hexes),
               "in-repo component hashes decode to lowercase hex digests")
 
-    return 0 if ok else 1
+    if ok:
+        print("PASS: gen_sbom selftest")
+        return 0
+    print("FAIL: gen_sbom selftest", file=sys.stderr)
+    return 1
 
 
 def main_exit_code(args: list[str]) -> int:
