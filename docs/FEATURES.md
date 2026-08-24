@@ -389,6 +389,20 @@ Conclusion: the send encode is modest and downstream; the real join-lag driver i
 because it is low-risk and default-inert, not because it is proven. See
 [`RESULTS.md`](RESULTS.md) §3e.
 
+## Path admission (v1.17.0)
+
+`PathAdmissionPatch` optionally caps non-priority `EntityAlive.FindPath` enqueues
+per frame and/or drops far non-alert path requests. Defaults both off (vanilla).
+Alerted / attack-target / investigate / active-sleeper always path. See CONFIG
+`Pathfinding.MaxPathEnqueuesPerTick` and `DropPathWhenFarDistSq`.
+
+## Animator emergency (v1.17.0 CullCompletely)
+
+Governor tier 2 and `es animoff` set enemy `Animator.cullingMode` to
+`CullCompletely` without disabling the component, so exit can restore root motion.
+Still default-off (`Governor.AnimatorEmergency`). Validate with `es animstate`
+(`dp` should be non-zero after `es animon` on moving zombies).
+
 ## Lifecycle
 
 Post-start setup (dynamic-mesh reapply, optional dedicated skips, GC incremental
@@ -428,22 +442,10 @@ General modding rules: [`../../MODDING_BEST_PRACTICES.md`](../../MODDING_BEST_PR
 | [loop.md](../../7dtd-engine-research/docs/loop.md) | Generic frame map |
 | [APM.md](../../7dtd-server-apm/docs/APM.md) | Evidence |
 
-## Path admission (v1.17.0)
-
-`PathAdmissionPatch` optionally caps non-priority `EntityAlive.FindPath` enqueues
-per frame and/or drops far non-alert path requests. Defaults both off (vanilla).
-Alerted / attack-target / investigate / active-sleeper always path. See CONFIG
-`Pathfinding.MaxPathEnqueuesPerTick` and `DropPathWhenFarDistSq`.
-
-## Animator emergency (v1.17.0 CullCompletely)
-
-Governor tier 2 and `es animoff` set enemy `Animator.cullingMode` to
-`CullCompletely` without disabling the component, so exit can restore root motion.
-Still default-off (`Governor.AnimatorEmergency`). Validate with `es animstate`
-(`dp` should be non-zero after `es animon` on moving zombies).
-
 ## Changelog
 
+- **2026-08-24:** Path admission + Animator emergency sections moved back with
+  the feature catalog (they had drifted below Related docs).
 - **2026-08-24:** Dedicated-only skips section corrected: cloth/jiggle
   suppression belongs to `AiLodPatch`'s level-triggered distance toggle under
   `SkipOnDedicated.ClothAndJiggleBoneSimulation`, not to a `DedicatedSkipPatch`
