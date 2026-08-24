@@ -93,6 +93,15 @@ namespace EfficientServer.Tests
             var miss = ServerPerfConfig.Load(Path.Combine(Path.GetTempPath(), "does_not_exist_" + Guid.NewGuid().ToString("N") + ".json"));
             Check(miss != null && miss.Pathfinding.GraphUpdateEveryTicks == 4, "missing file -> defaults");
 
+            // Null / empty path -> the same guard branch as a missing file
+            // (Load checks string.IsNullOrEmpty before File.Exists), never a
+            // throw. Deliberate runtime-null probe: NRT annotations are
+            // erased, so the IsNullOrEmpty guard is the only real defense.
+            var nullPath = ServerPerfConfig.Load(null!);
+            Check(nullPath != null && nullPath.Enabled, "null path -> defaults");
+            var emptyPath = ServerPerfConfig.Load("");
+            Check(emptyPath != null && emptyPath.Enabled, "empty path -> defaults");
+
             // Malformed JSON -> defaults, no throw.
             var bad = LoadTempTracked("{ this is not json ][");
             Check(bad != null && bad.Enabled, "malformed json -> defaults");
@@ -171,6 +180,8 @@ namespace EfficientServer.Tests
                 "FindUnknownKeys: malformed json -> empty, no throw");
             Check(ServerPerfConfig.FindUnknownKeys("").Count == 0,
                 "FindUnknownKeys: empty input -> empty");
+            Check(ServerPerfConfig.FindUnknownKeys(null!).Count == 0,
+                "FindUnknownKeys: null input -> empty");
             var typo = LoadTempTracked("{\"Pathfinding\":{\"GraphUpdateEveryTick\":8}}");
             Check(typo != null && typo.Pathfinding.GraphUpdateEveryTicks == 4,
                 "typo'd knob keeps default (and is logged), other fields unaffected");
@@ -777,6 +788,24 @@ namespace EfficientServer.Tests
             Check(atMin.Diagnostics.WarmupSeconds == 0 && atMin.Diagnostics.GrowSeconds == 1,
                 "Diagnostics lower endpoints preserved verbatim");
             Check(ModApi.Warnings.Count == 0, "lower endpoints load without any 'config corrected' warning");
+
+            // Idempotency: re-normalizing an already-normalized config must be
+            // silent and value-stable. Every FiniteRange/IntRange fallback is
+            // clamped into its own range precisely so this holds; a clamp whose
+            // fallback landed outside its (possibly sibling-shifted) bounds
+            // would spam "config corrected" on every reload AND drift the value
+            // each time - `es reload` re-runs this exact path.
+            var corrected = LoadTempTracked(
+                "{\"Pathfinding\":{\"GraphUpdateEveryTicks\":1000000}," +
+                "\"Governor\":{\"OverBudgetMs\":20,\"HealthyMs\":NaN}}");
+            Check(corrected.Pathfinding.GraphUpdateEveryTicks == 200 && corrected.Governor.HealthyMs == 15f,
+                "idempotency setup: first normalize corrected both out-of-range knobs");
+            Check(ModApi.Warnings.Count > 0, "idempotency setup: first normalize logged the corrections");
+            ModApi.Warnings.Clear();
+            corrected.Normalize();
+            Check(ModApi.Warnings.Count == 0, "re-normalize is silent (no repeated 'config corrected' warnings)");
+            Check(corrected.Pathfinding.GraphUpdateEveryTicks == 200 && corrected.Governor.HealthyMs == 15f,
+                "re-normalize keeps the already-corrected values stable");
 
             if (_failures == 0)
             {

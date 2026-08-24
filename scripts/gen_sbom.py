@@ -242,6 +242,36 @@ def selftest() -> int:
             "--lock", str(broken_lock), "--out", str(out_e)])
         check(rc == 2, f"malformed lock file exits 2 (got {rc})")
 
+        # The same package resolved in several target-framework groups must
+        # appear ONCE in the component list (keyed by name+resolved version),
+        # or every multi-target lock file would ship duplicate SBOM entries.
+        multi_tfm_lock = Path(td) / "multi.lock.json"
+        multi_tfm_lock.write_text(json.dumps({
+            "version": 1,
+            "dependencies": {
+                "net8.0": {
+                    "Newtonsoft.Json": {
+                        "type": "Direct",
+                        "requested": "[13.0.3, )",
+                        "resolved": "13.0.3",
+                        "contentHash": "ungn34Dxz6pBQUDeXa4iI7ADYaOWF3qctBD/YfIAFa0=",
+                    }
+                },
+                "net48": {
+                    "Newtonsoft.Json": {
+                        "type": "Direct",
+                        "requested": "[13.0.3, )",
+                        "resolved": "13.0.3",
+                        "contentHash": "ungn34Dxz6pBQUDeXa4iI7ADYaOWF3qctBD/YfIAFa0=",
+                    }
+                },
+            },
+        }), encoding="utf-8")
+        bom_multi = build_bom("t", "t", 0, multi_tfm_lock)
+        check(len(bom_multi["components"]) == 1,
+              f"package in two TFM groups dedupes to one component "
+              f"(got {len(bom_multi['components'])})")
+
     real_lock = Path(__file__).resolve().parent.parent / (
         "Source/EfficientServer.Tests/packages.lock.json")
     if real_lock.exists():
