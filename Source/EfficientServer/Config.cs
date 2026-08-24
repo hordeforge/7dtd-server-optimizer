@@ -107,7 +107,8 @@ namespace EfficientServer
         public bool PoolInitScanNodes { get; set; } = false;
 
         // Path admission at EntityAlive.FindPath (A2). 0 = unlimited (vanilla).
-        // Caps non-priority path enqueues per Unity frame; alerted / attack-target /
+        // Caps non-priority path enqueues per game tick (a TickClock window, so the
+        // budget holds at any Server.TargetFps); alerted / attack-target /
         // investigate / active-sleeper always admit and do not consume the budget.
         // Does not change path compute drain (still ~8 starts/frame stock).
         public int MaxPathEnqueuesPerTick { get; set; } = 0;
