@@ -93,7 +93,7 @@ coverage:
 	mkdir -p "$(ROOT)/TestResults"
 	# Same locked restore make test runs: the collect below passes --no-restore.
 	dotnet restore --locked-mode $(ROOT)/Source/EfficientServer.Tests
-	dotnet-coverage collect -f cobertura -o "$(ROOT)/TestResults/coverage.cobertura.xml" -- dotnet run --project "$(ROOT)/Source/EfficientServer.Tests" -c Release --no-restore
+	dotnet tool run dotnet-coverage -- collect -f cobertura -o "$(ROOT)/TestResults/coverage.cobertura.xml" -- dotnet run --project "$(ROOT)/Source/EfficientServer.Tests" -c Release --no-restore
 install:
 	$(ROOT)/scripts/install.sh
 # $(SEVENDTD_DS_DIR), not $(DS): an exported SEVENDTD_DS_DIR overrides ?=, so
