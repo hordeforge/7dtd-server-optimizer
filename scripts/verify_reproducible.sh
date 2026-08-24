@@ -3,9 +3,10 @@
 # README.md ("two builds of the same tree zip byte-identically").
 #
 # Three legs, each catches a different nondeterminism class:
-#   1. plain second package in the same tree     -> leftover-state / cache drift
-#   2. full recompile (obj/bin wiped)            -> incremental-build drift
-#   3. build from a copied tree at another path  -> build-path leakage into IL
+#   1. baseline package                          -> reference hash
+#   2. second package in the same tree           -> leftover-state / cache drift
+#   3. full recompile from a copied tree at another path -> build-path leakage
+#                                                           into IL
 #
 # The epoch is held constant across legs (it is an input by design); everything
 # else that must not matter is varied where possible. Needs a game install,

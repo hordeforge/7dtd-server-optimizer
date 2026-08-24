@@ -22,9 +22,11 @@ Env (subset of bloodmoon_profile):
   SKIP_SERVER_START=1 if dedicated already running
   SEVENDTD_TELNET_PASSWORD (default retest)
 
-Exit 0 if animator exit shows at least one moving zombie with dp>0 after
-restore OR animstate unavailable but frame recovered; non-zero on hard
-failures (no server, no players, animoff no frame change when load was high).
+Exit 0 unless a verdict fails outright: players did not join, CullCompletely
+not observed while animoff was active, dp=0 crawl after restore (moving
+zombies present), or entity collapse in the path phase. A missing animator
+frame cut under high load reports WEAK_no_frame_cut but does not fail the
+run; animstate snapshots that come back empty downgrade to SKIP verdicts.
 """
 from __future__ import annotations
 

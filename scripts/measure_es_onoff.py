@@ -14,7 +14,7 @@ writes a JSON report under server/logs/.
 
 Env (subset of bloodmoon_profile):
   BM_PLAYERS (default 32), BM_ZOMBIES (default 250), BM_GAMESTAGE (250)
-  BM_HOLD_SAMPLE_S (12) seconds per sample window
+  BM_HOLD_SAMPLE_S (35) seconds per sample window
   SKIP_SERVER_START=1 if a dedicated server is already running
   SEVENDTD_TELNET_PASSWORD (default retest)
 

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Globalization;
 using UnityEngine;
 
 namespace EfficientServer
@@ -66,17 +67,17 @@ namespace EfficientServer
             SdtdConsole.Instance.Output(
                 $"{ModApi.LogPrefix}enabled={c.Enabled} dedicatedOnly={c.DedicatedOnly} | "
                 + $"aiLod={c.AiLod.Enabled}(midStride={c.AiLod.MidTickStride}) | "
-                + $"graphEvery={c.Pathfinding.GraphUpdateEveryTicks} rescanSq={c.Pathfinding.MoveRescanThresholdSq} "
+                + $"graphEvery={c.Pathfinding.GraphUpdateEveryTicks} rescanSq={c.Pathfinding.MoveRescanThresholdSq.ToString(CultureInfo.InvariantCulture)} "
                 + $"poolInitScan={c.Pathfinding.PoolInitScanNodes} "
-                + $"pathCap={c.Pathfinding.MaxPathEnqueuesPerTick} pathDropFarSq={c.Pathfinding.DropPathWhenFarDistSq}");
+                + $"pathCap={c.Pathfinding.MaxPathEnqueuesPerTick} pathDropFarSq={c.Pathfinding.DropPathWhenFarDistSq.ToString(CultureInfo.InvariantCulture)}");
             SdtdConsole.Instance.Output(
                 $"{ModApi.LogPrefix}fastSend={c.Network.FastSingleTargetSend} stride={c.Network.EntityDistributionEveryTicks} "
                 + $"chunkBatch={c.WorldTransfer.ChunkPackagesPerObserverPerTick} "
                 + $"dynamicMesh={c.DynamicMesh.Enabled}(buffer={c.DynamicMesh.PlayerAreaChunkBuffer} regionMs={c.DynamicMesh.MaxRegionLoadMsPerFrame}) | "
                 + $"targetFps={c.Server.TargetFps} jobWorkers={c.Server.JobWorkerCount}");
             SdtdConsole.Instance.Output(
-                $"{ModApi.LogPrefix}governor={c.Governor.Enabled}(overMs={c.Governor.OverBudgetMs} healthyMs={c.Governor.HealthyMs} animEmergency={c.Governor.AnimatorEmergency}) "
-                + $"tickGuard={c.TickGuard.Enabled}(shedAboveMs={c.TickGuard.ShedAboveMs} batch={c.TickGuard.ShedBatch} minKept={c.TickGuard.MinEnemiesKept})");
+                $"{ModApi.LogPrefix}governor={c.Governor.Enabled}(overMs={c.Governor.OverBudgetMs.ToString(CultureInfo.InvariantCulture)} healthyMs={c.Governor.HealthyMs.ToString(CultureInfo.InvariantCulture)} animEmergency={c.Governor.AnimatorEmergency}) "
+                + $"tickGuard={c.TickGuard.Enabled}(shedAboveMs={c.TickGuard.ShedAboveMs.ToString(CultureInfo.InvariantCulture)} batch={c.TickGuard.ShedBatch} minKept={c.TickGuard.MinEnemiesKept})");
             SdtdConsole.Instance.Output(
                 $"{ModApi.LogPrefix}gcGuard={c.Gc.SkipForcedCollect}(ceilingMB={c.Gc.SafetyCollectAboveMB} incremental={c.Gc.Incremental}) | "
                 + $"animatorLod={c.AnimatorLod.Enabled}(farStride={c.AnimatorLod.FarStride}) "
@@ -131,13 +132,17 @@ namespace EfficientServer
                 if (anim.enabled && anim.isActiveAndEnabled)
                 {
                     AnimatorStateInfo si = anim.GetCurrentAnimatorStateInfo(0);
-                    st = $"state={si.shortNameHash} t={si.normalizedTime:F2} trans={anim.IsInTransition(0)}";
+                    st = $"state={si.shortNameHash} t={si.normalizedTime.ToString("F2", CultureInfo.InvariantCulture)} trans={anim.IsInTransition(0)}";
                 }
                 AvatarRootMotion rm = enemy.GetComponentInChildren<AvatarRootMotion>(true);
+                // Invariant numerics: this telnet output is machine-parsed (the
+                // validate_anim_path_admission harness reads vel/dp as [0-9.]+),
+                // so a comma-decimal host locale must not reach these fields -
+                // there "0,120" would parse as 0 and mask real root motion.
                 SdtdConsole.Instance.Output(
-                    $"  {enemy.entityId} {enemy.EntityName}: en={anim.enabled} spd={anim.speed:F2} rootMotion={anim.applyRootMotion} "
+                    $"  {enemy.entityId} {enemy.EntityName}: en={anim.enabled} spd={anim.speed.ToString("F2", CultureInfo.InvariantCulture)} rootMotion={anim.applyRootMotion} "
                     + $"cull={anim.cullingMode} move={anim.GetInteger(movementHash)} alive={anim.GetBool(aliveHash)} walk={anim.GetInteger(walkHash)} "
-                    + $"vel={enemy.motion.magnitude:F3} dp={anim.deltaPosition.magnitude:F4} rmFwd={(rm == null ? "none" : rm.enabled.ToString())} "
+                    + $"vel={enemy.motion.magnitude.ToString("F3", CultureInfo.InvariantCulture)} dp={anim.deltaPosition.magnitude.ToString("F4", CultureInfo.InvariantCulture)} rmFwd={(rm == null ? "none" : rm.enabled.ToString())} "
                     + $"attackTarget={(enemy.GetAttackTarget() != null)} {st}");
             }
         }
@@ -208,7 +213,7 @@ namespace EfficientServer
         {
             SdtdConsole.Instance.Output(
                 $"{ModApi.LogPrefix}runtime: modActive={ModApi.ShouldRun()} "
-                + $"governorTier={Patches.GovernorPatch.Level} tickEmaMs={Patches.GovernorPatch.EmaMs:F1} "
+                + $"governorTier={Patches.GovernorPatch.Level} tickEmaMs={Patches.GovernorPatch.EmaMs.ToString("F1", CultureInfo.InvariantCulture)} "
                 + $"animatorEmergency={Patches.AnimatorEmergency.Active} | "
                 + $"gcSafetyCollects={Patches.GcGuardPatch.SafetyCollects} "
                 + $"tickGuardShedTotal={Patches.TickGuardPatch.ShedTotal}");

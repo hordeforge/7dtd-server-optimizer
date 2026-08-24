@@ -23,7 +23,9 @@ Guard protocol (every step idempotent under repetition):
 - ``restore()``: write ONLY the managed keys (absence included) from the
   snapshot back into the live file, then delete it. Other keys keep whatever
   is on disk now, so a restore cannot clobber newer operator tuning. A second
-  call is a no-op.
+  call is a no-op. Exception: if the live file is missing or unreadable,
+  the full snapshot is restored instead (a managed-keys-only rebuild would
+  destroy every other operator setting).
 
 All writes go through temp-file + rename so a kill mid-write cannot leave a
 truncated JSON behind for the game's config reader or the next run.
@@ -343,6 +345,50 @@ def _selftest() -> int:
             "atomic write leaves no temp files",
             [p.name for p in root.iterdir() if ".tmp" in p.name] == [],
         )
+
+    # 9-11 exercise recover()/begin() against damaged states; they use their
+    # own scratch dir so the numbering above keeps its end state.
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        cfg = root / "efficientserver.json"
+        cfg.write_text(json.dumps(original, indent=2) + "\n", encoding="utf-8")
+
+        # 9. UNREADABLE backup (crash mid-write of the snapshot itself):
+        # quarantine it as evidence and leave the live file untouched - a
+        # restore can never be attempted from bytes nobody can parse.
+        s6 = mk()
+        cfg.write_text(json.dumps(original, indent=2) + "\n", encoding="utf-8")
+        s6.bak.write_text("{ truncated", encoding="utf-8")
+        live_before = cfg.read_bytes()
+        s6.recover()
+        stale6 = s6.bak.with_suffix(s6.bak.suffix + STALE_SUFFIX)
+        check("unreadable backup quarantined", stale6.is_file() and not s6.bak.exists())
+        check("unreadable backup leaves live untouched", cfg.read_bytes() == live_before)
+        stale6.unlink()
+
+        # 10. backup exists but the LIVE config is missing at recover time:
+        # the divergence rule cannot apply (nothing to compare), so this is
+        # quarantined too - restoring into a missing path would resurrect a
+        # config an operator may have deleted deliberately.
+        s7 = mk()
+        s7.bak.write_text(json.dumps(original, indent=2), encoding="utf-8")
+        cfg.unlink()
+        s7.recover()
+        stale7 = s7.bak.with_suffix(s7.bak.suffix + STALE_SUFFIX)
+        check("missing live config at recover -> backup quarantined",
+              stale7.is_file() and not s7.bak.exists())
+        check("missing live config stays missing after recover", not cfg.exists())
+        stale7.unlink()
+
+        # 11. begin() on a missing live config must fail loudly (named error)
+        # instead of snapshotting nothing and letting restore() "succeed" by
+        # writing an empty managed-keys-only file later.
+        try:
+            mk().begin()
+            begin_raised_named_error = False
+        except FileNotFoundError:
+            begin_raised_named_error = True
+        check("begin on missing live config fails loudly", begin_raised_named_error)
 
     if failures:
         print(f"FAIL: {len(failures)} es_cfg_guard selftest check(s)", file=sys.stderr)

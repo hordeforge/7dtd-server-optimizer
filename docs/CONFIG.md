@@ -282,7 +282,10 @@ Band and stride; clamps [100, 1e6] and [1, 10].
 
 ### `Server.TargetFps` (default `0` = leave vanilla, clamp [0,120])
 - **Mechanism:** sets `Application.targetFrameRate` at game start (persistent form
-  of the non-persistent `settargetfps` console command). The frame loop runs
+  of the non-persistent `settargetfps` console command) and re-asserts it
+  periodically (`TargetFpsPatch`), because vanilla resets the frame rate back to
+  its default some time after start - a one-shot apply silently loses. The frame
+  loop runs
   `UpdateTick` every frame for housekeeping, work slices, and the network pump; the
   FULL tick (entity sim + replication) is gated internally at ~20 Hz **regardless of
   frame rate** - measured: `TickEntities`/`OnUpdateEntities` stay at 19.9 calls/s at

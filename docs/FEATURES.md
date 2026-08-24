@@ -55,9 +55,14 @@ aggressive on approach spends a few EAI ticks at 0.05 scale before `GetAlertTick
 
 ## Dedicated-only skips
 
-`DedicatedSkipPatch` avoids selected presentation work that has no dedicated
-server consumer, including configured music, splash, environment-audio, cloth,
-and jiggle paths. Every optional target reports patch failure without hiding it.
+`DedicatedSkipPatch` prefixes selected presentation work that has no dedicated
+server consumer (configured music, splash-particle, environment-audio,
+ambient light-spectrum, and explosion-prefab paths). Cloth/jiggle-bone
+suppression is NOT one of its prefixes: `AiLodPatch`'s postfix consumes
+`SkipOnDedicated.ClothAndJiggleBoneSimulation` and toggles cloth level-triggered
+(off far, back on near) per entity during the same distance-band pass. Every
+skipped target logs a WARNING when its type or method is not found (skip
+disabled), never hiding the loss silently.
 
 ## Dynamic mesh budgets
 
@@ -384,6 +389,20 @@ Conclusion: the send encode is modest and downstream; the real join-lag driver i
 because it is low-risk and default-inert, not because it is proven. See
 [`RESULTS.md`](RESULTS.md) §3e.
 
+## Path admission (v1.17.0)
+
+`PathAdmissionPatch` optionally caps non-priority `EntityAlive.FindPath` enqueues
+per frame and/or drops far non-alert path requests. Defaults both off (vanilla).
+Alerted / attack-target / investigate / active-sleeper always path. See CONFIG
+`Pathfinding.MaxPathEnqueuesPerTick` and `DropPathWhenFarDistSq`.
+
+## Animator emergency (v1.17.0 CullCompletely)
+
+Governor tier 2 and `es animoff` set enemy `Animator.cullingMode` to
+`CullCompletely` without disabling the component, so exit can restore root motion.
+Still default-off (`Governor.AnimatorEmergency`). Validate with `es animstate`
+(`dp` should be non-zero after `es animon` on moving zombies).
+
 ## Lifecycle
 
 Post-start setup (dynamic-mesh reapply, optional dedicated skips, GC incremental
@@ -423,22 +442,14 @@ General modding rules: [`../../MODDING_BEST_PRACTICES.md`](../../MODDING_BEST_PR
 | [loop.md](../../7dtd-engine-research/docs/loop.md) | Generic frame map |
 | [APM.md](../../7dtd-server-apm/docs/APM.md) | Evidence |
 
-## Path admission (v1.17.0)
-
-`PathAdmissionPatch` optionally caps non-priority `EntityAlive.FindPath` enqueues
-per frame and/or drops far non-alert path requests. Defaults both off (vanilla).
-Alerted / attack-target / investigate / active-sleeper always path. See CONFIG
-`Pathfinding.MaxPathEnqueuesPerTick` and `DropPathWhenFarDistSq`.
-
-## Animator emergency (v1.17.0 CullCompletely)
-
-Governor tier 2 and `es animoff` set enemy `Animator.cullingMode` to
-`CullCompletely` without disabling the component, so exit can restore root motion.
-Still default-off (`Governor.AnimatorEmergency`). Validate with `es animstate`
-(`dp` should be non-zero after `es animon` on moving zombies).
-
 ## Changelog
 
+- **2026-08-24:** Path admission + Animator emergency sections moved back with
+  the feature catalog (they had drifted below Related docs).
+- **2026-08-24:** Dedicated-only skips section corrected: cloth/jiggle
+  suppression belongs to `AiLodPatch`'s level-triggered distance toggle under
+  `SkipOnDedicated.ClothAndJiggleBoneSimulation`, not to a `DedicatedSkipPatch`
+  prefix.
 - **2026-08-09:** Path admission + Animator emergency sections moved before the
   changelog (were appended after it) and version corrected v1.18 -> v1.17.0
   (the shipped release; no v1.18 exists).

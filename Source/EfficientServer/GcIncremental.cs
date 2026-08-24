@@ -27,11 +27,12 @@ namespace EfficientServer
 
         static bool _applied;
 
-        public static void Apply(GcConfig cfg)
+        public static void Apply()
         {
             // Respect the master switch like every sibling GameStartDone action:
             // the Boehm mode flip is a one-shot P/Invoke that cannot be undone, so
             // it must not fire when the mod is disabled or off a dedicated server.
+            GcConfig cfg = ModApi.Config != null ? ModApi.Config.Gc : null;
             if (_applied || cfg == null || !cfg.Incremental || !ModApi.ShouldRun()) return;
             _applied = true;
             try

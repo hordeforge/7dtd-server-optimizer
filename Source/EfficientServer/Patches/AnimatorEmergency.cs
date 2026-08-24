@@ -105,7 +105,7 @@ namespace EfficientServer.Patches
         /// Restore every live enemy animator's saved (or healthy default)
         /// culling mode. Does not toggle enabled, does not Rebind.
         /// </summary>
-        public static int RestoreAllEnemyAnimators()
+        static int RestoreAllEnemyAnimators()
         {
             World world = GameManager.Instance != null ? GameManager.Instance.World : null;
             if (world == null) return 0;

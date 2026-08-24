@@ -18,7 +18,7 @@ CI will pass: it runs exactly `make test` on every PR and on pushes to main
 ## First run
 
 ```bash
-git clone <this repo> && cd 7dtd-server-container-optimizer
+git clone <this repo> && cd 7dtd-server-optimizer
 make test        # ~2s; needs network once for the pinned NuGet restore
 ```
 
@@ -46,8 +46,8 @@ acceptance (`docs/FEATURES.md` fidelity checks).
 | `python3 -m compileall scripts` | a script has a syntax error | fix the script |
 | `dotnet restore --locked-mode` | you changed a `PackageReference` without regenerating the lockfile | run plain `dotnet restore Source/EfficientServer.Tests` and commit the regenerated `packages.lock.json` with the csproj change |
 | config harness (`Source/EfficientServer.Tests`) | a `Config.cs` behavior change broke a pinned check | change the code or update the check together; never delete a check to pass |
-| `scripts/check_config_doc.py` | a `ServerPerfConfig` field exists but is not documented in `docs/CONFIG.md`, or `config/efficientserver.json` has keys absent from `Config.cs` | document the field (mechanism, gameplay impact, measured gain) or fix the key typo |
-| `scripts/check_version.py` | versions disagree across `ModInfo.xml` / `AssemblyInfo.cs`, docs claim a version newer than shipped, or the changelog lacks the shipped version | bump `Source/EfficientServer/ModInfo.xml` and `AssemblyInfo.cs` together and add the matching `CHANGELOG.md` entry in the same change |
+| `scripts/check_config_doc.py` (+ `--selftest`) | a `ServerPerfConfig` field exists but is not documented in `docs/CONFIG.md`, `config/efficientserver.json` has keys absent from `Config.cs`, shipped values drift from code defaults, or the gate's own parsing broke | document the field (mechanism, gameplay impact, measured gain), fix the key typo, or fix the script; its selftest is the spec |
+| `scripts/check_version.py` (+ `--selftest`) | versions disagree across `ModInfo.xml` / `AssemblyInfo.cs`, docs claim a version newer than shipped, the changelog lacks the shipped version, or the gate's own parsing broke | bump `Source/EfficientServer/ModInfo.xml` and `AssemblyInfo.cs` together and add the matching `CHANGELOG.md` entry in the same change, or fix the script; its selftest is the spec |
 | `scripts/es_cfg_guard.py --selftest` | the config backup/restore guard broke its own protocol | fix the script; its selftest is the spec |
 | `scripts/gen_sbom.py --selftest` | the SBOM generator broke (determinism, lock parsing, CycloneDX structure) | fix the script; its selftest is the spec |
 

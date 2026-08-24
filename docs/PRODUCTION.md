@@ -16,7 +16,7 @@ evidence ([RESULTS](RESULTS.md)).
 ## 1. Install
 
 ```bash
-cd 7dtd-server-container-optimizer
+cd 7dtd-server-optimizer
 make build
 make install DS="/path/to/7 Days to Die Dedicated Server"     # EfficientServer
 cd ../7dtd-server-apm
@@ -58,7 +58,8 @@ Apply config edits live: `es reload` (telnet/console). `es status` shows active 
     zombie animators culled (`CullCompletely`) during extreme overload (~40% frame
     recovery; combat timing degrades, nothing despawns).
   - `TickGuard: ... shed N farthest enemies` = past throttling; expect thinner hordes.
-  - `SPIKE gmUpdateDuration=...` = frame spikes (rate-limited to 1/5 s).
+  - `SPIKE gmUpdateDuration=...` = frame spikes, logged by the APM bridge
+    (rate-limited to 1/5 s).
 - **Telemetry** (no capture needed, 24/7-safe):
   `Mods/7dtd-server-apm-bridge/telemetry/apm_app_latest.json`, refreshed every 30 s -
   `world.unityDeltaMs` (frame period; idle = frame target), `update.lateTicks`,

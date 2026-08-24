@@ -92,7 +92,11 @@ namespace EfficientServer.Patches
             // NOTE: calm-far LOD still uses enabled=false; emergency uses CullCompletely only.
             if (anim.enabled)
                 anim.enabled = false;
-            bool slotFrame = (Time.frameCount + entity.entityId) % cfg.FarStride == 0;
+            // Same wrap-safe striped-slot predicate TickClock's tests pin, driven by
+            // Time.frameCount instead of the tick clock (animator evaluation is
+            // per-frame, not per-tick). The uint cast inside keeps frameCount +
+            // entityId crossing int.MaxValue from flipping every entity's slot phase.
+            bool slotFrame = TickClock.OwnsSlot(entity.entityId, Time.frameCount, cfg.FarStride);
             if (!slotFrame)
                 return false; // no pump, no managed interpretation this frame
             if (pump)

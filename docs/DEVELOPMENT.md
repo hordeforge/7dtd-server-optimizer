@@ -141,8 +141,8 @@ supply-chain posture this documents: [`SECURITY.md`](../SECURITY.md),
 
 | Script | Role |
 |---|---|
-| `check_config_doc.py` | Regression gate (in `make test`): every `ServerPerfConfig` field must be documented in CONFIG.md |
-| `check_version.py` | Regression gate (in `make test`): ModInfo (source+dist) == AssemblyVersion, no doc claims a future minor |
+| `check_config_doc.py` | Regression gate (in `make test`): every `ServerPerfConfig` field must be documented in CONFIG.md; selftest pins its parsing/comparison logic |
+| `check_version.py` | Regression gate (in `make test`): ModInfo (source+dist) == AssemblyVersion, no doc claims a future minor; selftest pins version extraction/normalization |
 | `gen_sbom.py` | Release SBOM generator (called by `package.sh`; selftest in `make test`): deterministic CycloneDX 1.5 inventory from packages.lock.json |
 | `verify_reproducible.sh` (`make verify-reproducible`) | Rebuild-and-compare proof of the packaging reproducibility claim: same-tree repackage, full recompile, out-of-tree path variation; needs a game install |
 | `validate_anim_path_admission.py` | Live A/B: animator-emergency + path-admission against real bots/zombies (telnet + loadgen); see RESULTS |

@@ -64,8 +64,10 @@ must preserve:
 - **Rule for new patches:** static mutable fields are only safe if the patched
   method is proven main-thread (trace callers in the game IL first); anything
   reached from A* workers, DynamicMesh threads, LiteNet reader/writer threads,
-  or Unity job workers needs its own synchronization. `AstarGraphThrottlePatch`
-  uses `Interlocked` defensively even though its caller is main-thread today.
+  or Unity job workers needs its own synchronization. The two cadence levers
+  (`AstarGraphThrottlePatch`, `EntityDistributionStridePatch`) advance their
+  counters through `TickStride`, whose `Interlocked.Increment` keeps the stride
+  exact even if a caller ever runs off-main.
 
 ## Process model
 
@@ -358,6 +360,7 @@ See [`../../7dtd-engine-research/docs/loop.md`](../../7dtd-engine-research/docs/
 
 ## Changelog
 
+- **2026-08-24:** Concurrency-rule example updated: the cadence-lever counters now advance through the shared `TickStride` helper (its `Interlocked.Increment` is the defensive mechanism), not a patch-local `Interlocked` use.
 - **2026-08-23:** Concurrency model section added (main-thread confinement audit: patch surfaces, console drain, the one background thread, reload re-basing rule).
 - **2026-08-23:** Stale in-repo `tools/` dump-helper references repointed to `../7dtd-engine-research/tools/`.
 - **2026-08-08:** Stale `il/*-v3.0.1/` dump links repointed to current `*-v3.1.0/` dirs (loop-complete, deep, deeper, opt-scan).

@@ -13,7 +13,8 @@ each shipped value against the property initializer so the template and the
 code defaults cannot drift apart silently (CONFIG.md documents one set of
 defaults; two divergent copies would make one of them a lie).
 
-Run: python3 scripts/check_config_doc.py   (wired into `make test`)
+Run: python3 scripts/check_config_doc.py
+     python3 scripts/check_config_doc.py --selftest     (both wired into `make test`)
 """
 from __future__ import annotations
 
@@ -37,12 +38,15 @@ CLASS_BLOCK = re.compile(
 PROP_DECL = re.compile(r"public (\w+) (\w+) \{ get; set; \}(?: = ([^;]+);)?")
 
 USAGE = """\
-usage: check_config_doc.py [-h | --help]
+usage: check_config_doc.py [--selftest] [-h | --help]
 
 Gate: every ServerPerfConfig field must be documented in docs/CONFIG.md, every
 key in config/efficientserver.json must exist in Config.cs, and every shipped
-value must equal the C# built-in default. Wired into `make test`. Takes no
-options besides -h/--help.\
+value must equal the C# built-in default. Wired into `make test`.
+  --selftest  exercise the parsing/comparison logic itself (the repo gate above
+              only fails when tree and code drift; it stays green if this
+              script's own matching logic silently breaks)
+  -h, --help  show this help\
 """
 
 
@@ -143,6 +147,162 @@ def default_drift(schema: dict[str, dict], data: dict) -> list[str]:
     return problems
 
 
+def _selftest() -> int:
+    """Pin the gate's own parsing/comparison contracts with synthetic inputs.
+
+    The repo-facing gate compares tree state against Config.cs; it cannot fail
+    when its own regexes or comparators rot (a PROP_DECL that matches nothing
+    would report "all 0 fields documented" as OK). These checks use a synthetic
+    Config.cs-shaped snippet and plain dicts so every helper's spec is asserted
+    directly, following the --selftest convention of es_cfg_guard/gen_sbom.
+    """
+    failures: list[str] = []
+
+    def check(name: str, cond: bool) -> None:
+        if cond:
+            print("PASS: " + name)
+        else:
+            print("FAIL: " + name, file=sys.stderr)
+            failures.append(name)
+
+    # parse_cs_default: every initializer form Config.cs uses.
+    check(
+        "parse_cs_default bool literals",
+        parse_cs_default("true") is True and parse_cs_default("false") is False,
+    )
+    check(
+        "parse_cs_default int literals",
+        parse_cs_default("4") == 4 and parse_cs_default("-1") == -1,
+    )
+    check(
+        "parse_cs_default float suffix stripped to number",
+        parse_cs_default("100f") == 100 and parse_cs_default("0.5f") == 0.5,
+    )
+    check("parse_cs_default absent initializer -> None", parse_cs_default(None) is None)
+    check(
+        "parse_cs_default non-numeric literal -> None (skipped, not misreported as drift)",
+        parse_cs_default('"AiLod"') is None,
+    )
+
+    # values_equal: Python bool IS int, so the type-faithful guard is the spec.
+    check(
+        "values_equal never equates bool with number",
+        not values_equal(True, 1) and not values_equal(False, 0) and not values_equal(1, True),
+    )
+    check(
+        "values_equal bool identity holds",
+        values_equal(True, True) and values_equal(False, False),
+    )
+    check("values_equal accepts int/float cross-type", values_equal(100, 100.0))
+    check(
+        "values_equal detects real drift",
+        not values_equal(2, 3) and not values_equal(True, False),
+    )
+    check(
+        "values_equal strings compare exactly",
+        values_equal("a", "a") and not values_equal("a", "b"),
+    )
+
+    # parse_cs_schema: class extraction, scalar/section classification, and the
+    # `{ get; set; }` anchor that keeps method declarations out of the schema.
+    cs_snippet = (
+        "namespace EfficientServer\n"
+        "{\n"
+        "    public sealed class AiLodConfig\n"
+        "    {\n"
+        "        public bool Enabled { get; set; } = true;\n"
+        "        public float FullAiDistSq { get; set; } = 100f;\n"
+        "        public int Stride { get; set; }\n"
+        "        public SubConfig Sub { get; set; } = new SubConfig();\n"
+        "        public void Reset() { Enabled = false; }\n"
+        "    }\n"
+        "\n"
+        "    public sealed class SubConfig\n"
+        "    {\n"
+        "        public int Leaf { get; set; } = 7;\n"
+        "    }\n"
+        "\n"
+        "    public sealed class ServerPerfConfig\n"
+        "    {\n"
+        "        public bool Enabled { get; set; } = true;\n"
+        "        public AiLodConfig AiLod { get; set; } = new AiLodConfig();\n"
+        "    }\n"
+        "}\n"
+    )
+    schema = parse_cs_schema(cs_snippet)
+    check(
+        "parse_cs_schema finds every top-level config class",
+        set(schema) == {"AiLodConfig", "SubConfig", "ServerPerfConfig"},
+    )
+    check(
+        "parse_cs_schema parses scalar defaults (bool/int/float-suffix/absent)",
+        schema["AiLodConfig"]["scalars"]
+        == {"Enabled": True, "FullAiDistSq": 100, "Stride": None},
+    )
+    check(
+        "parse_cs_schema classifies non-scalar properties as sections by type name",
+        schema["AiLodConfig"]["sections"] == {"Sub": "SubConfig"},
+    )
+    check(
+        "parse_cs_schema ignores methods without { get; set; }",
+        all("Reset" not in part for part in schema["AiLodConfig"].values()),
+    )
+
+    # unknown_json_keys: typo paths at both levels plus wrong-shape values.
+    clean = {"Enabled": False, "AiLod": {"Enabled": True, "FullAiDistSq": 100}}
+    check(
+        "unknown_json_keys accepts a fully known template",
+        unknown_json_keys(schema, clean) == [],
+    )
+    check(
+        "unknown_json_keys names a root-level typo",
+        unknown_json_keys(schema, {"Enabld": True}) == ["Enabld"],
+    )
+    check(
+        "unknown_json_keys names a nested typo as a dotted path",
+        unknown_json_keys(schema, {"AiLod": {"FullAiDistSqX": 5}}) == ["AiLod.FullAiDistSqX"],
+    )
+    check(
+        "unknown_json_keys flags an object where a scalar belongs",
+        unknown_json_keys(schema, {"AiLod": {"Enabled": {}}})
+        == ["AiLod.Enabled (object where scalar expected)"],
+    )
+    check(
+        "unknown_json_keys flags a section bound to a non-object value",
+        unknown_json_keys(schema, {"AiLod": [1]}) == ["AiLod"],
+    )
+
+    # default_drift: exact message format pinned (it is operator-facing output).
+    check(
+        "default_drift reports scalar drift with both values",
+        default_drift(schema, {"Enabled": False})
+        == ["Enabled: shipped False != code default True"],
+    )
+    check(
+        "default_drift reports nested drift with dotted path",
+        default_drift(schema, {"AiLod": {"FullAiDistSq": 50}})
+        == ["AiLod.FullAiDistSq: shipped 50 != code default 100"],
+    )
+    check(
+        "default_drift skips keys absent from the template",
+        default_drift(schema, {}) == [] and default_drift(schema, {"AiLod": {}}) == [],
+    )
+    check(
+        "default_drift skips expression defaults it cannot compare",
+        default_drift(schema, {"AiLod": {"Stride": 99}}) == [],
+    )
+    check(
+        "default_drift accepts code defaults verbatim",
+        default_drift(schema, {"Enabled": True, "AiLod": {"FullAiDistSq": 100}}) == [],
+    )
+
+    if failures:
+        print(f"FAIL: {len(failures)} check_config_doc selftest check(s)", file=sys.stderr)
+        return 1
+    print("PASS: check_config_doc selftest")
+    return 0
+
+
 def main() -> int:
     src = CONFIG_CS.read_text(encoding="utf-8")
     doc = CONFIG_MD.read_text(encoding="utf-8")
@@ -201,6 +361,8 @@ if __name__ == "__main__":
     if argv in (["-h"], ["--help"]):
         print(USAGE)
         raise SystemExit(0)
+    if argv == ["--selftest"]:
+        raise SystemExit(_selftest())
     if argv:
         print(f"check_config_doc.py: unrecognized arguments: {' '.join(argv)}", file=sys.stderr)
         print(USAGE, file=sys.stderr)

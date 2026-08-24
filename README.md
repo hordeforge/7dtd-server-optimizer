@@ -1,8 +1,9 @@
 # 🔥 Crucible (7DTD EfficientServer)
 
-> **Part of [HordeForge](https://github.com/hordeforge)** — High-Performance Systems Engineering for 7 Days to Die.
+> **Part of [HordeForge](https://github.com/hordeforge)**: High-Performance Systems Engineering for 7 Days to Die.
 
 ![CI](https://github.com/hordeforge/7dtd-server-optimizer/actions/workflows/ci.yml/badge.svg)
+![coverage](https://raw.githubusercontent.com/hordeforge/7dtd-server-optimizer/badges/coverage.svg)
 ![license](https://img.shields.io/github/license/hordeforge/7dtd-server-optimizer)
 ![release](https://img.shields.io/github/v/release/hordeforge/7dtd-server-optimizer)
 ![languages](https://img.shields.io/github/languages/count/hordeforge/7dtd-server-optimizer)

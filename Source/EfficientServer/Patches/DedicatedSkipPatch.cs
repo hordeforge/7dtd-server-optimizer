@@ -9,32 +9,35 @@ namespace EfficientServer.Patches
     /// </summary>
     public static class DedicatedSkipPatch
     {
+        // One id for the optional skip group; a re-apply (es reload) replaces by method + id instead of stacking.
+        static readonly Harmony OptionalHarmony = new Harmony(ModApi.HarmonyId + ".optional");
+
         // Patched manually from GameStartPatch after types resolve, in case optional types move.
-        public static void ApplyOptional(Harmony harmony)
+        public static void ApplyOptional()
         {
             if (!ModApi.Config.Enabled) return;
             var skip = ModApi.Config.SkipOnDedicated;
             if (skip == null) return;
 
             if (skip.DynamicMusicSystem)
-                TryPrefix(harmony, "DynamicMusic.Conductor", "Update");
+                TryPrefix("DynamicMusic.Conductor", "Update");
             if (skip.WaterSplashParticles)
-                TryPrefix(harmony, "WaterSplashCubes", "Update");
+                TryPrefix("WaterSplashCubes", "Update");
             if (skip.EnvironmentAudioUpdates)
             {
-                TryPrefix(harmony, "EnvironmentAudioManager", "Update");
-                TryPrefix(harmony, "EnvironmentAudioManager", "FixedUpdate");
-                TryPrefix(harmony, "EnvironmentAudioManager", "LateUpdate");
+                TryPrefix("EnvironmentAudioManager", "Update");
+                TryPrefix("EnvironmentAudioManager", "FixedUpdate");
+                TryPrefix("EnvironmentAudioManager", "LateUpdate");
             }
             // Per-frame ambient light-spectrum lerp (~650 IL) whose only outputs are
             // RenderSettings.ambient*Color writes; the consumer chain
             // (LightManager.GetLightLevel -> stealth) is client-computed. RE sweep
             // 2026-07-21, RESULTS 3n.
             if (skip.AmbientLightSpectrumUpdates)
-                TryPrefix(harmony, "WorldEnvironment", "AmbientSpectrumFrameUpdate");
+                TryPrefix("WorldEnvironment", "AmbientSpectrumFrameUpdate");
         }
 
-        static void TryPrefix(Harmony harmony, string typeName, string methodName)
+        static void TryPrefix(string typeName, string methodName)
         {
             try
             {
@@ -59,7 +62,7 @@ namespace EfficientServer.Patches
                     return;
                 }
                 MethodInfo prefix = typeof(DedicatedSkipPatch).GetMethod(nameof(SkipIfDedicated), BindingFlags.Static | BindingFlags.NonPublic);
-                harmony.Patch(m, new HarmonyMethod(prefix));
+                OptionalHarmony.Patch(m, new HarmonyMethod(prefix));
                 ModApi.Log($"skip-patch {typeName}.{methodName}");
             }
             catch (Exception ex)
