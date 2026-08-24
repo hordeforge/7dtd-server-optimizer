@@ -59,13 +59,12 @@ namespace EfficientServer.Patches
             if (maxPerTick <= 0)
                 return true;
 
-            // Main-thread only (EntityAlive.FindPath); tick-local counter. The
-            // budget window is the GAME TICK (TickClock), not Time.frameCount:
-            // FindPath runs from EAI task leaves inside UpdateTick plus its
-            // slice-drained spill, and a frame-sourced window at
-            // Server.TargetFps > 20 would refill the cap several times per tick,
-            // admitting more per tick than this knob promises (the same
-            // frame-vs-tick trap TickClock exists to prevent; see TickClock).
+            // Main-thread only (EntityAlive.FindPath); window-scoped counter keyed
+            // on TickClock. That clock advances once per GameManager.UpdateTick
+            // INVOCATION, which is every frame (RESULTS 3k): the budget equals a
+            // game-tick budget only at the vanilla 20 fps, and at higher
+            // Server.TargetFps the window refills fps/20 times per tick, admitting
+            // proportionally more. The knob docs carry the same caveat.
             int tick = TickClock.Ticks;
             if (tick != _tickStamp)
             {

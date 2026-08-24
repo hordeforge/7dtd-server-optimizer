@@ -42,10 +42,12 @@ namespace EfficientServer.Patches
                 return;
             if (!(__instance is EntityEnemy))
                 return;
-            // Slot keyed on the TICK clock, not Time.frameCount: ccEntityCollision
-            // runs on the frame-rate-independent entity tick, and a frame-sourced
-            // modulo sampled at tick rate freezes whole id classes once
-            // Server.TargetFps > 20 (see TickClock).
+            // Slot from TickClock, which steps per UpdateTick invocation (= per
+            // frame, RESULTS 3k). At the vanilla 20 fps one frame hosts one tick and
+            // every id owns exactly one resolve slot per window; above 20 fps the
+            // counter jumps F = fps/20 between an entity's resolve ticks, so
+            // coverage is guaranteed only when gcd(F, stride) = 1 (jitter usually
+            // breaks other resonances). Same boundary as the mid-band AI stride.
             if (TickClock.SlotOwn(__instance.entityId, cfg.ResolveEveryNTicks))
                 return; // this zombie's resolve tick: full collision
             var cck = __instance.m_characterController as CharacterControllerKinematic;

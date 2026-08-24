@@ -351,6 +351,25 @@ namespace EfficientServer.Tests
             Check(gcBad.Gc.SafetyCollectAboveMB == 0, "SafetyCollectAboveMB -100 -> 0");
             Check(gcBad.Gc.SafetyCollectRamFraction == 0.95f, "SafetyCollectRamFraction 5.0 -> 0.95 (max clamp)");
 
+            // Locale boundary: "config corrected" lines are grepped by operators and
+            // matched by these tests, so FiniteRange must format with the INVARIANT
+            // culture. Under a comma-decimal host locale a CurrentCulture slip would
+            // emit "1,5 -> 0,95" and silently break every log-matching consumer -
+            // undetectable on the dot-decimal hosts CI runs on unless forced here.
+            var prevCulture = CultureInfo.CurrentCulture;
+            try
+            {
+                CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("de-DE");
+                var loc = LoadTempTracked("{\"Gc\":{\"SafetyCollectRamFraction\":1.5}}");
+                Check(loc.Gc.SafetyCollectRamFraction == 0.95f, "comma-decimal locale: 1.5 still clamps to 0.95");
+                Check(ModApi.Warnings.Count == 1 && ModApi.Warnings[0].Contains("1.5 -> 0.95"),
+                    "'config corrected' formats floats with dot decimals under a comma-decimal host locale");
+            }
+            finally
+            {
+                CultureInfo.CurrentCulture = prevCulture;
+            }
+
             // Diagnostics seconds: WarmupSeconds feeds Sleep(seconds * 1000), so a
             // value above ~2.1M would wrap the int product negative (Sleep throws);
             // GrowSeconds bounds the grow loop. Both must clamp like every other knob.
@@ -524,13 +543,14 @@ namespace EfficientServer.Tests
 
             // TickClock: the per-entity slot predicate behind the updateTasks
             // mid-band stride and the crowd-collision resolve stagger. The invariant
-            // that matters is COVERAGE at any tick sampling rate: over any `stride`
-            // consecutive ticks, EVERY entityId owns exactly one slot. This is the
-            // property the previous Time.frameCount-based striping lost when
-            // Server.TargetFps > 20 made the frame counter jump F = fps/20 steps
-            // between ticks - whenever gcd(F, stride) > 1, whole residue classes of
-            // entity ids never satisfied the slot condition and their AI tail /
-            // neighbor-collision resolution silently never ran.
+            // pinned here is COVERAGE under CONSECUTIVE sampling: over any `stride`
+            // consecutive counter values, EVERY entityId owns exactly one slot.
+            // Production samples once per entity per game tick while the counter
+            // steps per UpdateTick invocation (= per frame above the vanilla 20 fps,
+            // RESULTS 3k), so consecutive sampling - and this exact coverage - holds
+            // at 20 fps; above it, jumps of F = fps/20 between samples narrow the
+            // guarantee to gcd(F, stride) = 1 (see TickClock). This test pins the
+            // pure predicate; the wiring caveat lives with the clock itself.
             foreach (int strideLen in new[] { 2, 3, 4, 5, 8, 16 })
             {
                 bool everyIdOwnsExactlyOncePerWindow = true;
@@ -706,6 +726,10 @@ namespace EfficientServer.Tests
             Check(fa.FeatureActive("ExplosionParticles"), "default ExplosionParticles -> active (ships on)");
             Check(fa.FeatureActive("FastSend"), "default FastSend -> active (opt-out feature)");
             Check(fa.FeatureActive("Governor"), "default Governor -> active (inert when healthy)");
+            // Both levers of the Gc AND-gate ship true, so a default flip of either
+            // would silently deactivate the forced-collect guard; every other
+            // shipping-on feature above has its default pinned, so pin this one too.
+            Check(fa.FeatureActive("Gc"), "default Gc -> active (Enabled and SkipForcedCollect both ship true)");
             var govOff = LoadTemp("{\"Governor\":{\"Enabled\":false}}");
             Check(!govOff.FeatureActive("Governor"), "Governor disabled by config -> inactive");
             Check(!fa.FeatureActive("AnimatorLod"), "default AnimatorLod -> inactive (Enabled=false default)");

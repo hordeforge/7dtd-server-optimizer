@@ -59,8 +59,11 @@ sleeping/idle far zombies cost near zero. Alert/aggro always restores full AI.
 ### `MidTickStride` (default `1` = off, clamp [1,20])
 - **Mechanism:** mid-band entities run the heavy `updateTasks` tail (path follow +
   EAI + `UpdateMoveHelper`) every Nth tick, striped by entityId so cost spreads.
-  Slots count TICKS on a dedicated clock (`UpdateTick` prefix), not render frames,
-  so striping stays exact at any `Server.TargetFps`.
+  Slots come from the mod's TickClock, which advances once per `UpdateTick`
+  invocation - and `UpdateTick` runs every frame while the ~20 Hz full sim tick is
+  gated inside it (RESULTS 3k) - so striping is exact at the vanilla 20 fps
+  (one counter step per tick); above 20 fps coverage of all stripe slots is
+  guaranteed only when gcd(fps/20, N) = 1.
   `CheckDespawn` still runs every tick; alerted entities never stride.
 - **Measured: no win** (RESULTS: the mid band is a thin shell - close entities need
   full AI, far ones are already skipped). Kept for experimentation.
@@ -183,9 +186,11 @@ One-way per process: the collector mode is a P/Invoke that cannot be undone, so
 
 ### `MaxPathEnqueuesPerTick` (default `0`, clamp [0,2000])
 - **Mechanism:** Harmony prefix on `EntityAlive.FindPath`. Non-priority path
-  requests past this count within one game tick are dropped (original not
-  called); the window is the mod's tick clock, so the budget holds at any
-  `Server.TargetFps`. `0` = unlimited (vanilla). Priority (attack target,
+  requests past this count within one TickClock window are dropped (original not
+  called); the clock advances once per `UpdateTick` invocation (= every frame,
+  RESULTS 3k), so the budget is a true per-game-tick budget only at the vanilla
+  20 fps and refills fps/20 times per tick at higher `Server.TargetFps`.
+  `0` = unlimited (vanilla). Priority (attack target,
   investigate, alert ticks, active sleeper) always admits and does **not**
   consume the budget.
 - **Does not** change path *compute* drain (~8 starts/frame stock).
@@ -237,7 +242,9 @@ human A/B (see RESULTS §3r for the null finding).
 
 ### `ResolveEveryNTicks` (default `4`, clamp [1,16])
 - **Mechanism:** each zombie fully resolves entity collision every Nth tick,
-  striped by entityId on the game-tick clock (exact at any `Server.TargetFps`).
+  striped by entityId on the mod's TickClock (exact at the vanilla 20 fps; above
+  it the clock steps per frame, so coverage is guaranteed only when
+  gcd(fps/20, N) = 1 - see `MidTickStride`).
   `4` = vanilla's own response-stagger cadence family.
 - **Gameplay impact:** lower N is closer to vanilla; higher N trades collision
   fidelity for CPU. Disabled entirely while `CrowdCollisionLod.Enabled` is
@@ -304,8 +311,12 @@ Band and stride; clamps [100, 1e6] and [1, 10].
 - **Cost:** modest per-frame loop overhead + idle wakeups. **Recommendation: 0.**
 - **Interactions:** the governor's EMA measures FRAME intervals, so its idle floor
   equals the frame target - calibrate `HealthyMs`/`OverBudgetMs` to your fps (see
-  below). Tick-counted knobs (`GraphUpdateEveryTicks`, replication stride) count
-  FULL ticks and are fps-independent.
+  below). Cadence levers (`GraphUpdateEveryTicks`, replication stride) hook methods
+  that run only in the FULL-tick branch, so they count full ticks and are
+  fps-independent. The TickClock-sampled stripers (`MidTickStride`,
+  `ResolveEveryNTicks`, `MaxPathEnqueuesPerTick`) do NOT share that property: their
+  clock steps per `UpdateTick` invocation (= per frame), so they are exact at the
+  vanilla 20 fps only - see the per-knob notes above.
 
 ### `Server.JobWorkerCount` (default `0` = vanilla, clamp [0,64], v1.16.1)
 Unity job-worker pool size (vanilla default 31 on a 32-thread host). Runtime-settable

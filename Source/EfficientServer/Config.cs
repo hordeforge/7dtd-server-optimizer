@@ -23,9 +23,11 @@ namespace EfficientServer
         // Mid-band entity-AI tick-striding: entities between MediumAiDistSq and
         // SkipTasksFarDistSq run the heavy updateTasks tail (path follow + EAI +
         // the 1236-IL UpdateMoveHelper) only every Nth tick, striped by entity id
-        // so the per-tick entity cost is spread. Counts TICKS (frame-rate
-        // independent; see TickClock). 1 = off (every tick). CheckDespawn
-        // still runs every tick; alerted/targeting entities are never strided.
+        // so the per-tick entity cost is spread. The stripe counter steps per
+        // UpdateTick invocation (= frames above the vanilla 20 fps; see TickClock),
+        // so striping is exact at 20 fps and coverage-complete above only when
+        // gcd(fps/20, N) = 1. 1 = off (every tick). CheckDespawn still runs every
+        // tick; alerted/targeting entities are never strided.
         public int MidTickStride { get; set; } = 1;
     }
 
@@ -110,10 +112,13 @@ namespace EfficientServer
         public bool PoolInitScanNodes { get; set; } = false;
 
         // Path admission at EntityAlive.FindPath (A2). 0 = unlimited (vanilla).
-        // Caps non-priority path enqueues per game tick (a TickClock window, so the
-        // budget holds at any Server.TargetFps); alerted / attack-target /
-        // investigate / active-sleeper always admit and do not consume the budget.
-        // Does not change path compute drain (still ~8 starts/frame stock).
+        // Caps non-priority path enqueues per window of the mod's TickClock (which
+        // steps per UpdateTick invocation, i.e. per frame above the vanilla 20 fps:
+        // the budget is a true game-tick budget only at 20 fps, and at higher
+        // Server.TargetFps the window refills fps/20 times per tick); alerted /
+        // attack-target / investigate / active-sleeper always admit and do not
+        // consume the budget. Does not change path compute drain (still ~8
+        // starts/frame stock).
         public int MaxPathEnqueuesPerTick { get; set; } = 0;
 
         // Drop non-priority FindPath when aiClosestPlayerDistSq >= this. 0 = off

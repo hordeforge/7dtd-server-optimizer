@@ -1,18 +1,22 @@
 namespace EfficientServer.Patches
 {
     /// <summary>
-    /// Process-wide game-tick counter for per-entity LOD striping inside the TICK
-    /// path (<see cref="UpdateTasksLodPatch"/> mid-band striding,
-    /// <see cref="CrowdCollisionLodPatch"/> resolve staggering). Those methods run
-    /// from the ~20 Hz authority tick, which is independent of the render frame
-    /// rate, so their stripes must count TICKS: with Server.TargetFps above 20 the
-    /// frame counter jumps F = fps/20 steps between consecutive ticks, and a modulo
-    /// sampled only at tick times then misses whole residue classes whenever F and
-    /// the stride share a factor - a fixed subset of entities silently never owns a
-    /// slot (frozen AI tail / no neighbor-collision resolution). A tick-sourced
-    /// counter visits every residue exactly once per stride window at any frame
-    /// rate. Game-type-free so the test harness can drive it deterministically;
-    /// <see cref="TickClockPatch"/> is the one Harmony hookup that advances it.
+    /// Process-wide counter for per-entity LOD striping inside the TICK path
+    /// (<see cref="UpdateTasksLodPatch"/> mid-band striding,
+    /// <see cref="CrowdCollisionLodPatch"/> resolve staggering). Advanced by
+    /// <see cref="TickClockPatch"/>, whose prefix fires once per GameManager.UpdateTick
+    /// INVOCATION - and UpdateTick runs EVERY FRAME while the ~20 Hz full sim tick is
+    /// gated inside it (measured: 19.9 -> 59.7 UpdateTick calls/s when Server.TargetFps
+    /// rose 20 -> 60, RESULTS 3k). So this counter steps at FRAME granularity: between
+    /// two runs of one entity's tick-path work it jumps F = fps/20 steps.
+    ///
+    /// Coverage consequence: at the vanilla 20 fps (F=1) every entityId owns exactly
+    /// one slot per stride window, exact. Above 20 fps the every-residue guarantee
+    /// holds only when gcd(F, stride) = 1 (frame jitter usually breaks other
+    /// resonances); otherwise fixed id classes can go slotless for sustained spans -
+    /// the same hazard a raw Time.frameCount modulo carries. What the dedicated
+    /// counter still buys vs Time.frameCount: deterministic zero seed, immunity to
+    /// pre-game frames, and game-type-free state the test harness can replay.
     /// </summary>
     internal static class TickClock
     {

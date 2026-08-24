@@ -52,5 +52,84 @@ def main(argv: list[str]) -> int:
     return 0
 
 
+def _selftest() -> int:
+    """Pin badge rendering end to end on synthetic inputs.
+
+    CI renders the README badge straight from cobertura XML, so a silently
+    wrong threshold or percentage here ships as a misleading shield. Drive
+    colour() on both sides of every boundary, badge()'s structure, and
+    main() against a synthetic report including the missing-attribute
+    default (line-rate absent -> 0 -> red).
+    """
+    import tempfile
+
+    failures: list[str] = []
+
+    def check(name: str, cond: bool) -> None:
+        if cond:
+            print("PASS: " + name)
+        else:
+            print("FAIL: " + name, file=sys.stderr)
+            failures.append(name)
+
+    if sys.argv[1:] != ["--selftest"]:
+        print(f"usage: {Path(sys.argv[0]).name} --selftest", file=sys.stderr)
+        return 2
+
+    # Exact endpoints on BOTH sides of every threshold: a bound that quietly
+    # tightens or loosens by one must fail here, not on the README badge.
+    for pct, want, label in (
+        (90, "#4c1", "90 green"),
+        (89, "#97ca00", "89 below green"),
+        (75, "#97ca00", "75 light green"),
+        (74, "#dfb317", "74 below light green"),
+        (60, "#dfb317", "60 yellow"),
+        (59, "#fe7d37", "59 below yellow"),
+        (40, "#fe7d37", "40 orange"),
+        (39, "#e05d44", "39 below orange"),
+        (0, "#e05d44", "0 red"),
+        (100, "#4c1", "100 green"),
+    ):
+        check(f"colour boundary: {label}", colour(pct) == want)
+
+    svg = badge(92, "#97ca00")
+    check("badge labels the percentage", "coverage: 92%" in svg)
+    check("badge paints the value rect with the fill colour", 'fill="#97ca00"' in svg)
+    check("badge uses the fixed 64+36 layout", 'width="100" height="20"' in svg)
+
+    with tempfile.TemporaryDirectory(prefix="es-badge-test.") as td:
+        out = Path(td) / "badge.svg"
+        report = Path(td) / "coverage.cobertura.xml"
+        report.write_text(
+            '<coverage line-rate="0.9234" branch-rate="0"></coverage>',
+            encoding="utf-8",
+        )
+        rc = main([sys.argv[0], str(report), str(out)])
+        text = out.read_text(encoding="utf-8")
+        # round(0.9234 * 100) == 92 -> green band (>= 90).
+        check("main exits 0 on a well-formed report", rc == 0)
+        check("main renders the rounded percentage", 'coverage: 92%' in text)
+        check(
+            "main picks the band colour for 92",
+            'fill="#4c1"' in text,
+        )
+        # A report without line-rate must read as 0% red, not crash or lie.
+        bare = Path(td) / "bare.cobertura.xml"
+        bare.write_text("<coverage></coverage>", encoding="utf-8")
+        rc_bare = main([sys.argv[0], str(bare), str(out)])
+        text_bare = out.read_text(encoding="utf-8")
+        check("main treats a missing line-rate as exit 0", rc_bare == 0)
+        check(
+            "missing line-rate renders 0% red",
+            'coverage: 0%' in text_bare and '#e05d44' in text_bare,
+        )
+
+    if failures:
+        print(f"FAIL: {len(failures)} coverage_badge selftest check(s)", file=sys.stderr)
+        return 1
+    print("PASS: coverage_badge selftest")
+    return 0
+
+
 if __name__ == "__main__":
-    raise SystemExit(main(sys.argv))
+    raise SystemExit(_selftest() if "--selftest" in sys.argv[1:] else main(sys.argv))

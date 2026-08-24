@@ -15,7 +15,8 @@ quests, and multiplayer separation.
 **Mid-band tick-striding (v1.7.0, structural).** `UpdateTasksLodPatch` now has three
 bands on `aiClosestPlayerDistSq`: close = full rate; **mid (`MediumAiDistSq` <= d <
 `SkipTasksFarDistSq`) = run the heavy `updateTasks` tail every `AiLod.MidTickStride`-th
-tick, striped by entity id on a dedicated game-tick clock**; far = skip. The tail includes the 1236-IL
+tick, striped by entity id on the mod's TickClock** (exact at the vanilla 20 fps; the
+clock steps per `UpdateTick` invocation, i.e. per frame above it - see CONFIG); far = skip. The tail includes the 1236-IL
 `UpdateMoveHelper` that stock does not throttle via `aiActiveScale`, so at high zombie
 counts (the standard 64p+300z load, entity-axis dominated) this spreads the per-tick
 entity cost by up to the stride factor. `MidTickStride` default **1 = off** (every
