@@ -30,6 +30,7 @@ toolchain, and the measured-impact summary.
 | [V310_APM_BASELINE.md](V310_APM_BASELINE.md) | V3.1.0 APM / loadgen evidence baseline |
 | [PRODUCTION.md](PRODUCTION.md) | Deployment and operations runbook |
 | [plans/animator-cull-and-path-admission.md](plans/animator-cull-and-path-admission.md) | Build plan + live gates: animator CullCompletely emergency, path admission |
+| [evidence/](evidence/) | Stored A/B compare logs referenced by [V310_APM_BASELINE](V310_APM_BASELINE.md) |
 | [THREAT_MODEL.md](THREAT_MODEL.md) | Attack surface, trust boundaries, threats, mitigations |
 
 ## Evidence sources (private workspace)

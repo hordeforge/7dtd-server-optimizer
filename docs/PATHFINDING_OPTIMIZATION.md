@@ -161,11 +161,17 @@ backlog) - and no backlog has been measured to justify it. Original (wrong) idea
 - **Impact:** flattens the tick p99 (no single tick pays for all scans).
 - **Risk:** low (a deferred grid scans one tick later).
 
-### P4 - Pool `NavGraph.Scan` node buffers. Cuts the large-alloc.
+### P4 - Pool `NavGraph.Scan` node buffers. **BUILT (v1.8.0, default off) - no benchable tick win; parked.**
 
 `InitScan` reallocates node arrays each move. Reuse a per-grid node buffer (the
 grid dimensions are fixed) instead of allocating a fresh one when it moves.
 Attacks the top large-alloc directly → fewer GC pauses.
+
+**Outcome (2026-07-20 A/B + soak):** built as `InitScanPoolPatch`
+(`Pathfinding.PoolInitScanNodes`, default off; UNSAFE transpiler on an external-DLL
+iterator). The node-array allocation is eliminated cleanly and fidelity held, but
+no tested load showed a benchable tick win - kept as an opt-in knob, not a default
+([RESULTS §3c-3d](RESULTS.md)).
 
 - **Surface:** harder - `Scan()` lives in the external `Pathfinding` DLL; Harmony
   the grid's node-allocation path or the `AstarVoxelGrid` scan wrapper.
@@ -195,7 +201,7 @@ High risk, research-only.
    gate first.
 2. **P2 move-threshold** + **P3 scan budget** - cheap, bound CPU + alloc spikes.
 3. **P4 node pooling** - the alloc-cut for the GC-pause angle; do after P1-P3
-   prove the harness.
+   prove the harness. (Done: shipped v1.8.0, parked after measurement - see §3.)
 4. **P5 / P6** situational.
 
 Every code lever is server-side-only and wire-compatible (nav graphs are internal

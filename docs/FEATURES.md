@@ -322,8 +322,10 @@ cooldown, logging every transition; full recovery restores the baselines exactly
 Validated
 live: engages under a 435-zombie overload (cushioning 299 -> 128 ms/frame), restores
 vanilla within seconds of the load clearing. It schedules existing levers only.
-Note the recovery threshold must sit ABOVE 50 ms - the healthy loop idles at exactly
-50 ms and never below (enforced in config normalize).
+Note the recovery threshold must sit ABOVE the idle frame interval - exactly
+50 ms at the vanilla fps 20, lower if the fps cap is raised; normalize enforces
+the hysteresis ordering (`HealthyMs` stays below `OverBudgetMs`), not the 50 ms
+figure (see [CONFIG](CONFIG.md)).
 
 **Tier 2 (v1.16.0, `Governor.AnimatorEmergency`, default off):** when throttling has
 not recovered the tick and the EMA exceeds `EmergencyOverMs` (80), disable ALL
@@ -402,7 +404,9 @@ because it is low-risk and default-inert, not because it is proven. See
 ## Path admission (v1.17.0)
 
 `PathAdmissionPatch` optionally caps non-priority `EntityAlive.FindPath` enqueues
-per game tick and/or drops far non-alert path requests. Defaults both off (vanilla).
+per TickClock window (a frame above the vanilla 20 fps; an exact game-tick budget
+only at 20 fps - see CONFIG) and/or drops far non-alert path requests. Defaults
+both off (vanilla).
 Alerted / attack-target / investigate / active-sleeper always path. See CONFIG
 `Pathfinding.MaxPathEnqueuesPerTick` and `DropPathWhenFarDistSq`.
 
