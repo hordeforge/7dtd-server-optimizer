@@ -82,10 +82,14 @@ test:
 # Line coverage of the unit suite via dotnet-coverage. Writes
 # TestResults/coverage.cobertura.xml; CI renders it into the README badge
 # with scripts/coverage_badge.py.
+#
+# The tool lives in .config/dotnet-tools.json (local manifest): such tools get
+# no PATH shim, so invoke as `dotnet dotnet-coverage ...` and let the host CLI
+# resolve them. Output format flag is 18.x spelling (-f/--output-format).
 coverage:
 	dotnet tool restore
 	mkdir -p "$(ROOT)/TestResults"
-	dotnet-coverage collect --format cobertura -o "$(ROOT)/TestResults/coverage.cobertura.xml" -- dotnet run --project "$(ROOT)/Source/EfficientServer.Tests" -c Release --no-restore
+	dotnet dotnet-coverage collect -f cobertura -o "$(ROOT)/TestResults/coverage.cobertura.xml" -- dotnet run --project "$(ROOT)/Source/EfficientServer.Tests" -c Release --no-restore
 install:
 	$(ROOT)/scripts/install.sh
 # $(SEVENDTD_DS_DIR), not $(DS): an exported SEVENDTD_DS_DIR overrides ?=, so
