@@ -171,7 +171,25 @@ namespace EfficientServer.Patches
             _baseGraphEvery = -1;
             _baseEntityStride = -1;
             if (_level <= 0)
-                return; // baseline tier: the fresh object is already correct
+            {
+                // Baseline tier. A stray BENCH-PROBE emergency (`es animoff`; the
+                // probe never raises _level) must not survive a reload that turns
+                // the mod or governor off: no postfix/tier machine remains to step
+                // down, so rigs would keep CullCompletely plus skipped managed
+                // updates forever, and Enabled=false promises inert/vanilla. Under
+                // an active governor the probe stays operator-owned (`es animon`
+                // exits it), matching the manual enter/exit contract.
+                GovernorConfig baselineCfg = ModApi.Config != null ? ModApi.Config.Governor : null;
+                bool inactiveAtBaseline = ModApi.Config == null || !ModApi.Config.Enabled
+                    || baselineCfg == null || !baselineCfg.Enabled;
+                if (inactiveAtBaseline && AnimatorEmergency.Active)
+                {
+                    AnimatorEmergency.Exit();
+                    EsLog.Log("config reloaded: governor inactive (disabled or master off) - "
+                        + "released animator emergency left armed by the es animoff probe");
+                }
+                return;
+            }
 
             GovernorConfig cfg = ModApi.Config != null ? ModApi.Config.Governor : null;
             // The master switch counts too: Enabled=false promises "every patch
