@@ -100,7 +100,10 @@ if [[ -n "${SEVENDTD_CPU_AFFINITY:-}" ]] && command -v taskset >/dev/null 2>&1; 
 fi
 
 cd "$SRV"
-TS="$(date +%Y%m%d_%H%M%S)"
+# UTC stamp: local time repeats an hour at every DST fall-back, so restarts
+# inside the repeated hour (same wall second) would reuse and clobber the
+# previous server log exactly when you need the crash evidence.
+TS="$(date -u +%Y%m%d_%H%M%S)"
 LOG="$LOGDIR/server_$TS.log"
 
 # If config is outside the install tree, copy it beside the binary (the game often

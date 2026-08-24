@@ -95,8 +95,14 @@ def write_path_config(max_cap: int, drop_far: float) -> None:
 
 
 def write_report(prefix: str, report: dict) -> Path:
-    """Write a run's JSON report as OUT_DIR/<prefix>_<timestamp>.json."""
-    out = OUT_DIR / f"{prefix}_{time.strftime('%Y%m%d_%H%M%S')}.json"
+    """Write a run's JSON report as OUT_DIR/<prefix>_<timestamp>.json.
+
+    UTC, not local: across a DST fall-back the local wall clock repeats an
+    hour, so two runs of an A/B pair can stamp identical names and the second
+    write_atomic silently destroys the first half of the evidence pair. UTC
+    has no transitions, so one name maps to exactly one instant on any host.
+    """
+    out = OUT_DIR / f"{prefix}_{time.strftime('%Y%m%d_%H%M%S', time.gmtime())}.json"
     # Atomic for the same reason every live-file rewrite here goes through
     # write_atomic: these runs are routinely SIGKILLed by tool timeouts, and a
     # truncated report would break whatever tails or diffs it afterwards.
