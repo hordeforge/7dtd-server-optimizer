@@ -56,9 +56,13 @@ aggressive on approach spends a few EAI ticks at 0.05 scale before `GetAlertTick
 ## Dedicated-only skips
 
 `DedicatedSkipPatch` prefixes selected presentation work that has no dedicated
-server consumer (configured music, splash-particle, environment-audio,
-ambient light-spectrum, and explosion-prefab paths). Cloth/jiggle-bone
-suppression is NOT one of its prefixes: `AiLodPatch`'s postfix consumes
+server consumer (configured music, splash-particle, environment-audio, and
+ambient light-spectrum paths). The explosion-prefab skip is NOT one of its
+prefixes: it is the separate `ExplosionParticlesPatch` prefix on
+`GameManager.ExplosionClient` (own patch group, same
+`SkipOnDedicated.ExplosionParticles` config section; see its own section below).
+Cloth/jiggle-bone suppression is also NOT a `DedicatedSkipPatch` prefix:
+`AiLodPatch`'s postfix consumes
 `SkipOnDedicated.ClothAndJiggleBoneSimulation` and toggles cloth level-triggered
 (off far, back on near) per entity during the same distance-band pass. Every
 skipped target logs a WARNING when its type or method is not found (skip

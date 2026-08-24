@@ -288,5 +288,9 @@ At full 64p + demolition chaos, **ES is not a free win on ms_per_tick**.
 
 ## Changelog
 
+- **2026-08-07:** Path admission BM-ish A/B section (24p combat/bait, sessions
+  `161109`/`161552`): cap=32 + drop@50m worsened lag; verdict keep default-off.
+- **2026-08-06:** Moderate 16p forensic remeasure (sessions `155401`/`160357`):
+  UpdateTick avg -17.5%, late_ticks -68%, tick_stall -56%, STW worst 364 -> 31 ms.
 - **2026-08-03:** Full canonical-heavy-v2 64p ES on/off (mixed; STW win, ms_per_tick not); heavy 48p ES on/off + animator stress gate.
 - **2026-08-02:** Moderate 16p pair (section above).

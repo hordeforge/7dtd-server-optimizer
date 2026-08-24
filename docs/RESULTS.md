@@ -525,7 +525,8 @@ ViewDistance) or the custom-server long game.
 
 ## 3i. Adaptive load governor (v1.12.0, validated live 2026-07-21)
 
-`GovernorPatch` (config `Governor.*`, default off) closes the loop on the proven
+`GovernorPatch` (config `Governor.*`; shipped default-off at v1.12.0, flipped to
+**default-on** in v1.13.0 under the defaults policy - inert while healthy) closes the loop on the proven
 throttle levers: a `GameManager.UpdateTick` postfix tracks the tick-interval EMA
 (over ~32 ticks) and moves between two states:
 - **vanilla** (replication 20 Hz, configured graph cadence) while healthy, and
@@ -902,12 +903,18 @@ Network.{FastSingleTargetSend,
     EntityDistributionEveryTicks (1=vanilla; 2=10 Hz replication, -45% on the wall,
     needs human-eye pass, see §3g)}
 WorldTransfer.{ChunkPackagesPerObserverPerTick (3=vanilla; EXPERIMENTAL, see §3e)}
-Governor.{Enabled (false), OverBudgetMs (57), HealthyMs (52, floored >51: the loop
+Governor.{Enabled (true since v1.13.0), OverBudgetMs (57), HealthyMs (52, floored >51: the loop
     idles at 50ms), WindowTicks (100), CooldownTicks (400)}   # closed-loop, see §3i
 Diagnostics.{GcMegapauseTest, WarmupSeconds, GrowSeconds}   # never enable on a live server
 ```
 Init log tags each matched patch `(matched but config-disabled)` when its toggle is
 off; numeric fields are clamped + logged by `Normalize()`.
+
+This block is the v1.13-era snapshot kept for its section links; it does not list
+knobs added since (`AiLod.MidTickStride`, `SkipOnDedicated.AmbientLightSpectrumUpdates`,
+`Pathfinding.MaxPathEnqueuesPerTick`/`DropPathWhenFarDistSq`, `Server.*`,
+`AnimatorLod.*`, `CrowdCollisionLod.*`, `TickGuard.*`, tier-2 governor fields).
+[`CONFIG.md`](CONFIG.md) is the canonical per-option reference.
 
 ---
 

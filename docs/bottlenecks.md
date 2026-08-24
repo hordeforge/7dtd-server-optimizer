@@ -310,15 +310,17 @@ across many per-entity callees, consistent with the linear entity-axis).
 
 Ranked by perf-win / code-size. "Shipped" = already in EfficientServer.
 
-**Tier 1 - tiny code, big or proven impact (do these):**
+**Tier 1 - tiny code, big or proven impact:**
 
-1. **`SendPackage` entityId-map lookup** - *the standout unshipped win.* Replace the
-   linear `Clients.List` scan in `ConnectionManager.SendPackage` with the **already-
-   existing** `ClientInfoCollection.entityIdMap` / `ForEntityId` O(1) lookup. A few
-   lines (Harmony), no new data structure, and it removes an O(clients) inner scan
-   from the hottest send path (`SendToPlayers` calls it 7x per entity per tick).
-   Turns replication fan-out from O(entities x players x clients) to O(entities x
-   players). Highest impact-to-effort of anything not yet done.
+1. **`SendPackage` entityId-map lookup** - SHIPPED (`FastSendPatch`, v1.6.0,
+   default on since v1.13.0; A/B: correct 60/60 + 120/120 clients, ms_per_tick
+   **-1.8%@60p -> -4.2%@128p**). The prefix short-circuits only the pure
+   single-target case through the **already-existing**
+   `ClientInfoCollection.entityIdMap` / `ForEntityId` O(1) lookup, removing an
+   O(clients) inner scan from the hottest send path (`SendToPlayers` calls it
+   7x per entity per tick), turning replication fan-out from O(entities x
+   players x clients) to O(entities x players) for that case. Was graded here
+   as the highest impact-to-effort lever not yet done; it shipped and validated.
 2. **P1 `UpdateGraphs` throttle** - 1 Harmony prefix, **-28.5% ms/tick** at breaking
    load. SHIPPED.
 3. **AI `updateTasks` far-skip** - 1 prefix, drops the 1236-IL `UpdateMoveHelper`
@@ -336,6 +338,9 @@ Ranked by perf-win / code-size. "Shipped" = already in EfficientServer.
 6. **Path admission cap + `ASPPathFinder` reuse** - a small gate at
    `EntityAlive.FindPath` enqueue (cap/priority/drop-far) + reuse the per-navigator
    `ASPPathFinder` instead of `newobj` per build. Bounds path-request spikes + alloc.
+   Cap/drop-far half SHIPPED (`PathAdmissionPatch`, v1.17.0; live A/Bs found no
+   reliable frame win, so both knobs stay default 0 = vanilla); `ASPPathFinder`
+   per-build alloc reuse still open.
 7. **P2 move dead-zone** - 1 transpiler operand; cuts `InitScan` frequency. SHIPPED
    (marginal except under graph-dominated load).
 
@@ -343,7 +348,9 @@ Ranked by perf-win / code-size. "Shipped" = already in EfficientServer.
 
 8. **`InitScan` node-buffer reuse (P4)** - kills the **#1 allocator**; concurrency
    already safe (AstarPath work-item lock). External-DLL iterator rewrite = the code
-   cost. See [`ALLOCATION_UPSTREAM.md`](ALLOCATION_UPSTREAM.md) Lever A.
+   cost. BUILT (`InitScanPoolPatch`, v1.8.0, opt-in default off): alloc eliminated
+   cleanly but no benchable steady-state win. See
+   [`ALLOCATION_UPSTREAM.md`](ALLOCATION_UPSTREAM.md) Lever A and RESULTS §3c-3d.
 9. **Off-sim `Chunk.write` encode / cached chunk blobs** - the chunk pipeline is
    **56-60% of tick**; moving the 601-IL encode off the sim thread (or caching
    serialized blobs per chunk-version across observers) is the single biggest CPU
@@ -357,7 +364,8 @@ Ranked by perf-win / code-size. "Shipped" = already in EfficientServer.
     quadratic walls toward linear - the highest *absolute* ceiling raise, but a new
     subsystem to build and validate.
 
-**The one-line answer:** the best impact-per-line not yet shipped is **#1, the
-`SendPackage` entityId-map lookup** - a few lines against infrastructure that
-already exists, on the hottest path in the game. After that, **#5 buffer
-presize-and-retain** for allocation, then **#8/#9** for the structural CPU floor.
+**The one-line answer:** the tiny-lever tier is spent - #1, #2, #3, #4 and the
+P2 dead-zone (#7) all shipped, and #5 was refuted by RE. The best
+impact-per-line not yet built is the **`ASPPathFinder` per-build alloc reuse**
+(open half of #6), then **#8/#9** for the structural CPU floor and **#10** for
+the absolute ceiling raise.
