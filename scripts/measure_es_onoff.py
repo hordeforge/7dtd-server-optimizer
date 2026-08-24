@@ -97,6 +97,16 @@ APM_LINE_RE = re.compile(
     r"APM updates=(\d+) gmUpdateAvg=([0-9.]+)ms tickAvg=([0-9.]+)ms spikes=(\d+)"
 )
 
+# The bridge prints cumulative averages rounded to two decimals
+# (ToString("F2")), so every parsed value carries up to this much rounding
+# error. windowed() divides the weighted-sum delta by the WINDOW update count
+# while that error scales with TOTAL updates since boot, so the reconstruction
+# bound grows with server uptime: sub-0.1 ms on a fresh boot, but an attached
+# hours-old server (SKIP_SERVER_START=1) can push it well past the +/-0.5 ms
+# verdict band - enough to fabricate an ON_faster/ON_slower call from print
+# rounding alone. Verdicts must treat anything under the summed bounds as noise.
+HALF_QUANTUM_MS = 0.005
+
 # Incremental tail state per log path: byte offset, undecoded partial-line
 # carry, and the newest matching APM health line seen so far. The Unity log is
 # append-only and grows to hundreds of MB under blood-moon loads; rescanning
@@ -154,17 +164,29 @@ def windowed(a: dict, b: dict) -> dict | None:
     gmUpdateAvg / tickAvg are cumulative since boot; the per-window value is
     the delta of the weighted sums over the updates in between. Returns None
     when the window covers no new updates (e.g. a quiet server).
+
+    *_err_ms is the worst-case reconstruction error from the bridge's
+    two-decimal formatting: half a quantum on each cumulative average,
+    amplified by (total updates / window updates). Any verdict must compare
+    deltas against the SUMMED error bounds of both phases, not raw digits.
     """
     du = b["updates"] - a["updates"]
     if du <= 0:
         return None
+
+    def recon(key: str) -> tuple[float, float]:
+        sa = a["updates"] * a[key]
+        sb = b["updates"] * b[key]
+        err = HALF_QUANTUM_MS * (a["updates"] + b["updates"]) / du
+        return round((sb - sa) / du, 3), err
+
+    gm, gm_err = recon("gmUpdateAvg")
+    tick, tick_err = recon("tickAvg")
     return {
-        "gmUpdateAvg": round(
-            (b["updates"] * b["gmUpdateAvg"] - a["updates"] * a["gmUpdateAvg"]) / du, 3
-        ),
-        "tickAvg": round(
-            (b["updates"] * b["tickAvg"] - a["updates"] * a["tickAvg"]) / du, 3
-        ),
+        "gmUpdateAvg": gm,
+        "gmUpdateAvg_err_ms": round(gm_err, 3),
+        "tickAvg": tick,
+        "tickAvg_err_ms": round(tick_err, 3),
         "spikes": b["spikes"],
         "window_updates": du,
     }
@@ -271,10 +293,23 @@ def main() -> int:
 
             if on and off:
                 d = on["gmUpdateAvg"] - off["gmUpdateAvg"]
-                verdict = "ON_faster" if d < -0.5 else ("ON_slower" if d > 0.5 else "within_noise")
+                # The reconstruction error bounds (see windowed) set the floor
+                # for "same": on a long-uptime server they exceed the 0.5 ms
+                # heuristic, and a delta inside them is print-rounding noise,
+                # not an ES effect.
+                noise = max(0.5, on["gmUpdateAvg_err_ms"] + off["gmUpdateAvg_err_ms"])
+                verdict = (
+                    "within_noise"
+                    if abs(d) <= noise
+                    else ("ON_faster" if d < 0 else "ON_slower")
+                )
                 report["gmUpdateAvg_delta_ms"] = round(d, 3)
+                report["gmUpdateAvg_noise_bound_ms"] = round(noise, 3)
                 report["verdict"] = verdict
-                log(f"  delta gmUpdateAvg (ON-OFF) = {d:+.3f} ms -> {verdict}")
+                log(
+                    f"  delta gmUpdateAvg (ON-OFF) = {d:+.3f} ms"
+                    f" (noise bound {noise:.3f} ms) -> {verdict}"
+                )
             else:
                 report["verdict"] = "no_apm_data"
                 log(
