@@ -25,8 +25,14 @@ namespace EfficientServer.Patches
     /// though the CullCompletely exit path was live-cleared (2026-08-09 runs
     /// restored moving rigs with <c>dp &gt; 0</c>): residual dp=0 walkers and a
     /// missing saturation stress A/B keep it opt-in (RESULTS 3t, CONFIG.md).
+    ///
+    /// Internal like the other support modules (<see cref="AiAlertGate"/>,
+    /// <see cref="TickClock"/>, <see cref="TickStride"/>): runtime state with
+    /// in-assembly consumers only (governor tier 2, animator LOD gate, es console),
+    /// not a Harmony patch group and not game-discovered, so it stays off the
+    /// assembly's public surface.
     /// </summary>
-    public static class AnimatorEmergency
+    internal static class AnimatorEmergency
     {
         // instanceId -> prior culling mode. UnityEngine.Object cannot be a reliable
         // dictionary key after destroy; instance IDs stay stable for the GO lifetime.
