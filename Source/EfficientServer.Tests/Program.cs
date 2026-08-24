@@ -69,6 +69,96 @@ namespace EfficientServer.Tests
             return LoadTemp(json);
         }
 
+        // Discovery precedence of DefaultPathBesideAssembly: the packaged
+        // Config/efficientserver.json must win over a legacy sibling file, and
+        // with neither present the sibling path is returned so Load takes the
+        // missing-file branch. Both candidates resolve next to THIS test binary
+        // (the method walks its own assembly), so the fixtures are created and
+        // removed around each probe; any pre-existing files are saved and put
+        // back, so a crashed earlier run cannot wedge or pollute the harness.
+        static void CheckDefaultPathDiscovery()
+        {
+            string asmDir = Path.GetDirectoryName(typeof(ServerPerfConfig).Assembly.Location) ?? ".";
+            string subDir = Path.Combine(asmDir, "Config");
+            string subPath = Path.Combine(subDir, "efficientserver.json");
+            string sibPath = Path.Combine(asmDir, "efficientserver.json");
+            byte[]? subBefore = File.Exists(subPath) ? File.ReadAllBytes(subPath) : null;
+            byte[]? sibBefore = File.Exists(sibPath) ? File.ReadAllBytes(sibPath) : null;
+            bool weMadeSubDir = false;
+            try
+            {
+                if (subBefore != null) File.Delete(subPath);
+                if (sibBefore != null) File.Delete(sibPath);
+                Check(ServerPerfConfig.DefaultPathBesideAssembly() == sibPath,
+                    "DefaultPathBesideAssembly: no config anywhere -> sibling fallback path");
+
+                Directory.CreateDirectory(subDir);
+                weMadeSubDir = true;
+                File.WriteAllText(subPath, "{}");
+                File.WriteAllText(sibPath, "{}");
+                Check(ServerPerfConfig.DefaultPathBesideAssembly() == subPath,
+                    "DefaultPathBesideAssembly: Config/efficientserver.json preferred over sibling");
+                File.Delete(subPath);
+
+                Check(ServerPerfConfig.DefaultPathBesideAssembly() == sibPath,
+                    "DefaultPathBesideAssembly: sibling file picked up once Config/ copy is gone");
+                File.Delete(sibPath);
+
+                var fresh = ServerPerfConfig.Load(ServerPerfConfig.DefaultPathBesideAssembly());
+                Check(fresh != null && fresh.Enabled,
+                    "DefaultPathBesideAssembly: Load on the discovered-but-missing path -> defaults");
+            }
+            finally
+            {
+                if (subBefore != null) File.WriteAllBytes(subPath, subBefore);
+                else if (File.Exists(subPath)) File.Delete(subPath);
+                if (sibBefore != null) File.WriteAllBytes(sibPath, sibBefore);
+                else if (File.Exists(sibPath)) File.Delete(sibPath);
+                if (weMadeSubDir && Directory.Exists(subDir) && Directory.GetFiles(subDir).Length == 0)
+                    Directory.Delete(subDir);
+            }
+        }
+
+        // IO-failure branch of Load: a file that EXISTS but cannot be read must
+        // take the same fail-soft path as a parse error (defaults + one WARNING
+        // naming the failure), never escape as an exception out of dedicated
+        // start. Self-skipping: on hosts that do not enforce the mode bits
+        // (Windows) or accounts above them (root) the fixture stays readable,
+        // and the arrangement simply cannot be built there.
+        static void CheckUnreadableFileFailSoft()
+        {
+            if (!OperatingSystem.IsLinux() && !OperatingSystem.IsMacOS()) return;
+            string p = WriteTemp("{\"Enabled\":false}");
+            try
+            {
+                var prevMode = File.GetUnixFileMode(p);
+                File.SetUnixFileMode(p, UnixFileMode.None);
+                try
+                {
+                    bool stillReadable;
+                    try { File.ReadAllText(p); stillReadable = true; }
+                    catch { stillReadable = false; }
+                    if (!stillReadable)
+                    {
+                        ModApi.Warnings.Clear();
+                        var cfg = ServerPerfConfig.Load(p);
+                        Check(cfg != null && cfg.Enabled,
+                            "unreadable config file -> defaults (fail-soft like parse errors)");
+                        Check(ModApi.Warnings.Count == 1 && ModApi.Warnings[0].StartsWith("Config load failed ["),
+                            "unreadable config file -> one WARNING naming the exception type");
+                    }
+                }
+                finally
+                {
+                    File.SetUnixFileMode(p, prevMode);
+                }
+            }
+            finally
+            {
+                File.Delete(p);
+            }
+        }
+
         static int Main()
         {
             // Defaults.
@@ -578,6 +668,11 @@ namespace EfficientServer.Tests
             Check(noBom != null && noBom.Pathfinding.GraphUpdateEveryTicks == 6,
                 "UTF-8 no-BOM config loads normally");
 
+            // Discovery + IO-failure branches of the load path itself, which no
+            // string-level fixture reaches (they all go through LoadTemp):
+            CheckDefaultPathDiscovery();
+            CheckUnreadableFileFailSoft();
+
             // Fuzz: the config file is the mod's untrusted-input surface, so two
             // deterministic targets hammer Load + FindUnknownKeys (Fuzz.cs):
             // structure-aware mutations of the default config reach Normalize's
@@ -608,6 +703,7 @@ namespace EfficientServer.Tests
             Check(!fa.FeatureActive("TickGuard"), "default TickGuard -> inactive (Enabled=false default)");
             Check(!fa.FeatureActive("BenchGod"), "default BenchGod -> inactive (console flag off)");
             Check(fa.FeatureActive("BenchGod", true), "BenchGod -> active when console flag on");
+            Check(fa.FeatureActive("ExplosionParticles"), "default ExplosionParticles -> active (ships on)");
             Check(fa.FeatureActive("FastSend"), "default FastSend -> active (opt-out feature)");
             Check(fa.FeatureActive("Governor"), "default Governor -> active (inert when healthy)");
             var govOff = LoadTemp("{\"Governor\":{\"Enabled\":false}}");
