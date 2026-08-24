@@ -125,8 +125,8 @@ namespace EfficientServer
                 // Both calls self-guard on Enabled/ShouldRun. The megapause diagnostic
                 // is deliberately NOT re-run here: it blocks threads for minutes on
                 // purpose, so it stays a start-time-only lever.
-                Patches.DedicatedSkipPatch.ApplyOptional(new Harmony(HarmonyId + ".optional"));
-                GcIncremental.Apply(Config != null ? Config.Gc : null);
+                Patches.DedicatedSkipPatch.ApplyOptional();
+                GcIncremental.Apply();
             }
             catch (Exception ex)
             {

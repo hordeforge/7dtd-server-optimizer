@@ -1,5 +1,4 @@
 using System;
-using HarmonyLib;
 
 namespace EfficientServer.Patches
 {
@@ -17,9 +16,8 @@ namespace EfficientServer.Patches
             try
             {
                 DynamicMeshBudgetPatch.ApplyBudgets();
-                var h = new Harmony(ModApi.HarmonyId + ".optional");
-                DedicatedSkipPatch.ApplyOptional(h);
-                GcIncremental.Apply(ModApi.Config != null ? ModApi.Config.Gc : null);
+                DedicatedSkipPatch.ApplyOptional();
+                GcIncremental.Apply();
                 GcDiagnostics.StartMegapauseTest(ModApi.Config != null ? ModApi.Config.Diagnostics : null);
                 ApplyTargetFps();
                 ApplyJobWorkers();
