@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Threading;
 
 // Stub the only external symbols Config.cs touches (game-type-free), so the real
 // Config source compiles and runs under the plain .NET SDK. Warnings are recorded
@@ -378,6 +379,47 @@ namespace EfficientServer.Tests
             Check(!EfficientServer.Patches.TickStride.RunThisTick(ref sw, 3), "stride wrap: call 5 -> no run");
             Check(!EfficientServer.Patches.TickStride.RunThisTick(ref sw, 3), "stride wrap: call 6 -> no run");
             Check(EfficientServer.Patches.TickStride.RunThisTick(ref sw, 3), "stride wrap: call 7 -> run (phase continues)");
+
+            // Concurrent hammer. Production callers are main-thread today (the
+            // ARCHITECTURE concurrency model pins every patch surface to the
+            // Unity main loop), but RunThisTick uses Interlocked precisely so a
+            // future off-main caller composes safely; this pins that guarantee.
+            // With T total calls from many threads the counter must advance
+            // exactly once per call (no lost increments) and slot ownership must
+            // total exactly T / every (each increment draws a unique value in
+            // 1..T no matter how calls interleave, so the owned count is
+            // order-independent and exact, not statistical).
+            const int hammerThreads = 8;
+            const int hammerCallsPerThread = 1000000;
+            const int hammerEvery = 7;
+            int hammerTick = 0;
+            var ownedPerThread = new long[hammerThreads];
+            var hammers = new Thread[hammerThreads];
+            // Start barrier: without it thread-start jitter serializes the
+            // workers and the hammer proves nothing (each runs alone).
+            var startGate = new Barrier(hammerThreads);
+            for (int t = 0; t < hammerThreads; t++)
+            {
+                int slot = t; // per-thread result cell; no shared write besides RunThisTick's own counter
+                hammers[t] = new Thread(() =>
+                {
+                    long owned = 0;
+                    startGate.SignalAndWait();
+                    for (int i = 0; i < hammerCallsPerThread; i++)
+                        if (EfficientServer.Patches.TickStride.RunThisTick(ref hammerTick, hammerEvery))
+                            owned++;
+                    ownedPerThread[slot] = owned;
+                })
+                { IsBackground = true, Name = "es-test-stride-hammer-" + t };
+                hammers[t].Start();
+            }
+            for (int t = 0; t < hammerThreads; t++)
+                hammers[t].Join(); // join edges make every thread's writes visible to these asserts
+            int hammerTotal = hammerThreads * hammerCallsPerThread;
+            Check(hammerTick == hammerTotal,
+                "stride hammer: counter advanced exactly once per call under concurrency (" + hammerTick + "/" + hammerTotal + ")");
+            Check(ownedPerThread.Sum() == hammerTotal / hammerEvery,
+                "stride hammer: exactly " + (hammerTotal / hammerEvery) + " slots owned under concurrency (got " + ownedPerThread.Sum() + ")");
 
             // TickClock: the per-entity slot predicate behind the updateTasks
             // mid-band stride and the crowd-collision resolve stagger. The invariant

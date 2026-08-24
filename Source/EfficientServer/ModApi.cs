@@ -219,8 +219,14 @@ namespace EfficientServer
         // read + exception scaffolding each time is pure overhead. A failed read
         // is NOT cached: early during boot the game singleton may not exist yet,
         // and the gate must stay fail-closed until a real answer exists.
-        static bool _dedicatedResolved;
-        static bool _isDedicated;
+        // volatile publication: ShouldRun is the one gate every patch prefix
+        // calls, including surfaces whose caller set could grow off-main (the
+        // ARCHITECTURE concurrency rule reserves plain statics for proven
+        // main-thread paths). Volatile keeps the resolved flag from publishing
+        // before the value it guards, so no thread can ever observe
+        // "_dedicatedResolved == true" with a stale _isDedicated.
+        static volatile bool _dedicatedResolved;
+        static volatile bool _isDedicated;
 
         public static bool ShouldRun()
         {
