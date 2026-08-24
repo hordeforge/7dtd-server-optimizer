@@ -220,7 +220,8 @@ sweep; FindPaths drain re-pin (research polish).
 ## Animator CullCompletely stress (2026-08-03)
 
 Harness: `scripts/validate_anim_path_admission.py`  
-Report: `server/logs/validate_anim_path_20260803_082721.json`
+Report: the harness writes `server/logs/validate_anim_path_<timestamp>.json`
+(a local run artifact, gitignored like everything under `server/logs/`).
 
 | Knob | Value |
 |---|---|

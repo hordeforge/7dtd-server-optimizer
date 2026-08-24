@@ -37,10 +37,11 @@ Every EfficientServer patch surface runs on the Unity main thread; the mod takes
 no locks anywhere. The confinement rules below are the invariant new patches
 must preserve:
 
-- **Main-thread confined:** `GameManager.UpdateTick` / `gmUpdate` / `LateUpdate`
-  postfixes (Governor, TickGuard, TargetFps), `World.EntityActivityUpdate`,
+- **Main-thread confined:** `GameManager.UpdateTick` postfixes (Governor,
+  TickGuard, TargetFps), the GcGuard transpile callback inside `gmUpdate`,
+  `World.EntityActivityUpdate`,
   `EntityAlive.updateTasks`, every `EntityAlive.FindPath` caller (all EAI/UAI
-  task leaves), `NetEntityDistribution.OnUpdateEntities` (from LateUpdate),
+  task leaves), `NetEntityDistribution.OnUpdateEntities` (from UpdateTick),
   `ChunkManager.SendChunksToClients`, `Entity.ccEntityCollision`,
   `AvatarZombieController.Update/LateUpdate`, and `AstarManager.UpdateGraphs`
   (driven by the `Start` coroutine). Path COMPUTE is also main-thread here:

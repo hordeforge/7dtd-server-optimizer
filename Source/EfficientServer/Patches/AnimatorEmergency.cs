@@ -21,8 +21,10 @@ namespace EfficientServer.Patches
     /// While active, combat fidelity still degrades in known ways (attack
     /// cadence falls back to wall-clock timer, stuns clear next tick, movement
     /// uses the supplementary displacement path). Clients still animate locally.
-    /// <see cref="GovernorConfig.AnimatorEmergency"/> stays default-false until
-    /// a live human cycle clears the exit path with <c>es animstate</c> dp &gt; 0.
+    /// <see cref="GovernorConfig.AnimatorEmergency"/> stays default-false even
+    /// though the CullCompletely exit path was live-cleared (2026-08-09 runs
+    /// restored moving rigs with <c>dp &gt; 0</c>): residual dp=0 walkers and a
+    /// missing saturation stress A/B keep it opt-in (RESULTS 3t, CONFIG.md).
     /// </summary>
     public static class AnimatorEmergency
     {
