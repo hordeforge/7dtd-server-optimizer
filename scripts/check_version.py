@@ -11,7 +11,8 @@ Checks that:
 4. CHANGELOG.md exists and mentions the shipped mod version, so a release
    cannot tag without its changelog entry.
 
-Run: python3 scripts/check_version.py   (wired into `make test`)
+Run: python3 scripts/check_version.py
+     python3 scripts/check_version.py --selftest     (both wired into `make test`)
 """
 from __future__ import annotations
 
@@ -27,12 +28,15 @@ CHANGELOG = ROOT / "CHANGELOG.md"
 DOCS = ROOT / "docs"
 
 USAGE = """\
-usage: check_version.py [-h | --help]
+usage: check_version.py [--selftest] [-h | --help]
 
 Gate: ModInfo.xml, AssemblyInfo.cs and the dist ModInfo must carry consistent
 versions, docs must not claim a version newer than shipped, and CHANGELOG.md
-must mention the shipped version. Wired into `make test`. Takes no options
-besides -h/--help.\
+must mention the shipped version. Wired into `make test`.
+  --selftest  exercise the version extraction/normalization logic itself (the
+              repo gate above only fails on tree drift; it stays green if this
+              script's own matching logic silently breaks)
+  -h, --help  show this help\
 """
 
 
@@ -43,6 +47,62 @@ def modinfo_version(path: Path) -> str | None:
 
 def norm(v: str) -> tuple[int, ...]:
     return tuple(int(x) for x in v.split("."))
+
+
+def _selftest() -> int:
+    """Pin the extraction/normalization primitives the consistency checks use.
+
+    main() reads fixed repo paths, so the selftest drives its pure helpers on
+    synthetic inputs: a synthetic ModInfo.xml for modinfo_version and literal
+    strings for norm(), including the trailing-'.0' equivalence rule the
+    ModInfo-vs-AssemblyVersion comparison depends on.
+    """
+    import tempfile
+
+    failures: list[str] = []
+
+    def check(name: str, cond: bool) -> None:
+        if cond:
+            print("PASS: " + name)
+        else:
+            print("FAIL: " + name, file=sys.stderr)
+            failures.append(name)
+
+    with tempfile.TemporaryDirectory(prefix="es-version-test.") as td:
+        mi = Path(td) / "ModInfo.xml"
+        # Same attribute layout as the real ModInfo.xml (tab-indented, value=).
+        mi.write_text(
+            '<?xml version="1.0" encoding="UTF-8" ?>\n<xml>\n'
+            '\t<Name value="EfficientServer" />\n'
+            '\t<Version value="1.17.0" />\n'
+            "</xml>\n",
+            encoding="utf-8",
+        )
+        check("modinfo_version reads the Version attribute", modinfo_version(mi) == "1.17.0")
+        no_version = Path(td) / "NoVersion.xml"
+        no_version.write_text('<xml>\n\t<Name value="X" />\n</xml>\n', encoding="utf-8")
+        check(
+            "modinfo_version returns None when Version is missing",
+            modinfo_version(no_version) is None,
+        )
+
+    check("norm splits numeric parts", norm("1.17.0") == (1, 17, 0))
+    # The shipped pair: ModInfo "1.17.0" vs AssemblyVersion "1.17.0.0". The
+    # comparison in main() truncates the assembly tuple to the ModInfo length;
+    # pin both the equal and the drifted outcome of exactly that expression.
+    mi_v, asm_v = "1.17.0", "1.17.0.0"
+    check("norm treats trailing .0 as cosmetic", norm(mi_v) == norm(asm_v)[: len(norm(mi_v))])
+    other_mi, other_asm = "1.18.0", "1.17.0.0"
+    check(
+        "norm exposes a real version mismatch",
+        norm(other_mi) != norm(other_asm)[: len(norm(other_mi))],
+    )
+
+    if failures:
+        print(f"FAIL: {len(failures)} check_version selftest check(s)", file=sys.stderr)
+        return 1
+    print("PASS: check_version selftest")
+    return 0
 
 
 def main() -> int:
@@ -109,6 +169,8 @@ if __name__ == "__main__":
     if argv in (["-h"], ["--help"]):
         print(USAGE)
         raise SystemExit(0)
+    if argv == ["--selftest"]:
+        raise SystemExit(_selftest())
     if argv:
         print(f"check_version.py: unrecognized arguments: {' '.join(argv)}", file=sys.stderr)
         print(USAGE, file=sys.stderr)

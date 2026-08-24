@@ -75,7 +75,9 @@ test:
 	dotnet restore --locked-mode $(ROOT)/Source/EfficientServer.Tests
 	dotnet run --project $(ROOT)/Source/EfficientServer.Tests -c Release --no-restore
 	python3 $(ROOT)/scripts/check_config_doc.py
+	python3 $(ROOT)/scripts/check_config_doc.py --selftest
 	python3 $(ROOT)/scripts/check_version.py
+	python3 $(ROOT)/scripts/check_version.py --selftest
 	python3 $(ROOT)/scripts/es_cfg_guard.py --selftest
 	python3 $(ROOT)/scripts/gen_sbom.py --selftest
 
