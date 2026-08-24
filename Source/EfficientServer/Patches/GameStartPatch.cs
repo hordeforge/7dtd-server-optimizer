@@ -83,6 +83,13 @@ namespace EfficientServer.Patches
         static int _appliedFps;
         static bool _fpsApplied;
 
+        // Same shape as ApplyJobWorkers' guard: an engine setter failing must not
+        // escape. This apply is ALSO re-run every ~200 frames by TargetFpsPatch
+        // inside the game's UpdateTick postfix, where an unhandled exception would
+        // propagate into the tick loop - hence warn ONCE (per-tick rate forbids
+        // per-call logs), matching the AiLodPatch hot-path convention.
+        static bool _fpsWarned;
+
         // Persistent form of `settargetfps` (which does not survive restarts).
         // Frame rate is NOT the tick rate - the full entity tick stays ~20 Hz at
         // any fps; extra frames smooth the per-frame path (pump, slices), lowering
@@ -96,6 +103,23 @@ namespace EfficientServer.Patches
         // reload to 0 (or a disable) restores the pre-mod value instead of silently
         // keeping the override forever.
         public static void ApplyTargetFps()
+        {
+            try
+            {
+                ApplyTargetFpsInner();
+            }
+            catch (Exception ex)
+            {
+                if (!_fpsWarned)
+                {
+                    _fpsWarned = true;
+                    ModApi.Warn("target fps apply failed [" + ex.GetType().Name + "]: " + ex.Message
+                        + " - vanilla frame rate kept");
+                }
+            }
+        }
+
+        static void ApplyTargetFpsInner()
         {
             ServerConfig cfg = ModApi.Config != null ? ModApi.Config.Server : null;
             int wanted = cfg != null && ModApi.ShouldRun() ? cfg.TargetFps : 0;

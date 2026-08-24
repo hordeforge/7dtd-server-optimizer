@@ -294,17 +294,23 @@ def main() -> int:
         # Each cleanup step is isolated so one failure cannot skip the rest:
         # a restore error must not leak the bot cohort (it keeps loading the
         # server until its own wall clock expires) or lose the report.
+        restored = True
         try:
             ES_SWAP.restore()
         except Exception as e:
             log(f"WARN: config restore failed ({e}); backup kept for next run")
+            restored = False
         if toggle_mode:
-            # Best effort only: the sampled server may already be gone.
-            try:
-                B.telnet(["es reload"], settle=1.0)
-            except Exception:
-                pass
-            report["restored"] = True
+            # Best effort only: the sampled server may already be gone. Skipped
+            # when the restore failed, so a reload cannot re-apply the harness
+            # values the restore just failed to revert; the report must say
+            # "restored": false then, not claim success.
+            if restored:
+                try:
+                    B.telnet(["es reload"], settle=1.0)
+                except Exception:
+                    pass
+            report["restored"] = restored
         teardown_bots(bots)
         write_report("es_onoff", report)
     return code

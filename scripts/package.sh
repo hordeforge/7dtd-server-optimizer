@@ -39,7 +39,14 @@ EPOCH="${SOURCE_DATE_EPOCH:-$(git -C "$ROOT" log -1 --pretty=%ct)}"
 
 OUT="$ROOT/dist/EfficientServer-$VERSION.zip"
 STAGE="$(mktemp -d)"
-trap 'rm -rf "$STAGE"' EXIT
+ZIP_TMP=""
+# Same contract as install.sh: a failed run must not leave the only copy of an
+# artifact destroyed (or a partial zip sitting under the release name).
+finish() {
+  rm -rf "$STAGE"
+  if [[ -n "$ZIP_TMP" ]]; then rm -f "$ZIP_TMP"; fi
+}
+trap finish EXIT
 cp -a "$ROOT/dist/EfficientServer" "$STAGE/"
 
 # Supply-chain inventory inside the zip: a deterministic CycloneDX SBOM built
@@ -58,14 +65,18 @@ find "$STAGE" -type d -exec chmod 755 {} +
 find "$STAGE/EfficientServer" -type f -exec chmod 644 {} +
 find "$STAGE" -print0 | xargs -0 touch -d "@$EPOCH"
 
-# Recreate from scratch: zip otherwise UPDATES an existing archive, so files
-# dropped upstream would survive a same-version repack as stale entries.
-rm -f "$OUT"
+# Zip to a sibling temp file and rename, so a failed or killed zip run can
+# neither publish a partial archive under the release name nor destroy the
+# previous good artifact before its replacement exists. zip does not store the
+# output path in the archive, so the bytes are identical to a direct build.
+ZIP_TMP="$OUT.tmp.$$"
 (
   cd "$STAGE"
   # File entries only (dirs are implicit on extract), sorted, no extra fields.
-  find EfficientServer -type f -print | LC_ALL=C sort | zip -q -X "$OUT" -@
+  find EfficientServer -type f -print | LC_ALL=C sort | zip -q -X "$ZIP_TMP" -@
 )
+mv -f "$ZIP_TMP" "$OUT"
+ZIP_TMP=""
 echo "Packaged -> $OUT (entry mtime epoch $EPOCH)"
 
 # Build-environment record next to (not inside) the zip, so a faithful rebuild

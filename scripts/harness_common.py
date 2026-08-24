@@ -73,7 +73,9 @@ def ensure_server_ready(timeout_s: float = 180.0) -> None:
         except Exception as e:
             log(f"  wait telnet: {e}")
         time.sleep(3)
-    raise RuntimeError("telnet not ready")
+    # Name the window so a caller skimming a report can tell "server never came
+    # up" from "came up late"; per-probe failures were logged above.
+    raise RuntimeError(f"telnet not ready after {timeout_s:.0f}s of probes")
 
 
 def write_path_config(max_cap: int, drop_far: float) -> None:
@@ -95,7 +97,10 @@ def write_path_config(max_cap: int, drop_far: float) -> None:
 def write_report(prefix: str, report: dict) -> Path:
     """Write a run's JSON report as OUT_DIR/<prefix>_<timestamp>.json."""
     out = OUT_DIR / f"{prefix}_{time.strftime('%Y%m%d_%H%M%S')}.json"
-    out.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    # Atomic for the same reason every live-file rewrite here goes through
+    # write_atomic: these runs are routinely SIGKILLed by tool timeouts, and a
+    # truncated report would break whatever tails or diffs it afterwards.
+    write_atomic(out, json.dumps(report, indent=2) + "\n")
     log(f"report -> {out}")
     return out
 

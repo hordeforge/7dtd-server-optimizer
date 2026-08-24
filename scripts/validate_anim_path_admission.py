@@ -44,6 +44,7 @@ from harness_common import (
     ensure_server_ready,
     log,
     teardown_bots,
+    write_atomic,
     write_path_config,
     write_report,
 )
@@ -365,8 +366,10 @@ def main() -> int:
             )
         write_report("validate_anim_path", report)
         # Fixed-name copy of the same report so tooling can tail one path.
+        # Atomic: a kill mid-write must not strand truncated JSON at the one
+        # path tooling reads unconditionally.
         latest = OUT_DIR / "validate_anim_path_latest.json"
-        latest.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+        write_atomic(latest, json.dumps(report, indent=2) + "\n")
 
     return code
 
