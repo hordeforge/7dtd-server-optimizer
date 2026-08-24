@@ -266,6 +266,12 @@ namespace EfficientServer
         public bool GcMegapauseTest { get; set; } = false;
         public int WarmupSeconds { get; set; } = 60;
         public int GrowSeconds { get; set; } = 240;
+        // Runtime allow-switch for `es benchgod on` (global player damage
+        // immunity). Default false: the console command refuses to arm the flag
+        // until the operator opted in here, so reaching telnet/console alone is
+        // not enough to make every player immortal on a live server. Turning the
+        // flag OFF is always allowed. Pure decision: BenchGodArmAllowed.
+        public bool AllowBenchGod { get; set; } = false;
     }
 
     public sealed class ServerPerfConfig
@@ -532,6 +538,17 @@ namespace EfficientServer
             // server", so an unknown host must not activate server-only patches.
             return isDedicatedServer ?? false;
         }
+
+        /// <summary>
+        /// Pure bench-god arm gate (no game types), unit-testable like
+        /// <see cref="ShouldRunFor"/>: arming global player damage immunity via the
+        /// console requires an explicit Diagnostics.AllowBenchGod opt-in, and a null
+        /// config or section fails closed (false). Deliberate runtime-null probe:
+        /// NRT annotations are erased, so this guard is the only defense (same
+        /// contract as FindUnknownKeys).
+        /// </summary>
+        public static bool BenchGodArmAllowed(ServerPerfConfig cfg) =>
+            cfg != null && cfg.Diagnostics != null && cfg.Diagnostics.AllowBenchGod;
 
         /// <summary>
         /// Pure per-feature config gating (no game types): whether a patch group is

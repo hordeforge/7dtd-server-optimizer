@@ -298,7 +298,10 @@ level-1 and die to endgame zombies in seconds, which collapses the horde's targe
 anchors into a spawn-equilibrium plateau (RESULTS 3q). With it on, bots survive and
 the load stays an active siege. Not config-persisted; gated by the same
 dedicated-only check as every patch (a client host cannot toggle itself immune);
-never enable on a real dedicated server.
+arming `on` additionally requires the `Diagnostics.AllowBenchGod: true` config
+opt-in, so a console-level actor alone cannot enable it on a live server (the
+refusal is echoed and logged; `es benchgod off` always works). Never enable on a
+real dedicated server.
 
 ## TickGuard emergency load-shedding (v1.13.0, default off)
 

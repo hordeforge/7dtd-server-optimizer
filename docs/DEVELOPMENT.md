@@ -44,7 +44,7 @@ See [`FEATURES.md`](FEATURES.md) for behavior and validation notes. Groups are a
 | Crowd-collision LOD | `CrowdCollisionLod` | Stagger zombie entity-collision queries |
 | Governor | `Governor` | Adaptive engagement of the throttle levers under overload (+ opt-in tier 2) |
 | TickGuard | `TickGuard` | Last-resort emergency load shedding |
-| BenchGod | console `es benchgod` | BENCH ONLY diagnostic (player damage immunity) |
+| BenchGod | console `es benchgod` | BENCH ONLY diagnostic (player damage immunity; arming needs `Diagnostics.AllowBenchGod: true`) |
 | Game start reapply | (lifecycle) | Re-apply mesh settings after start |
 
 Change **one group at a time**, then re-measure.

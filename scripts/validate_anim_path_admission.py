@@ -45,6 +45,7 @@ from harness_common import (
     log,
     teardown_bots,
     write_atomic,
+    write_diag_config,
     write_path_config,
     write_report,
 )
@@ -223,7 +224,11 @@ def main() -> int:
             return code
         report["verdicts"]["join"] = "PASS"
         B.set_gamestage(GAMESTAGE)
-        B.telnet(["es benchgod on"], settle=1)
+        # Bench-god needs the runtime allow switch (the console gate refuses to
+        # arm without it): write it swap-guarded, reload, then arm. CFG_SWAP
+        # puts the operator's value back in the finally below.
+        write_diag_config(True)
+        B.telnet(["es reload", "es benchgod on"], settle=1)
         log(f"=== spawn ~{ZOMBIES} endgame ===")
         za = fast_spawn(ZOMBIES)
         report["spawned_alive"] = za

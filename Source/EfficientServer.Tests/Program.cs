@@ -384,6 +384,27 @@ namespace EfficientServer.Tests
             Check(diagOk.Diagnostics.WarmupSeconds == 30 && diagOk.Diagnostics.GrowSeconds == 120,
                 "valid Diagnostics seconds round-trip");
 
+            // Bench-god arm gate: global player damage immunity must NOT arm from the
+            // console without an explicit config opt-in. Pin the secure default, the
+            // JSON round-trip, sibling-flag isolation, and the fail-closed paths of
+            // the pure predicate the console command consults (null config / null
+            // section must refuse, mirroring the deliberate runtime-null probes of
+            // FindUnknownKeys above).
+            Check(new ServerPerfConfig().Diagnostics != null
+                && !new ServerPerfConfig().Diagnostics.AllowBenchGod,
+                "default AllowBenchGod=false (benchgod refuses until opted in)");
+            var bgOn = LoadTemp("{\"Diagnostics\":{\"AllowBenchGod\":true}}");
+            Check(bgOn.Diagnostics != null && bgOn.Diagnostics.AllowBenchGod,
+                "Diagnostics.AllowBenchGod=true round-trips");
+            Check(bgOn.Diagnostics != null && !bgOn.Diagnostics.GcMegapauseTest,
+                "AllowBenchGod=true leaves sibling diagnostic flags at defaults");
+            Check(!ServerPerfConfig.BenchGodArmAllowed(null!),
+                "BenchGodArmAllowed(null config) -> fail closed");
+            Check(!ServerPerfConfig.BenchGodArmAllowed(new ServerPerfConfig()),
+                "BenchGodArmAllowed(defaults) -> refused");
+            Check(ServerPerfConfig.BenchGodArmAllowed(bgOn),
+                "BenchGodArmAllowed(opt-in) -> allowed");
+
             // v1.7.0 fields: MidTickStride clamp, Network + Diagnostics defaults.
             var d2 = new ServerPerfConfig();
             Check(d2.AiLod.MidTickStride == 1, "default MidTickStride=1 (off)");

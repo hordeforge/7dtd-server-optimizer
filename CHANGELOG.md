@@ -51,6 +51,15 @@ So `EfficientServer-0.1.0.zip` logging `mod=1.17.0` is correct, not drift.
   misleading log.
 
 ### Added
+- Bench-god runtime guard: `es benchgod on` (global player damage immunity)
+  now refuses to arm unless the new `Diagnostics.AllowBenchGod: true` opt-in is
+  present in the installed config (`es reload` applies it). Reaching
+  telnet/console alone no longer suffices to make every player immortal on a
+  live server; the refusal is echoed and logged, `es status` shows the switch
+  as `benchgodAllow=`, and `es benchgod off` always works. The shipped config
+  template omits the Diagnostics group on purpose, so fresh installs refuse;
+  the animator/path validation harness writes the flag swap-guarded for its
+  bench runs and restores it afterwards.
 - Supply-chain inventory: `make package` now embeds a deterministic CycloneDX
   1.5 SBOM at `EfficientServer/bom.json` in every release zip, generated from
   the committed `packages.lock.json` graph (component versions plus NuGet

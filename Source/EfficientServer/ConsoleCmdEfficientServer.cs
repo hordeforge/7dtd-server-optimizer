@@ -19,7 +19,7 @@ namespace EfficientServer
             "EfficientServer control: 'es status' shows active levers plus live "
             + "counters, 'es reload' re-reads the config (applies live); diagnostics: "
             + "'es animoff' | 'es animon' | 'es animstate' | 'es rigoff' | 'es rigon' | "
-            + "'es benchgod on|off'";
+            + "'es benchgod on|off' (arming on requires Diagnostics.AllowBenchGod=true)";
 
         public override void Execute(List<string> _params, CommandSenderInfo _senderInfo)
         {
@@ -85,7 +85,7 @@ namespace EfficientServer
                 + $"skip(music={c.SkipOnDedicated.DynamicMusicSystem} waterSplash={c.SkipOnDedicated.WaterSplashParticles} "
                 + $"envAudio={c.SkipOnDedicated.EnvironmentAudioUpdates} cloth={c.SkipOnDedicated.ClothAndJiggleBoneSimulation} "
                 + $"lightSpectrum={c.SkipOnDedicated.AmbientLightSpectrumUpdates} explosionFx={c.SkipOnDedicated.ExplosionParticles}) | "
-                + $"diagGcMegapauseProbe={c.Diagnostics.GcMegapauseTest}");
+                + $"diagGcMegapauseProbe={c.Diagnostics.GcMegapauseTest} benchgodAllow={c.Diagnostics.AllowBenchGod}");
             OutputRuntime();
         }
 
@@ -196,7 +196,23 @@ namespace EfficientServer
             // endgame hordes and the load stays an active siege (RESULTS 3q).
             string arg = ConsoleCommandUtil.Arg(_params, 1);
             bool changed = arg == "on" || arg == "off";
-            if (arg == "on") Patches.BenchGodPatch.BenchGod = true;
+            if (arg == "on")
+            {
+                // Second gate beyond console access (THREAT_MODEL R3): arming global
+                // damage immunity needs an explicit config opt-in, so a bench-only
+                // flag cannot be flipped on a live server by whoever holds telnet.
+                // Disabling is always allowed. Refusal goes through the audited
+                // output path (console AND log), not just an echo.
+                if (!ServerPerfConfig.BenchGodArmAllowed(ModApi.Config))
+                {
+                    ConsoleCommandUtil.Output(
+                        "benchgod REFUSED (flag stays OFF): arming global player damage immunity "
+                        + "requires Diagnostics.AllowBenchGod=true in Config/efficientserver.json "
+                        + "+ es reload; see docs/CONFIG.md");
+                    return;
+                }
+                Patches.BenchGodPatch.BenchGod = true;
+            }
             else if (arg == "off") Patches.BenchGodPatch.BenchGod = false;
             string state = $"benchgod={(Patches.BenchGodPatch.BenchGod ? "ON (bench only!)" : "off")}";
             // A real toggle is audited in the server log (the flag is invisible

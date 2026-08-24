@@ -51,11 +51,15 @@ def log(msg: str) -> None:
 # Knobs the path-admission A/Bs toggle. The guard restores exactly these on any
 # exit path (crash-safe: a backup left by a killed run is finished or
 # quarantined by the NEXT run instead of blindly clobbering operator edits).
+# Diagnostics.AllowBenchGod is included because the animator harness must arm
+# `es benchgod on` (the console gate refuses without it) and must put the
+# operator's value back afterwards.
 CFG_SWAP = ConfigSwap(
     ES_CFG,
     [
         ("Pathfinding", "MaxPathEnqueuesPerTick"),
         ("Pathfinding", "DropPathWhenFarDistSq"),
+        ("Diagnostics", "AllowBenchGod"),
     ],
     log=log,
 )
@@ -91,6 +95,23 @@ def write_path_config(max_cap: int, drop_far: float) -> None:
     # Atomic: these runs are routinely killed by tool timeouts mid-write; a
     # truncated live JSON would leave the mod booting on built-in defaults and
     # make the next run quarantine the backup instead of finishing a restore.
+    write_atomic(ES_CFG, json.dumps(cfg, indent=2) + "\n")
+
+
+def write_diag_config(allow_benchgod: bool) -> None:
+    """Rewrite EfficientServer diagnostic knobs (bench-god allow switch).
+
+    `es benchgod on` refuses to arm unless Diagnostics.AllowBenchGod is true in
+    the installed config, so the animator harness writes it through the same
+    swap-guarded, atomic path before issuing the console command. The value is
+    restored by CFG_SWAP.restore() on every exit path.
+    """
+    if not ES_CFG.is_file():
+        raise FileNotFoundError(f"missing {ES_CFG}")
+    CFG_SWAP.begin()
+    cfg = json.loads(ES_CFG.read_text(encoding="utf-8"))
+    diag = cfg.setdefault("Diagnostics", {})
+    diag["AllowBenchGod"] = allow_benchgod
     write_atomic(ES_CFG, json.dumps(cfg, indent=2) + "\n")
 
 

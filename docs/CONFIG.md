@@ -405,6 +405,16 @@ research only. `WarmupSeconds` clamps to [0, 3600] and `GrowSeconds` to [1, 7200
 the warmup feeds `Thread.Sleep(seconds * 1000)`, so an unclamped value above ~2.1M
 would wrap the millisecond product negative and kill the probe.
 
+### `AllowBenchGod` (false)
+Runtime allow-switch for `es benchgod on` (global player damage immunity,
+RESULTS 3q). Default false: arming the flag from telnet/console REFUSES with an
+audited log line unless this knob is true in the installed config
+(`es reload` applies it), so reaching the console alone is not enough to make
+every player immortal on a live server. Turning the flag off
+(`es benchgod off`) always works. `es status` shows the switch as
+`benchgodAllow=`. The shipped template omits the whole Diagnostics group on
+purpose: absent keys keep their defaults, so a fresh install refuses.
+
 ---
 
 ## Launch environment (scripts/run_server.sh, all EAC-safe)
@@ -443,4 +453,6 @@ debugging revival and movement issues; `es rigoff` / `es rigon` toggle the ungua
 components (eyelid/gaze/feather/held-light-raycast; measured: no resolvable cost
 at saturation variance); `es benchgod on|off` makes players damage-immune so
 synthetic bench bots survive endgame hordes and the load stays an active siege
-(RESULTS 3q spawn-equilibrium problem) - never on a real server.
+(RESULTS 3q spawn-equilibrium problem) - never on a real server. Arming `on`
+additionally requires `Diagnostics.AllowBenchGod: true` (see above); without it
+the command refuses and logs.
