@@ -12,7 +12,7 @@ namespace EfficientServer.Patches
     ///
     /// Defaults are vanilla-neutral (both knobs 0 = unlimited / no distance drop).
     /// Never drops alerted / investigating / attack-target / active-sleeper entities.
-    /// Priority admits do not consume the per-frame budget so combat keeps pathing.
+    /// Priority admits do not consume the per-tick budget so combat keeps pathing.
     /// Server-internal; no wire change.
     /// </summary>
     [HarmonyPatch(typeof(EntityAlive), "FindPath", new[] {
@@ -20,8 +20,8 @@ namespace EfficientServer.Patches
     })]
     public static class PathAdmissionPatch
     {
-        static int _frameStamp = -1;
-        static int _enqueuedThisFrame;
+        static int _tickStamp = -1;
+        static int _enqueuedThisTick;
 
         // Lifetime drop counters for `es status`. Both knobs are silent by design
         // on the hot path (per-request logging would flood at blood-moon rates),
@@ -59,19 +59,25 @@ namespace EfficientServer.Patches
             if (maxPerTick <= 0)
                 return true;
 
-            // Main-thread only (EntityAlive.FindPath); frame-local counter.
-            int frame = Time.frameCount;
-            if (frame != _frameStamp)
+            // Main-thread only (EntityAlive.FindPath); tick-local counter. The
+            // budget window is the GAME TICK (TickClock), not Time.frameCount:
+            // FindPath runs from EAI task leaves inside UpdateTick plus its
+            // slice-drained spill, and a frame-sourced window at
+            // Server.TargetFps > 20 would refill the cap several times per tick,
+            // admitting more per tick than this knob promises (the same
+            // frame-vs-tick trap TickClock exists to prevent; see TickClock).
+            int tick = TickClock.Ticks;
+            if (tick != _tickStamp)
             {
-                _frameStamp = frame;
-                _enqueuedThisFrame = 0;
+                _tickStamp = tick;
+                _enqueuedThisTick = 0;
             }
-            if (_enqueuedThisFrame >= maxPerTick)
+            if (_enqueuedThisTick >= maxPerTick)
             {
                 _droppedCapTotal++;
                 return false;
             }
-            _enqueuedThisFrame++;
+            _enqueuedThisTick++;
             return true;
         }
     }

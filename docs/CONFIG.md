@@ -179,9 +179,11 @@ One-way per process: the collector mode is a P/Invoke that cannot be undone, so
 
 ### `MaxPathEnqueuesPerTick` (default `0`, clamp [0,2000])
 - **Mechanism:** Harmony prefix on `EntityAlive.FindPath`. Non-priority path
-  requests past this count in a Unity frame are dropped (original not called).
-  `0` = unlimited (vanilla). Priority (attack target, investigate, alert ticks,
-  active sleeper) always admits and does **not** consume the budget.
+  requests past this count within one game tick are dropped (original not
+  called); the window is the mod's tick clock, so the budget holds at any
+  `Server.TargetFps`. `0` = unlimited (vanilla). Priority (attack target,
+  investigate, alert ticks, active sleeper) always admits and does **not**
+  consume the budget.
 - **Does not** change path *compute* drain (~8 starts/frame stock).
 - **When to raise/set:** blood-moon path-spam A/B only; start around 32-128.
 - **Default 0:** no behavior change until explicitly tuned.

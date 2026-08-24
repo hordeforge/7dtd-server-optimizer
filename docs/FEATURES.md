@@ -392,7 +392,7 @@ because it is low-risk and default-inert, not because it is proven. See
 ## Path admission (v1.17.0)
 
 `PathAdmissionPatch` optionally caps non-priority `EntityAlive.FindPath` enqueues
-per frame and/or drops far non-alert path requests. Defaults both off (vanilla).
+per game tick and/or drops far non-alert path requests. Defaults both off (vanilla).
 Alerted / attack-target / investigate / active-sleeper always path. See CONFIG
 `Pathfinding.MaxPathEnqueuesPerTick` and `DropPathWhenFarDistSq`.
 
