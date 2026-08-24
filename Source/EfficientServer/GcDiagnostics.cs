@@ -56,12 +56,18 @@ namespace EfficientServer
 
         static void RunMegapause(DiagnosticsConfig cfg)
         {
+            // Tracks the GC_disable acquire so every release path matches it:
+            // Boehm's enable/disable is a process-wide counter, and an enable
+            // without a matching disable (a failure before the disable below)
+            // skews that count for every other user of the collector.
+            bool gcDisabled = false;
             try
             {
                 // long math: seconds -> ms must not wrap int before Sleep sees it.
                 Thread.Sleep((int)Math.Min(int.MaxValue, Math.Max(0, cfg.WarmupSeconds) * 1000L));
                 ulong heap0 = HeapBytes();
                 GC_disable();
+                gcDisabled = true;
                 ModApi.Log("GC MEGAPAUSE: collector DISABLED at heap=" + Gb(heap0) + "; growing under load...");
 
                 int grow = Math.Max(1, cfg.GrowSeconds);
@@ -84,6 +90,7 @@ namespace EfficientServer
                 // Re-enable BEFORE collecting: Boehm no-ops GC_gcollect while the
                 // disable count is > 0, so collecting first measures a 0 ms no-op.
                 GC_enable();
+                gcDisabled = false;
                 var pause = Stopwatch.StartNew();
                 GC_gcollect();               // single forced full STW collect of the grown heap
                 pause.Stop();
@@ -100,8 +107,14 @@ namespace EfficientServer
             }
             catch (Exception ex)
             {
-                // Re-enable defensively so a failed probe never leaves GC disabled.
-                try { GC_enable(); } catch { }
+                // Re-enable defensively so a failed probe never leaves GC disabled,
+                // but only if THIS run disabled it (an unmatched enable skews the
+                // process-wide counter; see gcDisabled above).
+                if (gcDisabled)
+                {
+                    gcDisabled = false;
+                    try { GC_enable(); } catch { }
+                }
                 // Name the type + library: DllNotFoundException (host OS ships the
                 // Boehm lib under another name) reads differently from a missing
                 // entry point, and the operator needs to know which one fired.

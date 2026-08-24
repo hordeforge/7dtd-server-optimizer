@@ -54,10 +54,21 @@ namespace EfficientServer.Patches
                 // enqueue (AddToSendQueue takes the queue's own +1), then drop
                 // our hold (-1). Omitting the final Handled would strand the
                 // count above zero and leak every sent package out of the
-                // game's package pool.
+                // game's package pool - so the drop runs in a finally: a throw
+                // out of SendPackage (a disconnecting client can null its
+                // connection slot between our loginDone check and this call,
+                // or AddToSendQueue can fail on a dead socket) must not pin
+                // inSendQueuesCount above zero forever, which would keep this
+                // pooled instance from ever reaching NetPackageManager.FreePackage.
                 _package.RegisterSendQueue();
-                client.SendPackage(_package);
-                _package.SendQueueHandled();
+                try
+                {
+                    client.SendPackage(_package);
+                }
+                finally
+                {
+                    _package.SendQueueHandled();
+                }
             }
             // else: no logged-in attached client for this id -> nothing sent (== vanilla)
             return false; // skip the O(clients) scan
