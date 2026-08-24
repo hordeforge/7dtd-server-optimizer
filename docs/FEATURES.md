@@ -64,9 +64,11 @@ prefixes: it is the separate `ExplosionParticlesPatch` prefix on
 Cloth/jiggle-bone suppression is also NOT a `DedicatedSkipPatch` prefix:
 `AiLodPatch`'s postfix consumes
 `SkipOnDedicated.ClothAndJiggleBoneSimulation` and toggles cloth level-triggered
-(off far, back on near) per entity during the same distance-band pass. Every
-skipped target logs a WARNING when its type or method is not found (skip
-disabled), never hiding the loss silently.
+(off far, back on near) per entity during the same distance-band pass (so that
+knob, unlike the four prefixes above, needs `AiLod.Enabled` too). Every skipped
+target logs a WARNING when its type or method is not found (skip disabled),
+never hiding the loss silently. The skip prefixes live-gate on their own knob
+per call, so `es reload` can take a skip away without a restart.
 
 ## Dynamic mesh budgets
 

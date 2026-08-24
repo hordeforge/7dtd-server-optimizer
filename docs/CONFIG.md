@@ -72,6 +72,8 @@ sleeping/idle far zombies cost near zero. Alert/aggro always restores full AI.
 
 All default `true`: this work produces output only a renderer/speaker could show,
 and a dedicated server has neither. **Zero gameplay impact by construction.**
+Every knob live-gates per call, so turning one off takes effect on `es reload`
+without a restart (the Harmony prefix stays installed but runs the original).
 
 ### `DynamicMusicSystem` / `EnvironmentAudioUpdates` (true)
 Skip the music conductor and ambient-audio graph updates (audible output only).
@@ -80,7 +82,9 @@ Skip the music conductor and ambient-audio graph updates (audible output only).
 Skip `WaterSplashCubes.Update` (visual splash particles).
 
 ### `ClothAndJiggleBoneSimulation` (true)
-Skip cloth/jiggle bone simulation (pure visual deformation).
+Skip cloth/jiggle bone simulation (pure visual deformation). Enforced inside the
+AI-LOD distance-band pass (`AiLodPatch`, where stock toggles cloth), so this knob
+has an effect only while `AiLod.Enabled` is also true.
 
 ### `AmbientLightSpectrumUpdates` (true, v1.14.3)
 Skip the per-frame ambient light-spectrum lerp (~650 IL) whose only outputs are

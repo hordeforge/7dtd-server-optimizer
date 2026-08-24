@@ -6,6 +6,12 @@ namespace EfficientServer.Patches
 {
     /// <summary>
     /// Skip client-oriented systems that still run on dedicated World.OnUpdateTick.
+    /// Each skip live-gates on its own knob (read per call, like every other
+    /// lever), so `es reload` can take a skip away without a restart: the prefix
+    /// stays installed but runs the original while its knob is false. The
+    /// install-time check below only decides whether a prefix exists at all;
+    /// without the per-call knob read, flipping a skip off would keep skipping
+    /// until the process restarted.
     /// </summary>
     public static class DedicatedSkipPatch
     {
@@ -20,24 +26,24 @@ namespace EfficientServer.Patches
             if (skip == null) return;
 
             if (skip.DynamicMusicSystem)
-                TryPrefix("DynamicMusic.Conductor", "Update");
+                TryPrefix("DynamicMusic.Conductor", "Update", nameof(SkipDynamicMusic));
             if (skip.WaterSplashParticles)
-                TryPrefix("WaterSplashCubes", "Update");
+                TryPrefix("WaterSplashCubes", "Update", nameof(SkipWaterSplash));
             if (skip.EnvironmentAudioUpdates)
             {
-                TryPrefix("EnvironmentAudioManager", "Update");
-                TryPrefix("EnvironmentAudioManager", "FixedUpdate");
-                TryPrefix("EnvironmentAudioManager", "LateUpdate");
+                TryPrefix("EnvironmentAudioManager", "Update", nameof(SkipEnvironmentAudio));
+                TryPrefix("EnvironmentAudioManager", "FixedUpdate", nameof(SkipEnvironmentAudio));
+                TryPrefix("EnvironmentAudioManager", "LateUpdate", nameof(SkipEnvironmentAudio));
             }
             // Per-frame ambient light-spectrum lerp (~650 IL) whose only outputs are
             // RenderSettings.ambient*Color writes; the consumer chain
             // (LightManager.GetLightLevel -> stealth) is client-computed. RE sweep
             // 2026-07-21, RESULTS 3n.
             if (skip.AmbientLightSpectrumUpdates)
-                TryPrefix("WorldEnvironment", "AmbientSpectrumFrameUpdate");
+                TryPrefix("WorldEnvironment", "AmbientSpectrumFrameUpdate", nameof(SkipAmbientSpectrum));
         }
 
-        static void TryPrefix(string typeName, string methodName)
+        static void TryPrefix(string typeName, string methodName, string prefixName)
         {
             try
             {
@@ -61,7 +67,7 @@ namespace EfficientServer.Patches
                     ModApi.Warn($"skip-patch {typeName}.{methodName}: method not found (skip disabled)");
                     return;
                 }
-                MethodInfo prefix = typeof(DedicatedSkipPatch).GetMethod(nameof(SkipIfDedicated), BindingFlags.Static | BindingFlags.NonPublic);
+                MethodInfo prefix = typeof(DedicatedSkipPatch).GetMethod(prefixName, BindingFlags.Static | BindingFlags.NonPublic);
                 OptionalHarmony.Patch(m, new HarmonyMethod(prefix));
                 ModApi.Log($"skip-patch {typeName}.{methodName}");
             }
@@ -71,9 +77,35 @@ namespace EfficientServer.Patches
             }
         }
 
-        static bool SkipIfDedicated()
+        // Run the original unless the mod is active AND this skip's knob is
+        // currently true. Master gate first: an inactive mod must never skip.
+        static bool Gate(bool knobActive)
         {
-            return !ModApi.ShouldRun();
+            return !(ModApi.ShouldRun() && knobActive);
+        }
+
+        static bool SkipDynamicMusic()
+        {
+            return Gate(ModApi.Config != null && ModApi.Config.SkipOnDedicated != null
+                && ModApi.Config.SkipOnDedicated.DynamicMusicSystem);
+        }
+
+        static bool SkipWaterSplash()
+        {
+            return Gate(ModApi.Config != null && ModApi.Config.SkipOnDedicated != null
+                && ModApi.Config.SkipOnDedicated.WaterSplashParticles);
+        }
+
+        static bool SkipEnvironmentAudio()
+        {
+            return Gate(ModApi.Config != null && ModApi.Config.SkipOnDedicated != null
+                && ModApi.Config.SkipOnDedicated.EnvironmentAudioUpdates);
+        }
+
+        static bool SkipAmbientSpectrum()
+        {
+            return Gate(ModApi.Config != null && ModApi.Config.SkipOnDedicated != null
+                && ModApi.Config.SkipOnDedicated.AmbientLightSpectrumUpdates);
         }
     }
 }

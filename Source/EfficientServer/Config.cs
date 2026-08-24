@@ -41,7 +41,9 @@ namespace EfficientServer
         // Ambient environment-audio graph updates (wind, biome beds).
         public bool EnvironmentAudioUpdates { get; set; } = true;
         // Cloth physics + jiggle-bone simulation on characters (capes, flapping
-        // clothes, body jiggle - pure visual deformation).
+        // clothes, body jiggle - pure visual deformation). Enforced by AiLodPatch's
+        // distance-band pass (stock toggles cloth there), so this knob has an
+        // effect only while AiLod.Enabled is also true.
         public bool ClothAndJiggleBoneSimulation { get; set; } = true;
         // Per-frame ambient light-spectrum lerp writing RenderSettings colors that
         // nothing headless reads (light-level -> stealth is client-computed).

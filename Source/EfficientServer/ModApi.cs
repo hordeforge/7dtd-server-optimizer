@@ -118,8 +118,9 @@ namespace EfficientServer
                 // so a disabled->enabled reload must install it here or the contract
                 // above ("patches are installed so reload can enable it") silently fails
                 // for music/splash/env-audio/spectrum skips until restart. Idempotent:
-                // Harmony replaces an existing patch by MethodInfo instead of stacking,
-                // and SkipIfDedicated live-gates on ShouldRun either way.
+                // Harmony replaces an existing patch by MethodInfo instead of stacking.
+                // Each skip's prefix live-gates on ShouldRun AND its own knob per call,
+                // so a reload can take a skip away again without a restart too.
                 // GcIncremental joins for the same reason: its one-shot guard is what
                 // makes late-enable possible (disable stays impossible by design).
                 // Both calls self-guard on Enabled/ShouldRun. The megapause diagnostic
