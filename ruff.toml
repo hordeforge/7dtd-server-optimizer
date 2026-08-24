@@ -9,22 +9,40 @@ src = ["scripts"]
 # Groups proven clean by a full run before being enabled here; a new group
 # must pass on the tree before its selector lands. Deliberately not selected:
 # - T20 (print): these are CLI harnesses; stdout is the product.
-# - BLE / S110 (blind except, except-pass): teardown paths log-and-continue
-#   on purpose so a failed cleanup never masks the real result.
 # - SIM / RET / PTH: style churn with no defect signal in this tree yet.
+# The S (bandit) group is selected minus the three rules with standing,
+# documented findings on this tree:
+# - S110 (except-pass): teardown paths log-and-continue on purpose so a
+#   failed cleanup never masks the real result.
+# - S314 (xml parse): coverage_badge.py parses CI-generated Cobertura XML,
+#   not untrusted input, and defusedxml would be a new dependency.
+# - S607 (partial executable path): the pkill/teardown calls are deliberate
+#   and bracket their patterns to avoid self-matching.
 select = [
     "E",    # pycodestyle errors (incl. E501 at 100 via line-length)
     "W",    # pycodestyle warnings
     "F",    # pyflakes (undefined names, unused bindings)
     "I",    # import order
+    "A",    # flake8-builtins (shadowing builtins)
     "B",    # flake8-bugbear (bug-prone constructs)
     "C4",   # flake8-comprehensions
     "UP",   # pyupgrade (stale syntax)
     "FA",   # missing `from __future__ import annotations`
     "ISC",  # implicit string concatenation pitfalls
+    "T10",  # debugger calls (a stray breakpoint() hangs CI harnesses)
+    "DTZ",  # naive datetimes in measurement/log-parsing code
     "EXE",  # executable/shebang hygiene
+    "S",    # flake8-bandit security rules (minus scoped ignores below)
     "FURB", # refurb modernizations
     "RUF",  # ruff-specific (stale noqa directives, etc.)
+]
+
+# Standing exceptions for the S band, each tied to a documented pattern
+# above. Revisit when the underlying code changes.
+ignore = [
+    "S110",
+    "S314",
+    "S607",
 ]
 
 [lint.per-file-ignores]
