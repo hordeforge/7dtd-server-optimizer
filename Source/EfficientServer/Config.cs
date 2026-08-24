@@ -328,7 +328,7 @@ namespace EfficientServer
                 // default, so name every ignored key at load (fail-soft per group;
                 // unknown keys are still ignored, just not silently).
                 foreach (string key in FindUnknownKeys(json))
-                    ModApi.Warn("config unknown key '" + key + "' ignored (no such option; check spelling)");
+                    EsLog.Warn("config unknown key '" + key + "' ignored (no such option; check spelling)");
                 var loaded = JsonConvert.DeserializeObject<ServerPerfConfig>(json);
                 if (loaded == null) return new ServerPerfConfig();
                 BackfillNullSections(loaded);
@@ -339,7 +339,7 @@ namespace EfficientServer
             {
                 // Type name + message: a parse error names its JSON line in Message,
                 // and the type separates syntax errors from IO failures.
-                ModApi.Warn("Config load failed [" + ex.GetType().Name + "], using defaults: " + ex.Message);
+                EsLog.Warn("Config load failed [" + ex.GetType().Name + "], using defaults: " + ex.Message);
                 return new ServerPerfConfig();
             }
         }
@@ -501,7 +501,7 @@ namespace EfficientServer
             if (normalized != value)
                 // Invariant floats: the "config corrected" line is grepped/parsed
                 // (tests match on it), so a comma-decimal locale must not reformat.
-                ModApi.Warn("config corrected " + name + ": "
+                EsLog.Warn("config corrected " + name + ": "
                     + value.ToString(CultureInfo.InvariantCulture) + " -> "
                     + normalized.ToString(CultureInfo.InvariantCulture));
             return normalized;
@@ -511,7 +511,7 @@ namespace EfficientServer
         {
             int normalized = Math.Max(min, Math.Min(max, value));
             if (normalized != value)
-                ModApi.Warn("config corrected " + name + ": " + value + " -> " + normalized);
+                EsLog.Warn("config corrected " + name + ": " + value + " -> " + normalized);
             return normalized;
         }
 

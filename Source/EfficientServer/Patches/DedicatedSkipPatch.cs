@@ -58,22 +58,22 @@ namespace EfficientServer.Patches
                     // types are legitimately absent on a headless build, but a
                     // rename would silently disable the skip with zero signal -
                     // hence WARNING, the channel an operator greps after an update.
-                    ModApi.Warn($"skip-patch {typeName}.{methodName}: type not found (skip disabled)");
+                    EsLog.Warn($"skip-patch {typeName}.{methodName}: type not found (skip disabled)");
                     return;
                 }
                 MethodInfo m = t.GetMethod(methodName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
                 if (m == null)
                 {
-                    ModApi.Warn($"skip-patch {typeName}.{methodName}: method not found (skip disabled)");
+                    EsLog.Warn($"skip-patch {typeName}.{methodName}: method not found (skip disabled)");
                     return;
                 }
                 MethodInfo prefix = typeof(DedicatedSkipPatch).GetMethod(prefixName, BindingFlags.Static | BindingFlags.NonPublic);
                 OptionalHarmony.Patch(m, new HarmonyMethod(prefix));
-                ModApi.Log($"skip-patch {typeName}.{methodName}");
+                EsLog.Log($"skip-patch {typeName}.{methodName}");
             }
             catch (Exception ex)
             {
-                ModApi.Warn($"skip-patch {typeName}.{methodName} failed [{ex.GetType().Name}]: {ex.Message}");
+                EsLog.Warn($"skip-patch {typeName}.{methodName} failed [{ex.GetType().Name}]: {ex.Message}");
             }
         }
 

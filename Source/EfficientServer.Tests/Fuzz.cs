@@ -60,7 +60,7 @@ namespace EfficientServer.Tests
             {
                 // The warning sink grows per corrected knob; clear per iteration
                 // so a long fuzz run stays O(1) memory like the fixtures.
-                ModApi.Warnings.Clear();
+                EsLog.Warnings.Clear();
                 var root = (JObject)seed.DeepClone();
                 Mutate(root, leaves[rng.Next(leaves.Count)], rng);
                 string json = JsonConvert.SerializeObject(root);
@@ -85,7 +85,7 @@ namespace EfficientServer.Tests
                 "structure fuzz: reflected section set covers the knob groups");
             for (int i = 0; i < CombinedIterations; i++)
             {
-                ModApi.Warnings.Clear();
+                EsLog.Warnings.Clear();
                 var root = (JObject)seed.DeepClone();
                 int hits = 1 + rng.Next(4);
                 var done = new HashSet<int>();
@@ -133,7 +133,7 @@ namespace EfficientServer.Tests
 
             for (int i = 0; i < GarbageIterations; i++)
             {
-                ModApi.Warnings.Clear();
+                EsLog.Warnings.Clear();
                 string json = GarbageCase(rng, defaultJson);
                 RunThroughLoadAndKeyScan(check, "garbage iter " + i, json, loadString);
             }
@@ -159,7 +159,7 @@ namespace EfficientServer.Tests
             };
             foreach (string shape in shapeCases)
             {
-                ModApi.Warnings.Clear();
+                EsLog.Warnings.Clear();
                 RunThroughLoadAndKeyScan(check, "shape '" + shape + "'", shape, loadString);
             }
 
@@ -179,7 +179,7 @@ namespace EfficientServer.Tests
             };
             for (int i = 0; i < byteCases.Length; i++)
             {
-                ModApi.Warnings.Clear();
+                EsLog.Warnings.Clear();
                 ServerPerfConfig loaded;
                 try { loaded = loadBytes(byteCases[i]); }
                 catch (Exception ex)
@@ -195,7 +195,7 @@ namespace EfficientServer.Tests
             // corruption shape (crash mid-write). Deterministic, one pass.
             for (int cut = 0; cut <= defaultJson.Length; cut += 37)
             {
-                ModApi.Warnings.Clear();
+                EsLog.Warnings.Clear();
                 RunThroughLoadAndKeyScan(check, "truncate@" + cut, defaultJson.Substring(0, cut), loadString);
             }
         }

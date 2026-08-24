@@ -66,7 +66,7 @@ namespace EfficientServer.Patches
                         if (!_clothWarned)
                         {
                             _clothWarned = true;
-                            ModApi.Warn("AI LOD cloth toggle failed [" + ex.GetType().Name + "]: " + ex.Message
+                            EsLog.Warn("AI LOD cloth toggle failed [" + ex.GetType().Name + "]: " + ex.Message
                                 + " - cloth suppression skipped (LOD scale unaffected)");
                         }
                     }

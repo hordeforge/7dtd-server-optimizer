@@ -10,9 +10,6 @@ namespace EfficientServer
     public class ModApi : IModApi
     {
         public const string HarmonyId = "com.7dtd.efficientserver";
-        // Single source of the mod prefix so console echo and log lines stay
-        // greppable under one tag across all three severity channels.
-        public const string LogPrefix = "[EfficientServer] ";
         public static ServerPerfConfig Config { get; private set; } = new ServerPerfConfig();
         public static string ModPath { get; private set; } = "";
         public static bool Active { get; private set; }
@@ -29,12 +26,12 @@ namespace EfficientServer
                 string cfgPath = ServerPerfConfig.DefaultPathBesideAssembly();
                 bool cfgFound = File.Exists(cfgPath);
                 Config = ServerPerfConfig.Load(cfgPath);
-                Log(cfgFound
+                EsLog.Log(cfgFound
                     ? "config: " + cfgPath
                     : "NO CONFIG FILE at " + cfgPath + " - built-in defaults applied");
                 if (!Config.Enabled)
                 {
-                    Log("disabled by config; patches are installed so reload can enable it");
+                    EsLog.Log("disabled by config; patches are installed so reload can enable it");
                 }
 
                 Active = true;
@@ -69,32 +66,32 @@ namespace EfficientServer
                     if (matched.Count > 0)
                     {
                         methods += matched.Count;
-                        Log($"patched {g.Name} -> " + string.Join(", ",
+                        EsLog.Log($"patched {g.Name} -> " + string.Join(", ",
                             matched.Select(mm => (mm.DeclaringType != null ? mm.DeclaringType.Name + "." : "") + mm.Name).ToArray())
                             + ConfigNote(g));
                     }
                     else
                     {
                         missing++;
-                        Warn($"MISSING TARGET: {g.Name} matched no game method (version drift?) - this optimization is INACTIVE");
+                        EsLog.Warn($"MISSING TARGET: {g.Name} matched no game method (version drift?) - this optimization is INACTIVE");
                     }
                 }
                 string summary = $"init {(missing == 0 ? "OK" : "with " + missing + " MISSING required target(s)")}. "
                     + $"matched methods={methods} dedicatedOnly={Config.DedicatedOnly} path={ModPath}";
-                if (missing == 0) Log(summary); else Warn(summary);
+                if (missing == 0) EsLog.Log(summary); else EsLog.Warn(summary);
 
                 // Post-start setup runs via the sanctioned lifecycle hook, not a
                 // Harmony patch on StartGame (no IL match needed just for timing).
                 try { ModEvents.GameStartDone.RegisterHandler(Patches.GameStartPatch.OnGameStartDone); }
                 catch (Exception ex)
                 {
-                    Warn("GameStartDone register failed [" + ex.GetType().Name + "]: "
+                    EsLog.Warn("GameStartDone register failed [" + ex.GetType().Name + "]: "
                         + ex.Message + " - start-time knobs (mesh budgets, target fps, job workers, skips) will not apply");
                 }
             }
             catch (Exception ex)
             {
-                Error("InitMod failed: " + ex);
+                EsLog.Error("InitMod failed: " + ex);
             }
         }
 
@@ -136,11 +133,11 @@ namespace EfficientServer
                 // the mod prefix (the game's own command-exception dump is unprefixed),
                 // then rethrow so the caller's success echo never prints over a
                 // partial apply.
-                Error("config reload apply failed [" + ex.GetType().Name
+                EsLog.Error("config reload apply failed [" + ex.GetType().Name
                     + "] - new config loaded, some levers may not have applied: " + ex);
                 throw;
             }
-            Log("config reloaded; enabled=" + Config.Enabled
+            EsLog.Log("config reloaded; enabled=" + Config.Enabled
                 + (File.Exists(path) ? ""
                     : " (NO CONFIG FILE at " + path + " - built-in defaults applied)"));
         }
@@ -191,7 +188,7 @@ namespace EfficientServer
             {
                 // Full exception, not just Message: Harmony failures name the failing
                 // IL stage in inner exceptions, and this fires once per group at init.
-                Error($"patch {t.Name} failed: {ex}");
+                EsLog.Error($"patch {t.Name} failed: {ex}");
                 return new List<MethodInfo>();
             }
         }
@@ -206,7 +203,7 @@ namespace EfficientServer
             try { game = Constants.cVersionInformation?.LongString ?? "?"; }
             catch { /* older/newer builds may differ */ }
             bool inc = Config.Gc != null && Config.Gc.Incremental;
-            Log($"versions: mod={mod} Assembly-CSharp={asm} game={game}; "
+            EsLog.Log($"versions: mod={mod} Assembly-CSharp={asm} game={game}; "
                 + $"config(enabled={Config.Enabled}, dedicatedOnly={Config.DedicatedOnly}, "
                 + $"gcGuard={(Config.Gc != null && Config.Gc.SkipForcedCollect)}, gcIncremental={inc})");
         }
@@ -255,37 +252,6 @@ namespace EfficientServer
                 isDedicated = null; // host type not needed to decide
             }
             return ServerPerfConfig.ShouldRunFor(Active, cfg?.Enabled ?? false, cfg?.DedicatedOnly ?? false, isDedicated);
-        }
-
-        public static void Log(string msg)
-        {
-            Emit(global::Log.Out, msg);
-        }
-
-        // Recoverable problems an operator must notice when grepping the log for
-        // WARNING: config corrections, skipped/missing optional targets, failed
-        // applies that fell back to vanilla behavior, and engaged opt-in emergency
-        // levers (governor tier-2 animator emergency, tick-guard entity sheds).
-        public static void Warn(string msg)
-        {
-            Emit(global::Log.Warning, msg);
-        }
-
-        // Failures that leave a patch group INACTIVE or the mod partially broken:
-        // version drift, patch application exceptions, init aborts.
-        public static void Error(string msg)
-        {
-            Emit(global::Log.Error, msg);
-        }
-
-        // The game's Log static writes to the dedicated log file and console; if it
-        // is unavailable (very early init, odd host), fall back to stdout rather
-        // than losing the line.
-        static void Emit(Action<string> sink, string msg)
-        {
-            string line = LogPrefix + msg;
-            try { sink(line); }
-            catch { Console.WriteLine(line); }
         }
     }
 }

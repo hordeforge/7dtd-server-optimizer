@@ -31,7 +31,7 @@ namespace EfficientServer.Patches
                 if (!_probeWarned)
                 {
                     _probeWarned = true;
-                    ModApi.Warn("AI alert check failed [" + ex.GetType().Name + "]: " + ex.Message
+                    EsLog.Warn("AI alert check failed [" + ex.GetType().Name + "]: " + ex.Message
                         + " - every entity now counts as alerted; AI LOD striding/skips and"
                         + " path admission are INACTIVE until restart");
                 }

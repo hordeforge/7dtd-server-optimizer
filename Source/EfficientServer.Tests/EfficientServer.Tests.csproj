@@ -2,7 +2,7 @@
 
   <!--
     Self-contained self-check for Config.Load / Config.Normalize. Config.cs has no
-    game-type dependencies (only ModApi.Log, stubbed here, plus Newtonsoft), so this
+    game-type dependencies (only EsLog.Warn, stubbed here, plus Newtonsoft), so this
     runs natively on the .NET SDK - no net48/Mono host or game DLLs needed. Assert
     harness rather than a test framework so it builds and runs offline.
     Run it with: dotnet run in this project directory.

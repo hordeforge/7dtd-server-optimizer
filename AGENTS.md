@@ -31,7 +31,7 @@ Default config: `DedicatedOnly: true`. Do not turn this into a client overhaul, 
 ## Build / install
 
 ```bash
-make test   # every CI gate: shellcheck + ruff + script syntax + config harness + doc/version consistency
+make test   # every CI gate: shellcheck + ruff + mypy + script syntax + config harness + doc/version consistency
 make build
 make install DS="/path/to/7 Days to Die Dedicated Server"
 make run DS="/path/to/7 Days to Die Dedicated Server"

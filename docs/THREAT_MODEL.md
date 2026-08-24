@@ -30,7 +30,7 @@ write APIs under `Source/EfficientServer/`; only config reads,
 
 | ID | Entry point | Location | Notes |
 |---|---|---|---|
-| E1 | Mod load into game process (`InitMod`) | `Source/EfficientServer/ModApi.cs:21` | Game loads the DLL at startup and calls `InitMod`; Harmony patches install here per group. Post-start setup registers on the sanctioned `GameStartDone` hook, not a patched game method (`ModApi.cs:79`) |
+| E1 | Mod load into game process (`InitMod`) | `Source/EfficientServer/ModApi.cs:18` | Game loads the DLL at startup and calls `InitMod`; Harmony patches install here per group. Post-start setup registers on the sanctioned `GameStartDone` hook, not a patched game method (`ModApi.cs:85`) |
 | E2 | Config JSON file read | `Source/EfficientServer/Config.cs:301` (`Load`), path resolution `Config.cs:487` | Read once at init and again on every `es reload`. Parsed with Newtonsoft.Json (game-bundled); read pinned to UTF-8 (`Config.cs:310`). No file watcher; disk changes apply only via E3 |
 | E3 | Operator console command `es` / `efficientserver` | `Source/EfficientServer/ConsoleCmdEfficientServer.cs:20` (`Execute`) | Subcommands: `reload`, `status`, `animoff`/`animon`, `animstate`, `rigoff`/`rigon`, `benchgod on\|off`. Reachable from the server terminal, the telnet remote console, and in-game clients the game's permission system admits to console commands |
 | E4 | P/Invoke into bundled Boehm GC library | `Source/EfficientServer/GcIncremental.cs:25`, `Source/EfficientServer/GcDiagnostics.cs:20` | `libmonobdwgc-2.0`; flips collector mode, sets pause limit, disables/enables collection, forces collects |
@@ -77,12 +77,12 @@ write APIs under `Source/EfficientServer/`; only config reads,
   (`GcDiagnostics.cs:57`). Caps: warmup 1 h, grow 2 h, heap 24 GiB
   (`Config.cs:463`, `GcDiagnostics.cs:27`). Documented "never enable on a live
   server" (`Config.cs:255`); nothing enforces it. The diagnostic arms only at
-  game start; `es reload` deliberately never re-runs it (`ModApi.cs:117`), so
+  game start; `es reload` deliberately never re-runs it (`ModApi.cs:124`), so
   mid-run config edits need a restart to arm it.
 - Repudiation: corrections and parse failures are logged as WARN with values
-  (`ModApi.Warn`, `ModApi.cs:231`), giving an after-the-fact trail. Reload apply
+  (`EsLog.Warn`, `EsLog.cs:26`), giving an after-the-fact trail. Reload apply
   failures are surfaced and rethrown so no success echo covers a partial apply
-  (`ModApi.cs:129`).
+  (`ModApi.cs:138`).
 
 ### B2: console actor to mod commands
 
@@ -110,15 +110,15 @@ write APIs under `Source/EfficientServer/`; only config reads,
 
 - Elevation of privilege: inherent and accepted; the mod IS privileged code.
   Controls reduce likelihood, not impact: per-group fail-soft patching so one
-  bad target does not kill the rest (`PatchAllSafe`, `ModApi.cs:174`), visible
-  MISSING TARGET detection on version drift (`ModApi.cs:70`), fail-closed
+  bad target does not kill the rest (`PatchAllSafe`, `ModApi.cs:181`), visible
+  MISSING TARGET detection on version drift (`ModApi.cs:76`), fail-closed
   dedicated gating (`ShouldRunFor`, `Config.cs:500`; exception path fails
-  closed, `ModApi.cs:213`) so server-only behavior (including BenchGod) cannot
+  closed, `ModApi.cs:254`) so server-only behavior (including BenchGod) cannot
   activate on an unknown/client host.
 - Single point of failure: `ModApi.ShouldRun()` gates every behavioral patch,
   including damage immunity (`BenchGodPatch.cs:23`). If it ever returned true
   where it must not, several high-impact threats activate at once. It fails
-  closed on exception (`ModApi.cs:213`); treat any future edit to it as
+  closed on exception (`ModApi.cs:254`); treat any future edit to it as
   security-critical.
 - Tampering with game logic: transpiler patches rewrite game IL at runtime
   (e.g. `LayerGridGraph.ScanInternal` node allocation,
@@ -186,8 +186,8 @@ write APIs under `Source/EfficientServer/`; only config reads,
 4. Reload-window drift: an operator edits the config between init and a later
    `es reload`; because the file has no watcher and `reload` re-reads from disk,
    whatever sits in the file at that moment becomes live policy, including
-   levers that were off at boot (`ModApi.ReloadConfig`, `ModApi.cs:92`; late
-   enable of skips/GC incremental is supported behavior, `ModApi.cs:119`).
+   levers that were off at boot (`ModApi.ReloadConfig`, `ModApi.cs:98`; late
+   enable of skips/GC incremental is supported behavior, `ModApi.cs:125`).
    Anyone with write access to the config directory therefore controls policy
    without needing console access, subject to the same clamps.
 
@@ -200,14 +200,14 @@ write APIs under `Source/EfficientServer/`; only config reads,
 | Parse-failure fallback to defaults | B1 malformed input | `Config.cs:334` |
 | Config read pinned to UTF-8 | B1 encoding-dependent misparse across hosts | `Config.cs:310` |
 | Structure-aware + garbage fuzzing of config parsing in CI | B1 parser robustness regressions | `Source/EfficientServer.Tests/Fuzz.cs`, run by `Makefile:71` |
-| Per-group fail-soft Harmony application | B3 partial breakage on version drift | `ModApi.cs:174` (`PatchAllSafe`) |
-| Visible MISSING TARGET init summary | B3 silent target drift | `ModApi.cs:70` |
-| Fail-closed `DedicatedOnly` gate | B3 activation on wrong host type | `Config.cs:500`, `ModApi.cs:213` |
+| Per-group fail-soft Harmony application | B3 partial breakage on version drift | `ModApi.cs:181` (`PatchAllSafe`) |
+| Visible MISSING TARGET init summary | B3 silent target drift | `ModApi.cs:76` |
+| Fail-closed `DedicatedOnly` gate | B3 activation on wrong host type | `Config.cs:500`, `ModApi.cs:254` |
 | One-shot guards on irreversible native flips | B3 repeated/mixed GC modes | `GcIncremental.cs:35`, `GcDiagnostics.cs:45` |
 | Defensive `GC_enable()` on probe failure | B3 permanently-disabled collector | `GcDiagnostics.cs:104` |
-| Reload apply failures surfaced, success echo suppressed | B1/B2 false "reloaded OK" over partial apply | `ModApi.cs:129` |
+| Reload apply failures surfaced, success echo suppressed | B1/B2 false "reloaded OK" over partial apply | `ModApi.cs:138` |
 | State-changing console commands echoed to log | B2 repudiation | `ConsoleCommandUtil.cs:23` |
-| Severity-split logging channels (INFO/WARN/ERROR) | triage of config corrections vs failures | `ModApi.cs:222-241` |
+| Severity-split logging channels (INFO/WARN/ERROR) | triage of config corrections vs failures | `EsLog.cs:15-45` |
 | Emergency levers log as WARNING when engaged | B1/B3 unnoticed combat degradation or entity sheds | `Patches/GovernorPatch.cs:108`, `Patches/TickGuardPatch.cs:94` |
 | Commit-pinned CI actions, unpersisted read-only token, main-scoped push | B6 supply chain | `.github/workflows/ci.yml:6,10,24,29` |
 | Locked-mode restore, SDK pin | B4/B6 dependency drift | `Makefile:70`, `global.json` |
@@ -240,8 +240,8 @@ Checked the docs against the code; results:
 ## Response readiness (notes only)
 
 - Audit trail available for investigation: everything logs through
-  `[EfficientServer]`-prefixed lines into the game log (`ModApi.Emit`,
-  `ModApi.cs:246`) across three severity channels, including config
+  `[EfficientServer]`-prefixed lines into the game log (`EsLog.Emit`,
+  `EsLog.cs:41`) across three severity channels, including config
   corrections, patch failures, MISSING TARGET summaries, engaged emergency
   levers, entity sheds, and (via `ConsoleCommandUtil.Output`) every
   state-changing console command; executed commands generally also appear via

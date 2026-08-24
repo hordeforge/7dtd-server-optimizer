@@ -34,10 +34,11 @@ jobs:
         with:
           cache: true
           cache-dependency-path: Source/EfficientServer.Tests/packages.lock.json
-      # Runners ship shellcheck + python3 but not ruff. Pinned to the exact
-      # version used locally so rule behavior cannot diverge between a green
-      # local run and a red remote one (and vice versa).
+      # Runners ship shellcheck + python3 but not ruff or mypy. Pinned to the
+      # exact versions used locally so rule/checker behavior cannot diverge
+      # between a green local run and a red remote one (and vice versa).
       - run: pipx install ruff==0.16.4
+      - run: pipx install mypy==2.1.0
       - run: make test
 
   coverage-badge:
@@ -54,6 +55,7 @@ jobs:
           cache: true
           cache-dependency-path: Source/EfficientServer.Tests/packages.lock.json
       - run: pipx install ruff==0.16.4
+      - run: pipx install mypy==2.1.0
       - run: make coverage
       - run: python3 scripts/coverage_badge.py TestResults/coverage.cobertura.xml "$RUNNER_TEMP/coverage.svg"
       - name: Publish the badge to the badges branch

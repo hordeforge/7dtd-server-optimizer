@@ -35,6 +35,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 STALE_SUFFIX = ".stale"
@@ -79,7 +80,12 @@ def write_atomic(path: Path, data: str) -> None:
 class ConfigSwap:
     """Backup-modify-restore for selected keys of one JSON config file."""
 
-    def __init__(self, cfg_path: Path, keys: list[tuple[str, ...]], log=print):
+    def __init__(
+        self,
+        cfg_path: Path,
+        keys: list[tuple[str, ...]],
+        log: Callable[..., None] = print,
+    ):
         self.cfg = cfg_path
         self.bak = cfg_path.with_suffix(cfg_path.suffix + ".swap-bak")
         # Accept bare "Key" strings so a missed trailing comma cannot turn a

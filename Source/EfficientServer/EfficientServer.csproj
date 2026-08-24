@@ -39,7 +39,7 @@
       <HintPath>$(GameManagedDir)/Newtonsoft.Json.dll</HintPath>
       <Private>false</Private>
     </Reference>
-    <!-- Provides global::Log (ModApi.Log wraps Log.Out); no using directive
+    <!-- Provides global::Log (EsLog.Log wraps Log.Out); no using directive
          exists for it, so grep cannot see this dependency. -->
     <Reference Include="LogLibrary">
       <HintPath>$(GameManagedDir)/LogLibrary.dll</HintPath>

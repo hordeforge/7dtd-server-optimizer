@@ -157,8 +157,8 @@ def main() -> int:
 
     if fails:
         print("FAIL:", file=sys.stderr)
-        for f in fails:
-            print(f"  {f}", file=sys.stderr)
+        for fail in fails:
+            print(f"  {fail}", file=sys.stderr)
         return 1
     print(f"OK: versions consistent (ModInfo {mi}, Assembly {asm}, dist {di})")
     return 0

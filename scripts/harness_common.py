@@ -82,37 +82,39 @@ def ensure_server_ready(timeout_s: float = 180.0) -> None:
     raise RuntimeError(f"telnet not ready after {timeout_s:.0f}s of probes")
 
 
-def write_path_config(max_cap: int, drop_far: float) -> None:
-    """Rewrite EfficientServer path knobs on disk."""
+def _rewrite_installed_section(section: str, updates: dict[str, object]) -> None:
+    """Set ``updates`` under ``section`` in the installed config, swap-guarded.
+
+    Shared body of every live-file knob rewrite here: snapshot through CFG_SWAP
+    before the first mutation (idempotent; restore happens in main()'s finally),
+    then rewrite atomically so a tool-timeout SIGKILL mid-write cannot strand
+    truncated JSON for the game's config reader or the next run's guard.
+    """
     if not ES_CFG.is_file():
         raise FileNotFoundError(f"missing {ES_CFG}")
-    # Snapshot once per run (idempotent); restore happens in main()'s finally.
     CFG_SWAP.begin()
     cfg = json.loads(ES_CFG.read_text(encoding="utf-8"))
-    pf = cfg.setdefault("Pathfinding", {})
-    pf["MaxPathEnqueuesPerTick"] = max_cap
-    pf["DropPathWhenFarDistSq"] = drop_far
-    # Atomic: these runs are routinely killed by tool timeouts mid-write; a
-    # truncated live JSON would leave the mod booting on built-in defaults and
-    # make the next run quarantine the backup instead of finishing a restore.
+    cfg.setdefault(section, {}).update(updates)
     write_atomic(ES_CFG, json.dumps(cfg, indent=2) + "\n")
+
+
+def write_path_config(max_cap: int, drop_far: float) -> None:
+    """Rewrite EfficientServer path knobs on disk."""
+    _rewrite_installed_section(
+        "Pathfinding",
+        {"MaxPathEnqueuesPerTick": max_cap, "DropPathWhenFarDistSq": drop_far},
+    )
 
 
 def write_diag_config(allow_benchgod: bool) -> None:
     """Rewrite EfficientServer diagnostic knobs (bench-god allow switch).
 
     `es benchgod on` refuses to arm unless Diagnostics.AllowBenchGod is true in
-    the installed config, so the animator harness writes it through the same
-    swap-guarded, atomic path before issuing the console command. The value is
-    restored by CFG_SWAP.restore() on every exit path.
+    the installed config, so the animator harness writes it here before issuing
+    the console command. The value is restored by CFG_SWAP.restore() on every
+    exit path.
     """
-    if not ES_CFG.is_file():
-        raise FileNotFoundError(f"missing {ES_CFG}")
-    CFG_SWAP.begin()
-    cfg = json.loads(ES_CFG.read_text(encoding="utf-8"))
-    diag = cfg.setdefault("Diagnostics", {})
-    diag["AllowBenchGod"] = allow_benchgod
-    write_atomic(ES_CFG, json.dumps(cfg, indent=2) + "\n")
+    _rewrite_installed_section("Diagnostics", {"AllowBenchGod": allow_benchgod})
 
 
 def write_report(prefix: str, report: dict) -> Path:
@@ -132,7 +134,7 @@ def write_report(prefix: str, report: dict) -> Path:
     return out
 
 
-def teardown_bots(bots) -> None:
+def teardown_bots(bots: subprocess.Popen[bytes] | None) -> None:
     """Stop the loadgen bot cohort on every exit path.
 
     A cohort left running keeps loading the server (and the host) until its

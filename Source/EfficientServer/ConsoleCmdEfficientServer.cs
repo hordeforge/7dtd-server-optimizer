@@ -32,7 +32,7 @@ namespace EfficientServer
                     // knobs (mesh budgets, target fps, job workers, dedicated skips,
                     // GC incremental) - single choke point.
                     ModApi.ReloadConfig();
-                    SdtdConsole.Instance.Output(ModApi.LogPrefix + "config reloaded");
+                    SdtdConsole.Instance.Output(EsLog.LogPrefix + "config reloaded");
                     Status();
                     break;
                 case "status":
@@ -54,7 +54,7 @@ namespace EfficientServer
                     break;
                 default:
                     SdtdConsole.Instance.Output(
-                        ModApi.LogPrefix + "unknown subcommand; use: es reload | es status | "
+                        EsLog.LogPrefix + "unknown subcommand; use: es reload | es status | "
                         + "es animoff | es animon | es animstate | es rigoff | es rigon | es benchgod on|off (diagnostics)");
                     break;
             }
@@ -63,23 +63,23 @@ namespace EfficientServer
         static void Status()
         {
             ServerPerfConfig c = ModApi.Config;
-            if (c == null) { SdtdConsole.Instance.Output(ModApi.LogPrefix + "no config"); return; }
+            if (c == null) { SdtdConsole.Instance.Output(EsLog.LogPrefix + "no config"); return; }
             SdtdConsole.Instance.Output(
-                $"{ModApi.LogPrefix}enabled={c.Enabled} dedicatedOnly={c.DedicatedOnly} | "
+                $"{EsLog.LogPrefix}enabled={c.Enabled} dedicatedOnly={c.DedicatedOnly} | "
                 + $"aiLod={c.AiLod.Enabled}(midStride={c.AiLod.MidTickStride}) | "
                 + $"graphEvery={c.Pathfinding.GraphUpdateEveryTicks} rescanSq={c.Pathfinding.MoveRescanThresholdSq.ToString(CultureInfo.InvariantCulture)} "
                 + $"poolInitScan={c.Pathfinding.PoolInitScanNodes} "
                 + $"pathCap={c.Pathfinding.MaxPathEnqueuesPerTick} pathDropFarSq={c.Pathfinding.DropPathWhenFarDistSq.ToString(CultureInfo.InvariantCulture)}");
             SdtdConsole.Instance.Output(
-                $"{ModApi.LogPrefix}fastSend={c.Network.FastSingleTargetSend} stride={c.Network.EntityDistributionEveryTicks} "
+                $"{EsLog.LogPrefix}fastSend={c.Network.FastSingleTargetSend} stride={c.Network.EntityDistributionEveryTicks} "
                 + $"chunkBatch={c.WorldTransfer.ChunkPackagesPerObserverPerTick} "
                 + $"dynamicMesh={c.DynamicMesh.Enabled}(buffer={c.DynamicMesh.PlayerAreaChunkBuffer} regionMs={c.DynamicMesh.MaxRegionLoadMsPerFrame}) | "
                 + $"targetFps={c.Server.TargetFps} jobWorkers={c.Server.JobWorkerCount}");
             SdtdConsole.Instance.Output(
-                $"{ModApi.LogPrefix}governor={c.Governor.Enabled}(overMs={c.Governor.OverBudgetMs.ToString(CultureInfo.InvariantCulture)} healthyMs={c.Governor.HealthyMs.ToString(CultureInfo.InvariantCulture)} animEmergency={c.Governor.AnimatorEmergency}) "
+                $"{EsLog.LogPrefix}governor={c.Governor.Enabled}(overMs={c.Governor.OverBudgetMs.ToString(CultureInfo.InvariantCulture)} healthyMs={c.Governor.HealthyMs.ToString(CultureInfo.InvariantCulture)} animEmergency={c.Governor.AnimatorEmergency}) "
                 + $"tickGuard={c.TickGuard.Enabled}(shedAboveMs={c.TickGuard.ShedAboveMs.ToString(CultureInfo.InvariantCulture)} batch={c.TickGuard.ShedBatch} minKept={c.TickGuard.MinEnemiesKept})");
             SdtdConsole.Instance.Output(
-                $"{ModApi.LogPrefix}gcGuard={c.Gc.SkipForcedCollect}(ceilingMB={c.Gc.SafetyCollectAboveMB} incremental={c.Gc.Incremental}) | "
+                $"{EsLog.LogPrefix}gcGuard={c.Gc.SkipForcedCollect}(ceilingMB={c.Gc.SafetyCollectAboveMB} incremental={c.Gc.Incremental}) | "
                 + $"animatorLod={c.AnimatorLod.Enabled}(farStride={c.AnimatorLod.FarStride}) "
                 + $"crowdCollision={c.CrowdCollisionLod.Enabled}(every={c.CrowdCollisionLod.ResolveEveryNTicks}) | "
                 + $"skip(music={c.SkipOnDedicated.DynamicMusicSystem} waterSplash={c.SkipOnDedicated.WaterSplashParticles} "
@@ -96,7 +96,7 @@ namespace EfficientServer
             // path the governor tier-2 uses. GAMEPLAY DEGRADES WHILE OFF (timer
             // attack cadence, supplementary movement) - bench or emergency only.
             World world = GameManager.Instance != null ? GameManager.Instance.World : null;
-            if (world == null) { SdtdConsole.Instance.Output(ModApi.LogPrefix + "no world"); return; }
+            if (world == null) { SdtdConsole.Instance.Output(EsLog.LogPrefix + "no world"); return; }
             if (sub == "animoff")
             {
                 Patches.AnimatorEmergency.Enter();
@@ -117,7 +117,7 @@ namespace EfficientServer
         {
             // Per-zombie animator truth table for debugging revival wedges.
             World world = GameManager.Instance != null ? GameManager.Instance.World : null;
-            if (world == null) { SdtdConsole.Instance.Output(ModApi.LogPrefix + "no world"); return; }
+            if (world == null) { SdtdConsole.Instance.Output(EsLog.LogPrefix + "no world"); return; }
             int movementHash = Animator.StringToHash("MovementState");
             int aliveHash = Animator.StringToHash("IsAlive");
             int walkHash = Animator.StringToHash("WalkType");
@@ -161,7 +161,7 @@ namespace EfficientServer
             // per-frame cost without new assembly references. Visual-only per RE
             // (RagdollWhenHit deliberately excluded: touches physics).
             World world = GameManager.Instance != null ? GameManager.Instance.World : null;
-            if (world == null) { SdtdConsole.Instance.Output(ModApi.LogPrefix + "no world"); return; }
+            if (world == null) { SdtdConsole.Instance.Output(EsLog.LogPrefix + "no world"); return; }
             if (sub == "rigoff")
             {
                 _rigDisabled.Clear();
@@ -218,7 +218,7 @@ namespace EfficientServer
             // A real toggle is audited in the server log (the flag is invisible
             // in game state); a bare `es benchgod` stays a read-only peek.
             if (changed) ConsoleCommandUtil.Output(state);
-            else SdtdConsole.Instance.Output(ModApi.LogPrefix + state + " (use on|off)");
+            else SdtdConsole.Instance.Output(EsLog.LogPrefix + state + " (use on|off)");
         }
 
         // Live state the config dump above cannot show: which levers are engaged
@@ -228,13 +228,13 @@ namespace EfficientServer
         static void OutputRuntime()
         {
             SdtdConsole.Instance.Output(
-                $"{ModApi.LogPrefix}runtime: modActive={ModApi.ShouldRun()} "
+                $"{EsLog.LogPrefix}runtime: modActive={ModApi.ShouldRun()} "
                 + $"governorTier={Patches.GovernorPatch.Level} tickEmaMs={Patches.GovernorPatch.EmaMs.ToString("F1", CultureInfo.InvariantCulture)} "
                 + $"animatorEmergency={Patches.AnimatorEmergency.Active} | "
                 + $"gcSafetyCollects={Patches.GcGuardPatch.SafetyCollects} "
                 + $"tickGuardShedTotal={Patches.TickGuardPatch.ShedTotal}");
             SdtdConsole.Instance.Output(
-                ModApi.LogPrefix + "runtime: pathDroppedCap=" + Patches.PathAdmissionPatch.DroppedCapTotal
+                EsLog.LogPrefix + "runtime: pathDroppedCap=" + Patches.PathAdmissionPatch.DroppedCapTotal
                 + " pathDroppedFar=" + Patches.PathAdmissionPatch.DroppedFarTotal
                 + " | tasksSkippedFar=" + Patches.UpdateTasksLodPatch.SkippedFarTotal
                 + " tasksStridedOff=" + Patches.UpdateTasksLodPatch.StridedOffTotal);

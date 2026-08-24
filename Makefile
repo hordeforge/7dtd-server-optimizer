@@ -25,12 +25,17 @@ endif
 # ci.yml steps plus README.md, like global.json's SDK pin.
 RUFF_VERSION := 0.16.4
 
+# Exact mypy pin, mirrored by the `pipx install mypy==` step in
+# .github/workflows/ci.yml. Same rationale as RUFF_VERSION: checker behavior
+# diverges between versions, so the type gate must be identical on both sides.
+MYPY_VERSION := 2.1.0
+
 .PHONY: help build build-mcs test coverage install uninstall run clean package verify-reproducible
 help:
 	@echo "EfficientServer: Harmony optimization mod for 7 Days to Die dedicated servers"
 	@echo
 	@echo "Contributor loop (works without a game install):"
-	@echo "  make test              Every CI gate: shellcheck + ruff +"
+	@echo "  make test              Every CI gate: shellcheck + ruff + mypy +"
 	@echo "                         script syntax + config harness + doc/version"
 	@echo "  make clean             Remove dist/ and bin/obj build outputs"
 	@echo
@@ -71,12 +76,20 @@ test:
 	  echo "ERROR: make test needs ruff exactly $(RUFF_VERSION), matching .github/workflows/ci.yml; found $$(ruff --version 2>/dev/null)." >&2; \
 	  echo "  Rule behavior diverges between versions, so CI and local runs must agree:" >&2; \
 	  echo "  uv tool install --force ruff=$(RUFF_VERSION) (or pipx install --force ruff=$(RUFF_VERSION))." >&2; exit 1; fi
+	@if ! command -v mypy >/dev/null 2>&1; then \
+	  echo "ERROR: make test needs mypy $(MYPY_VERSION) (type gate for scripts/*.py, config in mypy.ini)." >&2; \
+	  echo "  Install the pinned version: uv tool install mypy=$(MYPY_VERSION) (or pipx install mypy=$(MYPY_VERSION)) and rerun make test." >&2; exit 127; fi
+	@if [ "$$(mypy --version 2>/dev/null | awk '{print $$2}')" != "$(MYPY_VERSION)" ]; then \
+	  echo "ERROR: make test needs mypy exactly $(MYPY_VERSION), matching .github/workflows/ci.yml; found $$(mypy --version 2>/dev/null)." >&2; \
+	  echo "  Checker behavior diverges between versions, so CI and local runs must agree:" >&2; \
+	  echo "  uv tool install --force mypy=$(MYPY_VERSION) (or pipx install --force mypy=$(MYPY_VERSION))." >&2; exit 1; fi
 	@if ! command -v dotnet >/dev/null 2>&1; then \
 	  echo "ERROR: make test needs the .NET SDK pinned by global.json (8.0 band), but dotnet is not on PATH." >&2; \
 	  echo "  A local SDK in ~/.cache/dotnet-sdk or ~/.dotnet is picked up automatically; otherwise install the SDK and rerun make test." >&2; exit 127; fi
 # -x follows sourced files so checks see through `. ./lib.sh` style sharing.
 	shellcheck -x $(wildcard $(ROOT)/scripts/*.sh)
 	ruff check $(ROOT)/scripts
+	mypy $(ROOT)/scripts
 # Stdlib-only syntax gate for the scripts make test never executes
 # (validate_*.py / measure_es_onoff.py need a live server). Bytecode lands in
 # scripts/__pycache__, which is gitignored.

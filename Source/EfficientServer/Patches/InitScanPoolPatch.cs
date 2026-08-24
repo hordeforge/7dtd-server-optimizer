@@ -61,7 +61,7 @@ namespace EfficientServer.Patches
                     yield return ins;
                 }
             }
-            ModApi.Log("InitScanPoolPatch: rerouted " + swapped + " LevelGridNode newarr");
+            EsLog.Log("InitScanPoolPatch: rerouted " + swapped + " LevelGridNode newarr");
             if (swapped == 0)
                 throw new InvalidOperationException(
                     "InitScanPoolPatch: `newarr LevelGridNode` not found in ScanInternal; "

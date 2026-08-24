@@ -93,7 +93,7 @@ namespace EfficientServer.Patches
             // CooldownTicks - the channel an operator greps when players report
             // vanished hordes.
             // Invariant floats: same log-parsing convention as the governor lines.
-            ModApi.Warn($"TickGuard: tick EMA {emaMs.ToString("F1", CultureInfo.InvariantCulture)}ms > "
+            EsLog.Warn($"TickGuard: tick EMA {emaMs.ToString("F1", CultureInfo.InvariantCulture)}ms > "
                 + $"{cfg.ShedAboveMs.ToString(CultureInfo.InvariantCulture)}ms - shed {shed} "
                 + $"farthest enemies ({enemies} -> {enemies - shed}, lifetime {ShedTotal})");
             Scratch.Clear();

@@ -86,7 +86,7 @@ def sample_health(label: str, seconds: float = SAMPLE_S) -> dict:
             alives.append(float(h["entityAlives"]))
         if i + 1 < n:
             time.sleep(max(0.5, seconds / n))
-    def avg(xs):
+    def avg(xs: list[float]) -> float | None:
         return round(sum(xs) / len(xs), 2) if xs else None
     out = {
         "label": label,

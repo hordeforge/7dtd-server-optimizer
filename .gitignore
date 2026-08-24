@@ -8,4 +8,6 @@ TestResults/
 /server/logs/
 # Python bytecode from ad-hoc script runs
 __pycache__/
+# Type-checker cache from local mypy runs
+.mypy_cache/
 *.lock

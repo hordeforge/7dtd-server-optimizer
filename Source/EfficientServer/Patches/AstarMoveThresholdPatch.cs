@@ -50,7 +50,7 @@ namespace EfficientServer.Patches
                     yield return ins;
                 }
             }
-            ModApi.Log("AstarMoveThresholdPatch: rerouted " + swapped + " rescan dead-zone constant(s)");
+            EsLog.Log("AstarMoveThresholdPatch: rerouted " + swapped + " rescan dead-zone constant(s)");
             // Matched-but-untransformed is a silent failure; fail loudly on drift so
             // it surfaces as MISSING rather than pretending the threshold is applied.
             if (swapped == 0)

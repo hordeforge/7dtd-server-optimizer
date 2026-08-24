@@ -10,7 +10,7 @@ using System.Threading;
 // so tests can pin which channel each config problem is reported on.
 namespace EfficientServer
 {
-    internal static class ModApi
+    internal static class EsLog
     {
         public static readonly List<string> Warnings = new List<string>();
 
@@ -65,7 +65,7 @@ namespace EfficientServer.Tests
         // Load with a clean warning sink so channel assertions see only this file.
         static ServerPerfConfig LoadTempTracked(string json)
         {
-            ModApi.Warnings.Clear();
+            EsLog.Warnings.Clear();
             return LoadTemp(json);
         }
 
@@ -140,11 +140,11 @@ namespace EfficientServer.Tests
                     catch { stillReadable = false; }
                     if (!stillReadable)
                     {
-                        ModApi.Warnings.Clear();
+                        EsLog.Warnings.Clear();
                         var cfg = ServerPerfConfig.Load(p);
                         Check(cfg != null && cfg.Enabled,
                             "unreadable config file -> defaults (fail-soft like parse errors)");
-                        Check(ModApi.Warnings.Count == 1 && ModApi.Warnings[0].StartsWith("Config load failed ["),
+                        Check(EsLog.Warnings.Count == 1 && EsLog.Warnings[0].StartsWith("Config load failed ["),
                             "unreadable config file -> one WARNING naming the exception type");
                     }
                 }
@@ -175,9 +175,9 @@ namespace EfficientServer.Tests
             // edited outside its own clamp would otherwise log "config corrected" on
             // every fresh install and silently shift the knob.
             var defNorm = new ServerPerfConfig();
-            ModApi.Warnings.Clear();
+            EsLog.Warnings.Clear();
             defNorm.Normalize();
-            Check(ModApi.Warnings.Count == 0, "defaults need no normalization (silent no-op)");
+            Check(EsLog.Warnings.Count == 0, "defaults need no normalization (silent no-op)");
 
             // Missing file -> defaults, no throw.
             var miss = ServerPerfConfig.Load(Path.Combine(Path.GetTempPath(), "does_not_exist_" + Guid.NewGuid().ToString("N") + ".json"));
@@ -197,7 +197,7 @@ namespace EfficientServer.Tests
             Check(bad != null && bad.Enabled, "malformed json -> defaults");
             // The failure must surface on the WARNING channel (operators grep the
             // dedicated log for WARNING/ERROR; info-level config failures vanish).
-            Check(ModApi.Warnings.Count == 1 && ModApi.Warnings[0].StartsWith("Config load failed ["),
+            Check(EsLog.Warnings.Count == 1 && EsLog.Warnings[0].StartsWith("Config load failed ["),
                 "malformed json -> one WARNING naming the exception type");
 
             // Non-object value for a section key: deserialization throws ->
@@ -210,7 +210,7 @@ namespace EfficientServer.Tests
             // dedicated defaults branch, silently (valid JSON, so not a parse error).
             var docNull = LoadTempTracked("null");
             Check(docNull != null && docNull.Enabled, "whole-document null -> defaults");
-            Check(ModApi.Warnings.Count == 0, "whole-document null -> no warning (not malformed)");
+            Check(EsLog.Warnings.Count == 0, "whole-document null -> no warning (not malformed)");
 
             // Empty object -> defaults filled.
             var empty = LoadTemp("{}");
@@ -275,7 +275,7 @@ namespace EfficientServer.Tests
             var typo = LoadTempTracked("{\"Pathfinding\":{\"GraphUpdateEveryTick\":8}}");
             Check(typo != null && typo.Pathfinding.GraphUpdateEveryTicks == 4,
                 "typo'd knob keeps default (and is logged), other fields unaffected");
-            Check(ModApi.Warnings.Any(w => w.Contains("unknown key 'Pathfinding.GraphUpdateEveryTick'")),
+            Check(EsLog.Warnings.Any(w => w.Contains("unknown key 'Pathfinding.GraphUpdateEveryTick'")),
                 "typo'd knob -> WARNING names the dotted key");
             var caseBind = LoadTemp("{\"ailod\":{\"enabled\":false}}");
             Check(caseBind.AiLod.Enabled == false,
@@ -287,7 +287,7 @@ namespace EfficientServer.Tests
             // Normalize: GraphUpdateEveryTicks clamps [1,200].
             var big = LoadTempTracked("{\"Pathfinding\":{\"GraphUpdateEveryTicks\":1000000}}");
             Check(big.Pathfinding.GraphUpdateEveryTicks == 200, "GraphUpdateEveryTicks 1e6 -> 200");
-            Check(ModApi.Warnings.Any(w => w.StartsWith("config corrected Pathfinding.GraphUpdateEveryTicks")
+            Check(EsLog.Warnings.Any(w => w.StartsWith("config corrected Pathfinding.GraphUpdateEveryTicks")
                 && w.Contains("1000000") && w.Contains("200")),
                 "out-of-range knob -> WARNING records old and corrected value");
             var neg = LoadTemp("{\"Pathfinding\":{\"GraphUpdateEveryTicks\":-5}}");
@@ -362,7 +362,7 @@ namespace EfficientServer.Tests
                 CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("de-DE");
                 var loc = LoadTempTracked("{\"Gc\":{\"SafetyCollectRamFraction\":1.5}}");
                 Check(loc.Gc.SafetyCollectRamFraction == 0.95f, "comma-decimal locale: 1.5 still clamps to 0.95");
-                Check(ModApi.Warnings.Count == 1 && ModApi.Warnings[0].Contains("1.5 -> 0.95"),
+                Check(EsLog.Warnings.Count == 1 && EsLog.Warnings[0].Contains("1.5 -> 0.95"),
                     "'config corrected' formats floats with dot decimals under a comma-decimal host locale");
             }
             finally
@@ -834,7 +834,7 @@ namespace EfficientServer.Tests
             // tunes, so each fixture must also load with ZERO "config corrected"
             // warnings. Sibling-linked knobs stay mutually consistent (HealthyMs <=
             // OverBudgetMs-5, scales <= parent, ShedAboveMs over the governor band).
-            ModApi.Warnings.Clear();
+            EsLog.Warnings.Clear();
             var atMax = LoadTemp(
                 "{\"AiLod\":{\"FullAiDistSq\":1000000,\"MediumAiDistSq\":1000000,\"SkipTasksFarDistSq\":4000000," +
                 "\"MidTickStride\":20,\"FullScale\":1,\"MediumScale\":1,\"FarScale\":1}," +
@@ -880,9 +880,9 @@ namespace EfficientServer.Tests
                 && atMax.Gc.IncrementalPauseTargetMs == 10000, "Gc upper endpoints preserved verbatim");
             Check(atMax.Diagnostics.WarmupSeconds == 3600 && atMax.Diagnostics.GrowSeconds == 7200,
                 "Diagnostics upper endpoints preserved verbatim");
-            Check(ModApi.Warnings.Count == 0, "upper endpoints load without any 'config corrected' warning");
+            Check(EsLog.Warnings.Count == 0, "upper endpoints load without any 'config corrected' warning");
 
-            ModApi.Warnings.Clear();
+            EsLog.Warnings.Clear();
             var atMin = LoadTemp(
                 "{\"AiLod\":{\"FullAiDistSq\":1,\"MediumAiDistSq\":1,\"SkipTasksFarDistSq\":1," +
                 "\"MidTickStride\":1,\"FullScale\":0,\"MediumScale\":0,\"FarScale\":0}," +
@@ -928,7 +928,7 @@ namespace EfficientServer.Tests
                 && atMin.Gc.IncrementalPauseTargetMs == 0, "Gc lower endpoints preserved verbatim");
             Check(atMin.Diagnostics.WarmupSeconds == 0 && atMin.Diagnostics.GrowSeconds == 1,
                 "Diagnostics lower endpoints preserved verbatim");
-            Check(ModApi.Warnings.Count == 0, "lower endpoints load without any 'config corrected' warning");
+            Check(EsLog.Warnings.Count == 0, "lower endpoints load without any 'config corrected' warning");
 
             // Idempotency: re-normalizing an already-normalized config must be
             // silent and value-stable. Every FiniteRange/IntRange fallback is
@@ -941,10 +941,10 @@ namespace EfficientServer.Tests
                 "\"Governor\":{\"OverBudgetMs\":20,\"HealthyMs\":NaN}}");
             Check(corrected.Pathfinding.GraphUpdateEveryTicks == 200 && corrected.Governor.HealthyMs == 15f,
                 "idempotency setup: first normalize corrected both out-of-range knobs");
-            Check(ModApi.Warnings.Count > 0, "idempotency setup: first normalize logged the corrections");
-            ModApi.Warnings.Clear();
+            Check(EsLog.Warnings.Count > 0, "idempotency setup: first normalize logged the corrections");
+            EsLog.Warnings.Clear();
             corrected.Normalize();
-            Check(ModApi.Warnings.Count == 0, "re-normalize is silent (no repeated 'config corrected' warnings)");
+            Check(EsLog.Warnings.Count == 0, "re-normalize is silent (no repeated 'config corrected' warnings)");
             Check(corrected.Pathfinding.GraphUpdateEveryTicks == 200 && corrected.Governor.HealthyMs == 15f,
                 "re-normalize keeps the already-corrected values stable");
 

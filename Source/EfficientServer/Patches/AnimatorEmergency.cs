@@ -71,7 +71,7 @@ namespace EfficientServer.Patches
             }
             PruneDespawnedSavedModes();
             if (!Active || swept > 0)
-                ModApi.Log($"Governor: animator emergency {(Active ? "sweep" : "ENTER")} - CullCompletely on {swept} rigs (saved={SavedModes.Count})");
+                EsLog.Log($"Governor: animator emergency {(Active ? "sweep" : "ENTER")} - CullCompletely on {swept} rigs (saved={SavedModes.Count})");
             Active = true;
         }
 
@@ -88,7 +88,7 @@ namespace EfficientServer.Patches
             if (StaleIds.Count == 0) return;
             for (int i = 0; i < StaleIds.Count; i++)
                 SavedModes.Remove(StaleIds[i]);
-            ModApi.Log("Governor: animator emergency pruned " + StaleIds.Count
+            EsLog.Log("Governor: animator emergency pruned " + StaleIds.Count
                 + " saved mode(s) for despawned rigs (saved=" + SavedModes.Count + ")");
         }
 
@@ -98,7 +98,7 @@ namespace EfficientServer.Patches
             int restored = RestoreAllEnemyAnimators();
             SavedModes.Clear();
             Active = false;
-            ModApi.Log($"Governor: animator emergency EXIT - restored cullingMode on {restored} rigs");
+            EsLog.Log($"Governor: animator emergency EXIT - restored cullingMode on {restored} rigs");
         }
 
         /// <summary>

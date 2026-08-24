@@ -95,14 +95,19 @@ def cluster_players() -> list[int]:
 def main() -> int:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     B.PLAYERS, B.GAMESTAGE = PLAYERS, GAMESTAGE
+    # Nested containers are built here and embedded by reference so the
+    # verdict/phase writes below index a precisely typed dict instead of
+    # reaching through report's object-valued slots.
+    phases: dict[str, dict] = {}
+    verdicts: dict[str, str] = {}
     report = {
         "players": PLAYERS,
         "gamestage": GAMESTAGE,
         "path_cap": PATH_CAP,
         "path_drop_far_sq": PATH_DROP,
         "mode": "bloodmoon",
-        "phases": {},
-        "verdicts": {},
+        "phases": phases,
+        "verdicts": verdicts,
     }
     bots = None
     try:
@@ -118,9 +123,9 @@ def main() -> int:
         report["joined"] = joined
         if joined < max(1, int(PLAYERS * 0.5)):
             log(f"FAIL: only {joined}/{PLAYERS} joined")
-            report["verdicts"]["join"] = "FAIL"
+            verdicts["join"] = "FAIL"
             return 2
-        report["verdicts"]["join"] = "PASS"
+        verdicts["join"] = "PASS"
         B.set_gamestage(GAMESTAGE)
 
         # Cluster bots into one party so the blood-moon horde scales (party GS +
@@ -139,13 +144,13 @@ def main() -> int:
         write_path_config(0, 0.0)
         B.telnet(["es reload"], settle=1.5)
         base = sample_health("path_baseline")
-        report["phases"]["path_baseline"] = base
+        phases["path_baseline"] = base
         log(f"  path baseline: {base}")
 
         write_path_config(PATH_CAP, PATH_DROP)
         B.telnet(["es reload"], settle=1.5)
         on = sample_health("path_admission_on")
-        report["phases"]["path_admission_on"] = on
+        phases["path_admission_on"] = on
         log(f"  path on ({PATH_CAP}/{PATH_DROP}): {on}")
 
         fb, fo = base.get("frameMs_avg"), on.get("frameMs_avg")
@@ -155,12 +160,12 @@ def main() -> int:
             # Higher alive on the 'on' phase = load imbalance, not a regression.
             da = (on.get("entityAlives") or 0) - (base.get("entityAlives") or 0)
             report["alive_delta"] = da
-            report["verdicts"]["path_frame"] = (
+            verdicts["path_frame"] = (
                 "PASS" if delta < -2 else ("noise_or_load_imbalance" if da > 0 else "no_win")
             )
         else:
-            report["verdicts"]["path_frame"] = "no_health_data"
-        log(f"=== VERDICTS: {json.dumps(report['verdicts'])} ===")
+            verdicts["path_frame"] = "no_health_data"
+        log(f"=== VERDICTS: {json.dumps(verdicts)} ===")
     except KeyboardInterrupt:
         return 130
     except Exception as e:
@@ -169,7 +174,7 @@ def main() -> int:
         # restores the config and writes the report.
         log(f"FAIL exception: {e}")
         report["error"] = repr(e)
-        report["verdicts"]["overall"] = "ERROR"
+        verdicts["overall"] = "ERROR"
         return 4
     finally:
         # Isolated so a restore failure cannot skip bot teardown (a leaked

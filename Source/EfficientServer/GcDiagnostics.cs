@@ -1,7 +1,6 @@
 using System;
 using System.Diagnostics;
 using System.Globalization;
-using System.Runtime.InteropServices;
 using System.Threading;
 
 namespace EfficientServer
@@ -16,20 +15,13 @@ namespace EfficientServer
     /// </summary>
     internal static class GcDiagnostics
     {
-        const string Lib = "monobdwgc-2.0";
-
-        [DllImport(Lib)] static extern void GC_disable();
-        [DllImport(Lib)] static extern void GC_enable();
-        [DllImport(Lib)] static extern void GC_gcollect();
-        [DllImport(Lib)] static extern UIntPtr GC_get_heap_size();
-
         // Hard safety cap: abort the grow + collect if the heap passes this, so a
         // misconfigured run cannot exhaust host RAM.
         const ulong SafetyCapBytes = 24UL * 1024 * 1024 * 1024;
 
         static ulong HeapBytes()
         {
-            try { return (ulong)GC_get_heap_size(); }
+            try { return (ulong)BoehmNative.GC_get_heap_size(); }
             catch { return 0UL; }
         }
 
@@ -48,13 +40,13 @@ namespace EfficientServer
             // GC_disable/GC_enable refcounts against the single collector.
             if (_started)
             {
-                ModApi.Log("GC MEGAPAUSE diagnostic already armed this process; not re-arming");
+                EsLog.Log("GC MEGAPAUSE diagnostic already armed this process; not re-arming");
                 return;
             }
             _started = true;
             var t = new Thread(() => RunMegapause(cfg)) { IsBackground = true, Name = "es-gc-megapause" };
             t.Start();
-            ModApi.Log("GC MEGAPAUSE diagnostic armed (DIAGNOSTIC ONLY): warmup="
+            EsLog.Log("GC MEGAPAUSE diagnostic armed (DIAGNOSTIC ONLY): warmup="
                 + cfg.WarmupSeconds + "s grow=" + cfg.GrowSeconds + "s");
         }
 
@@ -70,9 +62,9 @@ namespace EfficientServer
                 // long math: seconds -> ms must not wrap int before Sleep sees it.
                 Thread.Sleep((int)Math.Min(int.MaxValue, Math.Max(0, cfg.WarmupSeconds) * 1000L));
                 ulong heap0 = HeapBytes();
-                GC_disable();
+                BoehmNative.GC_disable();
                 gcDisabled = true;
-                ModApi.Log("GC MEGAPAUSE: collector DISABLED at heap=" + Gb(heap0) + "; growing under load...");
+                EsLog.Log("GC MEGAPAUSE: collector DISABLED at heap=" + Gb(heap0) + "; growing under load...");
 
                 int grow = Math.Max(1, cfg.GrowSeconds);
                 var sw = Stopwatch.StartNew();
@@ -81,10 +73,10 @@ namespace EfficientServer
                 {
                     Thread.Sleep(10000);
                     ulong h = HeapBytes();
-                    ModApi.Log("GC MEGAPAUSE: +" + (int)sw.Elapsed.TotalSeconds + "s heap=" + Gb(h));
+                    EsLog.Log("GC MEGAPAUSE: +" + (int)sw.Elapsed.TotalSeconds + "s heap=" + Gb(h));
                     if (h >= SafetyCapBytes)
                     {
-                        ModApi.Warn("GC MEGAPAUSE: SAFETY CAP hit (" + Gb(h) + "), collecting early");
+                        EsLog.Warn("GC MEGAPAUSE: SAFETY CAP hit (" + Gb(h) + "), collecting early");
                         aborted = true;
                         break;
                     }
@@ -93,16 +85,16 @@ namespace EfficientServer
                 ulong heapBefore = HeapBytes();
                 // Re-enable BEFORE collecting: Boehm no-ops GC_gcollect while the
                 // disable count is > 0, so collecting first measures a 0 ms no-op.
-                GC_enable();
+                BoehmNative.GC_enable();
                 gcDisabled = false;
                 var pause = Stopwatch.StartNew();
-                GC_gcollect();               // single forced full STW collect of the grown heap
+                BoehmNative.GC_gcollect();   // single forced full STW collect of the grown heap
                 pause.Stop();
                 ulong heapAfter = HeapBytes();
 
                 double freedGb = (heapBefore > heapAfter)
                     ? (heapBefore - heapAfter) / (1024.0 * 1024.0 * 1024.0) : 0.0;
-                ModApi.Log("GC MEGAPAUSE RESULT: "
+                EsLog.Log("GC MEGAPAUSE RESULT: "
                     + "grow=" + (int)sw.Elapsed.TotalSeconds + "s"
                     + (aborted ? " (safety-capped)" : "")
                     + " heap " + Gb(heap0) + " -> " + Gb(heapBefore) + " -> " + Gb(heapAfter)
@@ -117,13 +109,13 @@ namespace EfficientServer
                 if (gcDisabled)
                 {
                     gcDisabled = false;
-                    try { GC_enable(); } catch { }
+                    try { BoehmNative.GC_enable(); } catch { }
                 }
                 // Name the type + library: DllNotFoundException (host OS ships the
                 // Boehm lib under another name) reads differently from a missing
                 // entry point, and the operator needs to know which one fired.
-                ModApi.Warn("GC MEGAPAUSE failed [" + ex.GetType().Name
-                    + " via " + Lib + "]: " + ex.Message);
+                EsLog.Warn("GC MEGAPAUSE failed [" + ex.GetType().Name
+                    + " via " + BoehmNative.Lib + "]: " + ex.Message);
             }
         }
     }

@@ -34,6 +34,7 @@ import os
 import re
 import sys
 import time
+from collections.abc import Iterable
 from pathlib import Path
 
 from es_cfg_guard import ConfigSwap, write_atomic
@@ -62,17 +63,20 @@ GAMESTAGE = int(os.environ.get("BM_GAMESTAGE", "250"))
 SAMPLE_S = float(os.environ.get("BM_HOLD_SAMPLE_S", "35"))
 SKIP_START = os.environ.get("SKIP_SERVER_START", "0") == "1"
 ARM = os.environ.get("ES_ARM", "")  # "on" or "off" = matched-arm mode (fresh server per arm)
+# One spelling of "matched-arm mode is active"; ARM is consulted for which arm,
+# this for whether arm mode applies at all.
+ARM_MODE = ARM in ("on", "off")
 
 # Toggle-mode crash safety: Enabled is snapshotted before the first rewrite
 # and put back on any exit path. A backup left by a killed run is finished or
 # quarantined by the NEXT run (es_cfg_guard) instead of clobbering later edits.
 # Matched-arm mode never snapshots: the caller owns the config between arms.
 ES_SWAP = ConfigSwap(ES_CFG, [("Enabled",)], log=log)
-# Where the loadgen-booted server writes its Unity log: mirror the sibling's
-# own resolution exactly (start_dedicated_prefab.sh USERDATA), NOT
+# Directory the loadgen-booted server writes its Unity log into: mirror the
+# sibling's own resolution exactly (start_dedicated_prefab.sh USERDATA), NOT
 # SEVENDTD_LOGDIR (that names run_server.sh's output dir, which has no effect
 # on a loadgen-booted server).
-LOG_GLOB = Path(
+LOG_DIR = Path(
     os.environ.get("RE_DEDICATED_USERDATA")
     or str(Path.home() / ".cache" / "7dtd-loadgen")
 )
@@ -84,10 +88,10 @@ def latest_server_log() -> Path | None:
     # Pick newest by mtime, not name sort: the zero-padded timestamp sorts
     # chronologically only within one world-name prefix, so logs from different
     # world names interleaved in the same dir would misorder by name.
-    def by_mtime(paths):
+    def by_mtime(paths: Iterable[Path]) -> list[Path]:
         return sorted(paths, key=lambda p: p.stat().st_mtime)
 
-    cands = by_mtime(LOG_GLOB.glob("server_prefab_*.txt")) if LOG_GLOB.is_dir() else []
+    cands = by_mtime(LOG_DIR.glob("server_prefab_*.txt")) if LOG_DIR.is_dir() else []
     if not cands:
         cands = by_mtime(DS.glob("logs/server_prefab_*.txt"))
     return cands[-1] if cands else None
@@ -155,6 +159,12 @@ def read_apm(logf: Path) -> dict | None:
                         "tickAvg": float(m.group(3)),
                         "spikes": int(m.group(4)),
                     }
+        else:
+            # No newline in this append: park the merged buffer (old carry
+            # plus new bytes) back as the tail, or the offset above would
+            # skip these bytes forever and truncate the line once it does
+            # complete in a later append.
+            st["tail"] = data
     return st["last"]
 
 
@@ -230,19 +240,24 @@ def set_config_enabled(on: bool, live_reload: bool) -> None:
 def main() -> int:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     B.PLAYERS, B.ZOMBIES, B.GAMESTAGE = PLAYERS, ZOMBIES, GAMESTAGE
-    report = {"players": PLAYERS, "zombies": ZOMBIES, "gamestage": GAMESTAGE, "phases": {}}
+    # Embedded by reference so the phase writes below index a precisely typed
+    # dict instead of reaching through report's object-valued slots. Values are
+    # nullable on purpose: sample_apm returns None when no APM window was read,
+    # and the report must record that absence rather than drop the phase.
+    phases: dict[str, dict | None] = {}
+    report = {"players": PLAYERS, "zombies": ZOMBIES, "gamestage": GAMESTAGE, "phases": phases}
     bots = None
     code = 0
     try:
         # Toggle mode: snapshot Enabled before anything rewrites it. Arm mode
         # leaves the config to the caller, but still resolves any backup a
         # killed earlier run left behind so it cannot fire much later.
-        if ARM in ("on", "off"):
+        if ARM_MODE:
             ES_SWAP.recover()
         else:
             ES_SWAP.begin()
         if not SKIP_START:
-            if ARM in ("on", "off"):
+            if ARM_MODE:
                 set_config_enabled(ARM == "on", live_reload=False)
             B.start_server()
         ensure_server_ready()
@@ -265,7 +280,7 @@ def main() -> int:
         spawned = B.spawn_endgame(ZOMBIES)
         report["spawned"] = spawned
 
-        if ARM in ("on", "off"):
+        if ARM_MODE:
             # Matched-arm mode: fresh server booted with this arm's Enabled,
             # one sample, no toggle. Two runs (ES_ARM=on / ES_ARM=off) give the
             # canonical fresh-server-per-arm comparison.
@@ -274,7 +289,7 @@ def main() -> int:
             st = B.telnet(["es status"], settle=1.5)
             report["es_status"] = st[-400:]
             s = sample_apm("arm_" + ARM, logf)
-            report["phases"]["arm_" + ARM] = s
+            phases["arm_" + ARM] = s
             report["verdict"] = "arm_" + ARM
             log(f"  arm {ARM}: {s}")
             # caller owns the next arm's config
@@ -283,12 +298,12 @@ def main() -> int:
             # pre-run Enabled value goes back in main()'s finally.
             set_config_enabled(True, live_reload=True)
             on = sample_apm("es_on", logf)
-            report["phases"]["es_on"] = on
+            phases["es_on"] = on
             log(f"  ES ON : {on}")
 
             set_config_enabled(False, live_reload=True)
             off = sample_apm("es_off", logf)
-            report["phases"]["es_off"] = off
+            phases["es_off"] = off
             log(f"  ES OFF: {off}")
 
             if on and off:
@@ -327,7 +342,7 @@ def main() -> int:
         report["verdict"] = "ERROR"
         code = 4
     finally:
-        toggle_mode = ARM not in ("on", "off")
+        toggle_mode = not ARM_MODE
         # Each cleanup step is isolated so one failure cannot skip the rest:
         # a restore error must not leak the bot cohort (it keeps loading the
         # server until its own wall clock expires) or lose the report.

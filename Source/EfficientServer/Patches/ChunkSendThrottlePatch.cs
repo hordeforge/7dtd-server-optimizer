@@ -44,7 +44,7 @@ namespace EfficientServer.Patches
                     swapped++;
                 }
             }
-            ModApi.Log("ChunkSendThrottlePatch: rerouted " + swapped + " chunk batch-cap constant");
+            EsLog.Log("ChunkSendThrottlePatch: rerouted " + swapped + " chunk batch-cap constant");
             if (swapped != 1)
                 throw new InvalidOperationException(
                     "ChunkSendThrottlePatch: expected exactly one `ldc.i4.3 ; bge` batch cap in "

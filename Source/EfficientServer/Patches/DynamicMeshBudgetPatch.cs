@@ -47,7 +47,7 @@ namespace EfficientServer.Patches
                 DynamicMeshSettings.MaxRegionLoadMsPerFrame = cfg.MaxRegionLoadMsPerFrame;
                 DynamicMeshServer.MaxActiveSyncs = cfg.MaxActiveSyncs;
                 _applied = true;
-                ModApi.Log(
+                EsLog.Log(
                     "mesh budgets: OnlyPlayerAreas=" + DynamicMeshSettings.OnlyPlayerAreas +
                     " buf=" + DynamicMeshSettings.PlayerAreaChunkBuffer +
                     " loadMs=" + DynamicMeshSettings.MaxRegionLoadMsPerFrame +
@@ -55,7 +55,7 @@ namespace EfficientServer.Patches
             }
             catch (Exception ex)
             {
-                ModApi.Warn("mesh budget apply failed [" + ex.GetType().Name + "]: " + ex.Message);
+                EsLog.Warn("mesh budget apply failed [" + ex.GetType().Name + "]: " + ex.Message);
             }
         }
 
@@ -82,11 +82,11 @@ namespace EfficientServer.Patches
                 DynamicMeshSettings.MaxRegionLoadMsPerFrame = _loadMs;
                 DynamicMeshServer.MaxActiveSyncs = _syncs;
                 _applied = false;
-                ModApi.Log("mesh budgets restored to stock (dynamic mesh group disabled)");
+                EsLog.Log("mesh budgets restored to stock (dynamic mesh group disabled)");
             }
             catch (Exception ex)
             {
-                ModApi.Warn("mesh budget restore failed [" + ex.GetType().Name + "]: " + ex.Message);
+                EsLog.Warn("mesh budget restore failed [" + ex.GetType().Name + "]: " + ex.Message);
             }
         }
     }
