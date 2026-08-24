@@ -45,11 +45,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Exact range pin: a bare Version="13.0.3" restores as [13.0.3, ),
+    <!-- Exact range pin: a bare Version="13.0.4" restores as [13.0.4, ),
          so any non-locked restore floats to the newest 13.x+. SECURITY.md
          promises an exact pin; brackets deliver it. Bump = reviewed change
          of this string + regenerated lock file, like global.json's SDK. -->
-    <PackageReference Include="Newtonsoft.Json" Version="[13.0.3]" />
+    <PackageReference Include="Newtonsoft.Json" Version="[13.0.4]" />
   </ItemGroup>
 
 </Project>
