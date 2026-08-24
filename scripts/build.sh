@@ -76,8 +76,11 @@ refs=(
 )
 
 # Sort explicitly: find order is readdir order, and source order changes the
-# emitted metadata layout of the DLL.
-mapfile -d '' sources < <(find "$SRC" -type f -name '*.cs' -print0 | LC_ALL=C sort -z)
+# emitted metadata layout of the DLL. Prune bin/obj so SDK-generated artifacts
+# (e.g. obj/Release/*.AssemblyAttributes.cs left by a prior dotnet build) are
+# never compiled into the shipped DLL.
+mapfile -d '' sources < <(find "$SRC" -type d \( -name bin -o -name obj \) -prune -o \
+  -type f -name '*.cs' -print0 | LC_ALL=C sort -z)
 mcs -nostdlib -sdk:4.7.2 -target:library -optimize+ -langversion:7.2 \
   -out:"$OUT/EfficientServer.dll" \
   "${refs[@]}" \
