@@ -10,8 +10,12 @@ namespace EfficientServer.Patches
     ///   close (d &lt; MediumAiDistSq)                : full rate, every tick.
     ///   mid   (MediumAiDistSq &lt;= d &lt; FarDistSq) : run every MidTickStride-th tick,
     ///                                                 striped by entity id (spreads the
-    ///                                                 per-tick entity cost; counts TICKS
-    ///                                                 via TickClock, not render frames).
+    ///                                                 per-tick entity cost; TickClock
+    ///                                                 steps per UpdateTick INVOCATION =
+    ///                                                 frames above the vanilla 20 fps,
+    ///                                                 so striping is exact at 20 fps
+    ///                                                 and coverage-complete above only
+    ///                                                 when gcd(fps/20, stride) = 1).
     ///   far   (d &gt;= SkipTasksFarDistSq)           : skip the tail entirely.
     /// CheckDespawn (updateTasks' first step) still runs every tick in mid/far so far
     /// entities cannot accumulate. Alerted / targeting / investigating / active-sleeper
