@@ -55,9 +55,14 @@ aggressive on approach spends a few EAI ticks at 0.05 scale before `GetAlertTick
 
 ## Dedicated-only skips
 
-`DedicatedSkipPatch` avoids selected presentation work that has no dedicated
-server consumer, including configured music, splash, environment-audio, cloth,
-and jiggle paths. Every optional target reports patch failure without hiding it.
+`DedicatedSkipPatch` prefixes selected presentation work that has no dedicated
+server consumer (configured music, splash-particle, environment-audio,
+ambient light-spectrum, and explosion-prefab paths). Cloth/jiggle-bone
+suppression is NOT one of its prefixes: `AiLodPatch`'s postfix consumes
+`SkipOnDedicated.ClothAndJiggleBoneSimulation` and toggles cloth level-triggered
+(off far, back on near) per entity during the same distance-band pass. Every
+skipped target logs a WARNING when its type or method is not found (skip
+disabled), never hiding the loss silently.
 
 ## Dynamic mesh budgets
 
@@ -439,6 +444,10 @@ Still default-off (`Governor.AnimatorEmergency`). Validate with `es animstate`
 
 ## Changelog
 
+- **2026-08-24:** Dedicated-only skips section corrected: cloth/jiggle
+  suppression belongs to `AiLodPatch`'s level-triggered distance toggle under
+  `SkipOnDedicated.ClothAndJiggleBoneSimulation`, not to a `DedicatedSkipPatch`
+  prefix.
 - **2026-08-09:** Path admission + Animator emergency sections moved before the
   changelog (were appended after it) and version corrected v1.18 -> v1.17.0
   (the shipped release; no v1.18 exists).

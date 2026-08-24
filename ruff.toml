@@ -28,8 +28,9 @@ select = [
 ]
 
 [lint.per-file-ignores]
-# harness_common inserts the sibling 7dtd-loadgen scripts dir into sys.path,
-# then imports modules that only exist via that path entry. Those imports
-# cannot be hoisted above the statement that makes them resolvable.
+# harness_common inserts the sibling 7dtd-loadgen scripts dir into sys.path
+# (for bloodmoon_profile, which exists only there) and imports the local
+# es_cfg_guard in the same block. Those imports cannot be hoisted above the
+# statement that makes the sibling module resolvable.
 "scripts/harness_common.py" = ["E402"]
 

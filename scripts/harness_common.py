@@ -22,8 +22,9 @@ OPT_ROOT = Path(__file__).resolve().parent.parent
 LOADGEN_ROOT = OPT_ROOT.parent / "7dtd-loadgen"
 sys.path.insert(0, str(LOADGEN_ROOT / "scripts"))
 
-# These imports must stay below the sys.path insert (bloodmoon_profile and
-# es_cfg_guard resolve against the sibling loadgen tree); the resulting E402
+# These imports must stay below the sys.path insert (bloodmoon_profile lives
+# only in the sibling loadgen tree; es_cfg_guard is local to this repo's
+# scripts/, already on sys.path as the script directory); the resulting E402
 # is exempted per-file in ruff.toml instead of inline noqa noise.
 import bloodmoon_profile as B
 

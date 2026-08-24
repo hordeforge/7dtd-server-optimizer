@@ -23,7 +23,9 @@ Guard protocol (every step idempotent under repetition):
 - ``restore()``: write ONLY the managed keys (absence included) from the
   snapshot back into the live file, then delete it. Other keys keep whatever
   is on disk now, so a restore cannot clobber newer operator tuning. A second
-  call is a no-op.
+  call is a no-op. Exception: if the live file is missing or unreadable,
+  the full snapshot is restored instead (a managed-keys-only rebuild would
+  destroy every other operator setting).
 
 All writes go through temp-file + rename so a kill mid-write cannot leave a
 truncated JSON behind for the game's config reader or the next run.
