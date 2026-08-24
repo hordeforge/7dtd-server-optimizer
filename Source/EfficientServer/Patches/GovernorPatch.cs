@@ -1,3 +1,4 @@
+using System.Globalization;
 using HarmonyLib;
 
 namespace EfficientServer.Patches
@@ -112,7 +113,11 @@ namespace EfficientServer.Patches
                 // WARNING, not info: tier 2 globally degrades combat fidelity and is
                 // opt-in, so firing means the operator both opted in AND the server
                 // is past the emergency threshold - exactly what grepping WRN finds.
-                ModApi.Warn($"Governor: tick EMA {emaMs:F1}ms > {cfg.EmergencyOverMs}ms despite throttles "
+                // Log floats render invariant, same convention as es status / es
+                // animstate: the log is grepped across hosts, and a comma-decimal
+                // locale must not reformat these values.
+                ModApi.Warn($"Governor: tick EMA {emaMs.ToString("F1", CultureInfo.InvariantCulture)}ms > "
+                    + $"{cfg.EmergencyOverMs.ToString(CultureInfo.InvariantCulture)}ms despite throttles "
                     + "- ANIMATOR EMERGENCY CullCompletely (combat timing degrades; clients see no visual change)");
                 AnimatorEmergency.Enter();
                 return;
@@ -123,15 +128,18 @@ namespace EfficientServer.Patches
             {
                 ApplyThrottledLevers(path, net);
                 ModApi.Log(previous == 2
-                    ? $"Governor: tick EMA {emaMs:F1}ms < {cfg.HealthyMs}ms - stepped down from emergency to THROTTLED"
-                    : $"Governor: tick EMA {emaMs:F1}ms > {cfg.OverBudgetMs}ms - THROTTLED "
+                    ? $"Governor: tick EMA {emaMs.ToString("F1", CultureInfo.InvariantCulture)}ms < "
+                      + $"{cfg.HealthyMs.ToString(CultureInfo.InvariantCulture)}ms - stepped down from emergency to THROTTLED"
+                    : $"Governor: tick EMA {emaMs.ToString("F1", CultureInfo.InvariantCulture)}ms > "
+                      + $"{cfg.OverBudgetMs.ToString(CultureInfo.InvariantCulture)}ms - THROTTLED "
                       + $"(replication /{net.EntityDistributionEveryTicks}, graph updates /{path.GraphUpdateEveryTicks})");
             }
             else
             {
                 net.EntityDistributionEveryTicks = _baseEntityStride;
                 path.GraphUpdateEveryTicks = _baseGraphEvery;
-                ModApi.Log($"Governor: tick EMA {emaMs:F1}ms < {cfg.HealthyMs}ms - restored baseline "
+                ModApi.Log($"Governor: tick EMA {emaMs.ToString("F1", CultureInfo.InvariantCulture)}ms < "
+                    + $"{cfg.HealthyMs.ToString(CultureInfo.InvariantCulture)}ms - restored baseline "
                     + $"(replication /{_baseEntityStride}, graph updates /{_baseGraphEvery})");
             }
         }

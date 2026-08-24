@@ -235,7 +235,9 @@ def main() -> int:
         if joined < max(1, int(PLAYERS * 0.5)):
             log(f"FAIL: only {joined}/{PLAYERS} joined")
             return 2
-        B.telnet(["gamestage", str(GAMESTAGE)], settle=1.0)
+        # Same helper as the sibling harnesses: there is no `gamestage` console
+        # command (stage derives from player XP), so set_gamestage grants XP.
+        B.set_gamestage(GAMESTAGE)
 
         log(f"=== spawn ~{ZOMBIES} endgame (ES {'ON' if ARM != 'off' else 'OFF'}) ===")
         spawned = B.spawn_endgame(ZOMBIES)

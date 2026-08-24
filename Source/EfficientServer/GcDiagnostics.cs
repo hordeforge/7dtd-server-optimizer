@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Threading;
 
@@ -32,7 +33,10 @@ namespace EfficientServer
             catch { return 0UL; }
         }
 
-        static string Gb(ulong bytes) => (bytes / (1024.0 * 1024.0 * 1024.0)).ToString("F2") + " GB";
+        // Invariant: PAUSE_MS is grepped/compared out of the log (RESULTS.md),
+        // so a comma-decimal host locale must not reformat it.
+        static string Gb(ulong bytes)
+            => (bytes / (1024.0 * 1024.0 * 1024.0)).ToString("F2", CultureInfo.InvariantCulture) + " GB";
 
         static bool _started;
 
@@ -102,8 +106,8 @@ namespace EfficientServer
                     + "grow=" + (int)sw.Elapsed.TotalSeconds + "s"
                     + (aborted ? " (safety-capped)" : "")
                     + " heap " + Gb(heap0) + " -> " + Gb(heapBefore) + " -> " + Gb(heapAfter)
-                    + " freed=" + freedGb.ToString("F2") + " GB"
-                    + " ** PAUSE_MS=" + pause.Elapsed.TotalMilliseconds.ToString("F0") + " **");
+                    + " freed=" + freedGb.ToString("F2", CultureInfo.InvariantCulture) + " GB"
+                    + " ** PAUSE_MS=" + pause.Elapsed.TotalMilliseconds.ToString("F0", CultureInfo.InvariantCulture) + " **");
             }
             catch (Exception ex)
             {

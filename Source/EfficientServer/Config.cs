@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -485,7 +486,11 @@ namespace EfficientServer
             float chosen = float.IsNaN(value) || float.IsInfinity(value) ? fallback : value;
             float normalized = Math.Max(min, Math.Min(max, chosen));
             if (normalized != value)
-                ModApi.Warn("config corrected " + name + ": " + value + " -> " + normalized);
+                // Invariant floats: the "config corrected" line is grepped/parsed
+                // (tests match on it), so a comma-decimal locale must not reformat.
+                ModApi.Warn("config corrected " + name + ": "
+                    + value.ToString(CultureInfo.InvariantCulture) + " -> "
+                    + normalized.ToString(CultureInfo.InvariantCulture));
             return normalized;
         }
 

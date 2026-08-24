@@ -30,6 +30,15 @@ namespace EfficientServer.Patches
             try
             {
                 CaptureStockOnce();
+                // Already applied with these exact values (repeat `es reload`):
+                // stay silent, matching the reload contract that the re-applied
+                // knobs log only real changes.
+                if (_applied
+                    && DynamicMeshSettings.OnlyPlayerAreas == cfg.OnlyPlayerAreas
+                    && DynamicMeshSettings.PlayerAreaChunkBuffer == cfg.PlayerAreaChunkBuffer
+                    && DynamicMeshSettings.MaxRegionLoadMsPerFrame == cfg.MaxRegionLoadMsPerFrame
+                    && DynamicMeshServer.MaxActiveSyncs == cfg.MaxActiveSyncs)
+                    return;
                 // No ad-hoc clamps here: ServerPerfConfig.Normalize owns these
                 // ranges (floors included), and every config reaching this method
                 // has passed through it.

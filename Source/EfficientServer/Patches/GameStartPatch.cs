@@ -37,8 +37,9 @@ namespace EfficientServer.Patches
 
         // Unity job-system worker pool size (0 = vanilla). Runtime-settable; the
         // saturated frame is partly main-thread job-fence waiting (RESULTS 3o), and
-        // pool size is the one untested variable there. Logs the current count even
-        // when leaving vanilla, so the default is visible in the log.
+        // pool size is the one untested variable there. Same logging contract as
+        // ApplyTargetFpsInner: silent when there is nothing to apply or undo; only
+        // real transitions log, so repeated `es reload` stays quiet.
         public static void ApplyJobWorkers()
         {
             ServerConfig cfg = ModApi.Config != null ? ModApi.Config.Server : null;
@@ -48,17 +49,13 @@ namespace EfficientServer.Patches
                 int current = Unity.Jobs.LowLevel.Unsafe.JobsUtility.JobWorkerCount;
                 if (wanted <= 0)
                 {
-                    if (_workersApplied)
+                    if (!_workersApplied) return; // never touched it: nothing to undo
+                    _workersApplied = false;
+                    if (current != _prevWorkers)
                     {
-                        _workersApplied = false;
-                        if (current != _prevWorkers)
-                        {
-                            Unity.Jobs.LowLevel.Unsafe.JobsUtility.JobWorkerCount = _prevWorkers;
-                            ModApi.Log($"job workers {current} -> {_prevWorkers} (config 0 or mod inactive: vanilla restored)");
-                        }
-                        return;
+                        Unity.Jobs.LowLevel.Unsafe.JobsUtility.JobWorkerCount = _prevWorkers;
+                        ModApi.Log($"job workers {current} -> {_prevWorkers} (config 0 or mod inactive: vanilla restored)");
                     }
-                    ModApi.Log($"job workers = {current} (vanilla)");
                     return;
                 }
                 if (!_workersApplied)

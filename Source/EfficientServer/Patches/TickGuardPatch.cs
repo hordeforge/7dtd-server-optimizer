@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Globalization;
 using HarmonyLib;
 using UnityEngine;
 
@@ -91,7 +92,9 @@ namespace EfficientServer.Patches
             // and only fires while the tick is collapsing, rate-bounded by
             // CooldownTicks - the channel an operator greps when players report
             // vanished hordes.
-            ModApi.Warn($"TickGuard: tick EMA {emaMs:F1}ms > {cfg.ShedAboveMs}ms - shed {shed} "
+            // Invariant floats: same log-parsing convention as the governor lines.
+            ModApi.Warn($"TickGuard: tick EMA {emaMs.ToString("F1", CultureInfo.InvariantCulture)}ms > "
+                + $"{cfg.ShedAboveMs.ToString(CultureInfo.InvariantCulture)}ms - shed {shed} "
                 + $"farthest enemies ({enemies} -> {enemies - shed}, lifetime {ShedTotal})");
             Scratch.Clear();
         }
