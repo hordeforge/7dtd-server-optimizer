@@ -48,7 +48,9 @@ def main(argv: list[str]) -> int:
         return 2
     root = ET.parse(argv[1]).getroot()
     pct = round(float(root.get("line-rate", "0")) * 100)
-    Path(argv[2]).write_text(badge(pct, colour(pct)))
+    # Pinned codec like every other text write in scripts/: the badge lands
+    # on GitHub via CI, and a non-UTF-8 preferred locale must not change bytes.
+    Path(argv[2]).write_text(badge(pct, colour(pct)), encoding="utf-8")
     return 0
 
 
