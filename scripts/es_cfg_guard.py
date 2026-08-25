@@ -15,17 +15,18 @@ Guard protocol (every step idempotent under repetition):
     * If the live file equals the backup except for this swap's managed keys,
       the divergence can only come from a run of this same harness that died
       before restoring: finish its interrupted restore (copy back, drop backup).
-    * Otherwise the live file moved on since (operator edit, reinstall): the
-      backup is stale evidence. Rename it to ``<backup>.stale`` and touch
-      nothing - never restore across unrelated edits.
+    * Otherwise the live file moved on since (operator edit, reinstall, valid
+      JSON of some other shape): the backup is stale evidence. Rename it to
+      ``<backup>.stale`` and touch nothing - never restore across unrelated
+      edits.
 - ``begin()``: ``recover()``, then snapshot the live file byte-exact.
   Safe to call again while already begun (no re-snapshot).
 - ``restore()``: write ONLY the managed keys (absence included) from the
   snapshot back into the live file, then delete it. Other keys keep whatever
   is on disk now, so a restore cannot clobber newer operator tuning. A second
-  call is a no-op. Exception: if the live file is missing or unreadable,
-  the full snapshot is restored instead (a managed-keys-only rebuild would
-  destroy every other operator setting).
+  call is a no-op. Exception: if the live file is missing, unreadable, or not
+  a JSON object, the full snapshot is restored instead (a managed-keys-only
+  rebuild would destroy or misplace every other operator setting).
 
 All writes go through temp-file + rename so a kill mid-write cannot leave a
 truncated JSON behind for the game's config reader or the next run.
@@ -146,9 +147,22 @@ class ConfigSwap:
             self._quarantine("live config missing")
             return
         try:
-            live = _read_doc(self.cfg)
+            # Not _read_doc: the live document's SHAPE is unknown here (that is
+            # what the check below decides), so parse untyped like the boundary
+            # json.loads is.
+            live: object = json.loads(self.cfg.read_text(encoding="utf-8"))
         except Exception as e:
             self._quarantine(f"live config unreadable: {e}")
+            return
+        # A VALID-JSON but non-object live document (array, scalar, null) parses
+        # yet has no keys to replay managed values into: the divergence rule
+        # cannot apply, so quarantine like any other damaged state - restoring
+        # across a shape an operator (or a corrupting writer) produced is never
+        # this guard's call.
+        if not isinstance(live, dict):
+            self._quarantine(
+                f"live config is valid JSON but not an object ({type(live).__name__})"
+            )
             return
         # Replay the backup's managed-key values onto the live doc; if that
         # makes the documents identical, only this harness touched the file
@@ -194,7 +208,9 @@ class ConfigSwap:
             self._log("config guard: live config was missing; restored full backup")
             return
         try:
-            live = _read_doc(self.cfg)
+            # Not _read_doc, same reason as recover(): the live shape is what
+            # the check below decides.
+            live: object = json.loads(self.cfg.read_text(encoding="utf-8"))
         except Exception as e:
             # Unreadable live JSON: rebuilding from {} would write back ONLY the
             # managed keys and destroy every other operator setting, so fall
@@ -204,6 +220,17 @@ class ConfigSwap:
             self._log(
                 f"config guard: live config unreadable ({e}); "
                 "restored full backup"
+            )
+            return
+        if not isinstance(live, dict):
+            # Valid JSON of the wrong shape (array, scalar, null): a key-scoped
+            # rebuild would likewise destroy or misplace every operator setting,
+            # so take the same full-snapshot exit as the unreadable case.
+            _write_atomic(self.cfg, self.bak.read_bytes())
+            self.bak.unlink()
+            self._log(
+                f"config guard: live config is valid JSON but not an object "
+                f"({type(live).__name__}); restored full backup"
             )
             return
         for kp in self.keys:
@@ -398,6 +425,42 @@ def _selftest() -> int:
         except FileNotFoundError:
             begin_raised_named_error = True
         check("begin on missing live config fails loudly", begin_raised_named_error)
+
+        # 12. live config is VALID JSON but not an object at recover time:
+        # parses fine, so the unreadable branch does not fire, yet the
+        # divergence rule cannot apply (no keys to replay into). Must be
+        # quarantined like every other damaged state, never a crash.
+        for shape in ('[1, 2]', 'null', '"text"', '42'):
+            s8 = mk()
+            cfg.write_text(json.dumps(original, indent=2) + "\n", encoding="utf-8")
+            s8.begin()
+            cfg.write_text(shape, encoding="utf-8")
+            try:
+                s8.recover()
+                recovered_cleanly = True
+            except Exception:
+                recovered_cleanly = False
+            stale8 = s8.bak.with_suffix(s8.bak.suffix + STALE_SUFFIX)
+            check(
+                f"non-object live config ({shape}) quarantined without raising",
+                recovered_cleanly and stale8.is_file() and not s8.bak.exists(),
+            )
+            stale8.unlink()
+
+        # 13. non-object live config at RESTORE time takes the full-backup
+        # branch (a key-scoped rebuild would destroy or misplace operator
+        # settings), consuming the backup exactly like the corrupt-live case.
+        s9 = mk()
+        cfg.write_text(json.dumps(original, indent=2) + "\n", encoding="utf-8")
+        s9.begin()
+        snapshot = _canonical(_read_doc(cfg))
+        cfg.write_text("[1]", encoding="utf-8")
+        s9.restore()
+        check(
+            "non-object live config restored from full backup",
+            _canonical(_read_doc(cfg)) == snapshot,
+        )
+        check("backup consumed after non-object-live restore", not s9.bak.exists())
 
     if failures:
         print(f"FAIL: {len(failures)} es_cfg_guard selftest check(s)", file=sys.stderr)
