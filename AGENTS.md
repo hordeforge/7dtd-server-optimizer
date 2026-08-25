@@ -31,7 +31,7 @@ Default config: `DedicatedOnly: true`. Do not turn this into a client overhaul, 
 ## Build / install
 
 ```bash
-make test   # every CI gate: shellcheck + ruff + mypy + script syntax + config harness + doc/version consistency
+make test   # every CI gate: shellcheck + ruff + mypy + script syntax + .NET unit tests + config harness + doc/version consistency
 make build
 make install DS="/path/to/7 Days to Die Dedicated Server"
 make run DS="/path/to/7 Days to Die Dedicated Server"
@@ -69,21 +69,6 @@ Source: `Source/EfficientServer/`. Packaged mod name: `Mods/EfficientServer/`. H
 | `../7dtd-engine-research/docs/INDEX.md` | Research docs + dump index |
 | `TODO.md` | Phased implementation plan |
 
-## RE dumps
-
-Stock-game RE tooling lives in **`../7dtd-engine-research/tools/`** (not here): general
-dumpers (`src/`), the legacy per-family dumpers (`legacy/`), and the dump-regen
-test (`tools/tests/`). Build + usage: [`../7dtd-engine-research/tools/README.md`](../7dtd-engine-research/tools/README.md);
-method: [`../7dtd-engine-research/docs/re-methodology.md`](../7dtd-engine-research/docs/re-methodology.md).
-
-```bash
-cd ../7dtd-engine-research/tools && ./build.sh
-mono bin/legacy/DumpGmUpdate.exe "$DS/7DaysToDieServer_Data/Managed/Assembly-CSharp.dll" \
-  ../il/gmUpdate-VERSION
-```
-
-Human synthesis belongs in `../7dtd-engine-research/docs/` or `docs/`, never as optim product narrative inside dump folders. Automated check: `../7dtd-engine-research/tools/tests/test_re_dump_regen.py` (needs dedicated install + mcs/mono).
-
 ## Sibling projects
 
 | Project | Role |
@@ -94,12 +79,21 @@ Human synthesis belongs in `../7dtd-engine-research/docs/` or `docs/`, never as 
 
 Do not silently install, edit, or couple into siblings. Public runner/API only.
 
-## Stock-game research -> 7dtd-engine-research
+## Stock-game research and RE dumps
 
 Anything that studies the **stock** dedicated server belongs in
 [`../7dtd-engine-research/`](../7dtd-engine-research/), not here: reverse-engineering
-narratives (`docs/`), the Mono.Cecil dump tooling (`tools/`), wire/protocol
-analysis, and engine cost/loop RE. This repo owns the reviewed Harmony optimization mod;
-it does not host stock-game RE docs or dumpers. When RE is needed, add it
-under `../7dtd-engine-research/` and link back. How to RE:
-[`../7dtd-engine-research/docs/re-methodology.md`](../7dtd-engine-research/docs/re-methodology.md).
+narratives (`docs/`), the Mono.Cecil dump tooling (`tools/`: general dumpers in `src/`,
+legacy per-family dumpers in `legacy/`, regen test in `tools/tests/`), wire/protocol
+analysis, and engine cost/loop RE. Add new RE there and link back; how:
+[`docs/re-methodology.md`](../7dtd-engine-research/docs/re-methodology.md). Build +
+usage of the dumpers: [`tools/README.md`](../7dtd-engine-research/tools/README.md).
+Regenerate dumps with:
+
+```bash
+cd ../7dtd-engine-research/tools && ./build.sh
+mono bin/legacy/DumpGmUpdate.exe "$DS/7DaysToDieServer_Data/Managed/Assembly-CSharp.dll" \
+  ../il/gmUpdate-VERSION
+```
+
+Human synthesis belongs in `../7dtd-engine-research/docs/` or `docs/`, never as optim product narrative inside dump folders. Automated check: `../7dtd-engine-research/tools/tests/test_re_dump_regen.py` (needs dedicated install + mcs/mono).
