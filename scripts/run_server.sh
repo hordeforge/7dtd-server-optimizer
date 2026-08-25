@@ -63,7 +63,10 @@ fi
 LOGDIR="${SEVENDTD_LOGDIR:-$ROOT/server/logs}"
 mkdir -p "$LOGDIR"
 
-export LD_LIBRARY_PATH="$SRV:${LD_LIBRARY_PATH:-}"
+# :+ keeps a trailing empty element out of the list: an empty entry makes the
+# loader treat the CURRENT DIRECTORY as a library source for the process
+# lifetime, not just at launch.
+export LD_LIBRARY_PATH="$SRV${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 # Reduce Unity player noise; dedicated headless.
 export MALLOC_ARENA_MAX="${MALLOC_ARENA_MAX:-2}"
 
