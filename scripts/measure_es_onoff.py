@@ -36,6 +36,7 @@ import sys
 import time
 from collections.abc import Iterable
 from pathlib import Path
+from typing import TypedDict
 
 from es_cfg_guard import ConfigSwap, write_atomic
 from harness_common import (
@@ -111,15 +112,30 @@ APM_LINE_RE = re.compile(
 # rounding alone. Verdicts must treat anything under the summed bounds as noise.
 HALF_QUANTUM_MS = 0.005
 
+# Counters parsed out of one [7dtd-server-apm] health line (cumulative since
+# server boot; see read_apm).
+class _ApmCounters(TypedDict):
+    updates: int
+    gmUpdateAvg: float
+    tickAvg: float
+    spikes: int
+
+
 # Incremental tail state per log path: byte offset, undecoded partial-line
 # carry, and the newest matching APM health line seen so far. The Unity log is
 # append-only and grows to hundreds of MB under blood-moon loads; rescanning
 # the whole file every poll second would churn page cache and inject disk I/O
 # noise into the exact frame-time numbers this harness measures.
-_APM_TAIL: dict[Path, dict] = {}
+class _ApmTailState(TypedDict):
+    off: int
+    tail: bytes
+    last: _ApmCounters | None
 
 
-def read_apm(logf: Path) -> dict | None:
+_APM_TAIL: dict[Path, _ApmTailState] = {}
+
+
+def read_apm(logf: Path) -> _ApmCounters | None:
     """Parse the most recent matching [7dtd-server-apm] health line from the server log.
 
     Reads only bytes appended since the previous call (the log is append-only;
@@ -168,7 +184,7 @@ def read_apm(logf: Path) -> dict | None:
     return st["last"]
 
 
-def windowed(a: dict, b: dict) -> dict | None:
+def windowed(a: _ApmCounters, b: _ApmCounters) -> dict | None:
     """Windowed (instantaneous-ish) metrics from two cumulative APM reads.
 
     gmUpdateAvg / tickAvg are cumulative since boot; the per-window value is
@@ -184,14 +200,14 @@ def windowed(a: dict, b: dict) -> dict | None:
     if du <= 0:
         return None
 
-    def recon(key: str) -> tuple[float, float]:
-        sa = a["updates"] * a[key]
-        sb = b["updates"] * b[key]
+    def recon(avg_a: float, avg_b: float) -> tuple[float, float]:
+        sa = a["updates"] * avg_a
+        sb = b["updates"] * avg_b
         err = HALF_QUANTUM_MS * (a["updates"] + b["updates"]) / du
         return round((sb - sa) / du, 3), err
 
-    gm, gm_err = recon("gmUpdateAvg")
-    tick, tick_err = recon("tickAvg")
+    gm, gm_err = recon(a["gmUpdateAvg"], b["gmUpdateAvg"])
+    tick, tick_err = recon(a["tickAvg"], b["tickAvg"])
     return {
         "gmUpdateAvg": gm,
         "gmUpdateAvg_err_ms": round(gm_err, 3),

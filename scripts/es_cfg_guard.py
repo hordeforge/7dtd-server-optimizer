@@ -51,7 +51,10 @@ Backup/restore guard library for the installed EfficientServer config
 
 
 def _read_doc(path: Path) -> dict:
-    return json.loads(path.read_text(encoding="utf-8"))
+    # Boundary pin: json.loads is typed Any; the guard protocol only ever
+    # feeds it the object-shaped efficientserver.json.
+    doc: dict = json.loads(path.read_text(encoding="utf-8"))
+    return doc
 
 
 def _canonical(doc: dict) -> str:

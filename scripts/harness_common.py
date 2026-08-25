@@ -30,6 +30,23 @@ import bloodmoon_profile as B
 
 from es_cfg_guard import ConfigSwap, write_atomic
 
+# Public surface of this shared module (mypy no_implicit_reexport: consumers
+# may import exactly these; B and write_atomic are deliberate re-exports).
+__all__ = [
+    "CFG_SWAP",
+    "DS",
+    "ES_CFG",
+    "OUT_DIR",
+    "B",
+    "ensure_server_ready",
+    "log",
+    "teardown_bots",
+    "write_atomic",
+    "write_diag_config",
+    "write_path_config",
+    "write_report",
+]
+
 # Canonical here is SEVENDTD_DS_DIR (same var as build/install/run and the
 # Makefile's DS=); SEVENDTD_SERVER_DIR is also accepted because that is the
 # 7dtd-loadgen sibling's spelling (start_dedicated_prefab.sh), so one export

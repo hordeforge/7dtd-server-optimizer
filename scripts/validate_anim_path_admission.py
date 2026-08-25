@@ -178,7 +178,10 @@ def fast_spawn(target: int) -> int:
         B.telnet(cmds, settle=1.2)
         log(f"  fast_spawn round {round_i+1}: alive={B.alive()}/{target}")
         time.sleep(1)
-    return B.alive()
+    # Boundary pin: alive() is untyped in the loadgen sibling; this function's
+    # contract is a concrete spawned-entity count.
+    alive: int = B.alive()
+    return alive
 
 
 def main() -> int:

@@ -170,6 +170,55 @@ namespace EfficientServer.Tests
             Check(Math.Abs(d.Gc.SafetyCollectRamFraction - 0.5f) < 1e-6, "default RamFraction=0.5");
             Check(d.Gc.SafetyCollectAboveMB == 0, "default SafetyCollectAboveMB=0 (AUTO)");
 
+            // Shipped-default VALUE pins for the rest of the knob surface. The
+            // normalize-silence check below only proves defaults sit IN RANGE,
+            // and the fuzz corpus mutates FROM the serialized defaults, so
+            // neither can see an initializer quietly change VALUE (a shed batch
+            // of 150 or a horde floor of 6 would ship as "the tuned default"
+            // with every clamp and endpoint still green). Expected values are
+            // the documented initializers in Config.cs; safety-relevant ones
+            // (TickGuard floors, governor band, DedicatedOnly gate) included.
+            var dAll = new ServerPerfConfig();
+            Check(dAll.Enabled && dAll.DedicatedOnly,
+                "defaults: Enabled + DedicatedOnly ship true (dedicated gate closed)");
+            Check(dAll.AiLod.FullAiDistSq == 100f && dAll.AiLod.MediumAiDistSq == 400f
+                && dAll.AiLod.SkipTasksFarDistSq == 2500f && dAll.AiLod.SkipTasksUnlessAlerted,
+                "AiLod distance defaults: 100/400/2500 bands, alerted exempt");
+            Check(dAll.AiLod.FullScale == 1f && dAll.AiLod.MediumScale == 0.2f && dAll.AiLod.FarScale == 0.05f,
+                "AiLod scale defaults: 1/0.2/0.05");
+            Check(dAll.SkipOnDedicated.DynamicMusicSystem && dAll.SkipOnDedicated.WaterSplashParticles
+                && dAll.SkipOnDedicated.EnvironmentAudioUpdates
+                && dAll.SkipOnDedicated.ClothAndJiggleBoneSimulation
+                && dAll.SkipOnDedicated.AmbientLightSpectrumUpdates
+                && dAll.SkipOnDedicated.ExplosionParticles,
+                "SkipOnDedicated defaults: every render-only skip ships ON");
+            Check(dAll.DynamicMesh.Enabled && dAll.DynamicMesh.OnlyPlayerAreas
+                && dAll.DynamicMesh.PlayerAreaChunkBuffer == 2
+                && dAll.DynamicMesh.MaxRegionLoadMsPerFrame == 2 && dAll.DynamicMesh.MaxActiveSyncs == 2,
+                "DynamicMesh defaults: player-area budget 2/2/2");
+            Check(dAll.Gc.SkipForcedCollect && !dAll.Gc.Incremental && dAll.Gc.IncrementalPauseTargetMs == 0,
+                "Gc defaults: forced collect skipped, incremental OFF, no pause limit");
+            Check(!dAll.Pathfinding.PoolInitScanNodes,
+                "default PoolInitScanNodes=false (unsafe transpile ships off)");
+            Check(dAll.Network.EntityDistributionEveryTicks == 1,
+                "default EntityDistributionEveryTicks=1 (vanilla cadence)");
+            Check(dAll.Server.JobWorkerCount == 0, "default JobWorkerCount=0 (leave vanilla)");
+            Check(!dAll.AnimatorLod.Enabled && dAll.AnimatorLod.FullRateDistSq == 400f
+                && dAll.AnimatorLod.FarStride == 4,
+                "AnimatorLod defaults: OFF, 20 m full-rate band, far stride 4");
+            Check(!dAll.CrowdCollisionLod.Enabled && dAll.CrowdCollisionLod.ResolveEveryNTicks == 4,
+                "CrowdCollisionLod defaults: OFF, resolve stride 4");
+            Check(dAll.Governor.HealthyMs == 52f && dAll.Governor.EmergencyOverMs == 80f
+                && !dAll.Governor.AnimatorEmergency
+                && dAll.Governor.WindowTicks == 100 && dAll.Governor.CooldownTicks == 400,
+                "Governor defaults: 52/80 band, emergency OFF, 100/400 windows");
+            Check(dAll.TickGuard.ShedAboveMs == 70f && dAll.TickGuard.WindowTicks == 60
+                && dAll.TickGuard.ShedBatch == 15 && dAll.TickGuard.CooldownTicks == 100
+                && dAll.TickGuard.MinEnemiesKept == 60,
+                "TickGuard defaults: shed at 70 ms, batch 15, horde floor 60");
+            Check(dAll.Diagnostics.WarmupSeconds == 60 && dAll.Diagnostics.GrowSeconds == 240,
+                "Diagnostics defaults: warmup 60 s, grow 240 s");
+
             // Shipped-default drift: Normalize on untouched defaults must be a silent
             // no-op (FiniteRange/IntRange warn exactly when a value moves). A default
             // edited outside its own clamp would otherwise log "config corrected" on
@@ -261,6 +310,11 @@ namespace EfficientServer.Tests
                 "FindUnknownKeys: all-caps keys fold ordinally, independent of host locale");
             Check(ServerPerfConfig.KeyNameMatches("AILOD", "AiLod"),
                 "KeyNameMatches: AILOD == AiLod under OrdinalIgnoreCase");
+            // And a distinct key must not fold: the comparator is an equality,
+            // not a prefix/substring match, or typos sharing a prefix with a
+            // real key would bind silently instead of being reported.
+            Check(!ServerPerfConfig.KeyNameMatches("AiLodX", "AiLod"),
+                "KeyNameMatches: distinct keys do not match (no prefix folding)");
             // And a key that only differs by a Unicode case twin (dotless ı U+0131,
             // which Turkish folding maps to/from 'I') is NOT known: ordinal equality
             // keeps it a reported typo.
@@ -402,6 +456,11 @@ namespace EfficientServer.Tests
                 "BenchGodArmAllowed(null config) -> fail closed");
             Check(!ServerPerfConfig.BenchGodArmAllowed(new ServerPerfConfig()),
                 "BenchGodArmAllowed(defaults) -> refused");
+            // Deliberate runtime-null probe promised by the guard's contract:
+            // NRT annotations are erased, so a null Diagnostics section must
+            // fail closed too, not NRE the console command.
+            Check(!ServerPerfConfig.BenchGodArmAllowed(new ServerPerfConfig { Diagnostics = null! }),
+                "BenchGodArmAllowed(null diagnostics section) -> fail closed");
             Check(ServerPerfConfig.BenchGodArmAllowed(bgOn),
                 "BenchGodArmAllowed(opt-in) -> allowed");
 
@@ -799,7 +858,7 @@ namespace EfficientServer.Tests
                 "\"MaxPathEnqueuesPerTick\":0,\"PoolInitScanNodes\":false}," +
                 "\"Network\":{\"FastSingleTargetSend\":false,\"EntityDistributionEveryTicks\":1}," +
                 "\"WorldTransfer\":{\"ChunkPackagesPerObserverPerTick\":3}," +
-                "\"Server\":{\"TargetFps\":0}}");
+                "\"Server\":{\"TargetFps\":0},\"SkipOnDedicated\":{\"ExplosionParticles\":false}}");
             Check(!faOff.FeatureActive("GraphThrottle"), "GraphUpdateEveryTicks 1 -> inactive");
             Check(!faOff.FeatureActive("MoveThreshold"), "MoveRescanThresholdSq 100 -> inactive");
             Check(!faOff.FeatureActive("PathAdmission"), "no path admission knobs -> inactive");
@@ -808,6 +867,7 @@ namespace EfficientServer.Tests
             Check(!faOff.FeatureActive("EntityDistributionStride"), "EntityDistributionEveryTicks 1 -> inactive");
             Check(!faOff.FeatureActive("ChunkSendThrottle"), "ChunkPackagesPerObserverPerTick 3 (vanilla) -> inactive");
             Check(!faOff.FeatureActive("TargetFps"), "TargetFps 0 -> inactive");
+            Check(!faOff.FeatureActive("ExplosionParticles"), "ExplosionParticles false -> inactive");
             // Admission is an OR of two independent levers; faOn above only
             // exercises the enqueue-cap side, so pin the drop-distance side too.
             var dropOnly = LoadTemp("{\"Pathfinding\":{\"DropPathWhenFarDistSq\":2500}}");

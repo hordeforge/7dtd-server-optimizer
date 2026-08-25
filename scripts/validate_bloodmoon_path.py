@@ -79,7 +79,9 @@ def cluster_players() -> list[int]:
     """Teleport all joined bots onto the first bot so they form ONE blood-moon
     party (party join is within 80 m, RE aidirector.md AddPlayerToParty).
     Scattered bots each make a Party of 1 -> enemy max 2 -> tiny horde."""
-    ids = B.player_ids()
+    # Pin the count type at the loadgen boundary: player_ids() is untyped in
+    # the sibling tree, and every consumer below assumes bot entity ids.
+    ids: list[int] = B.player_ids()
     if len(ids) < 2:
         return ids
     anchor = ids[0]
