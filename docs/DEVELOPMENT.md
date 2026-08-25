@@ -86,7 +86,7 @@ All optional; scripts fall back to defaults. The Makefile routes its documented
 | `RE_DEDICATED_USERDATA` | measure_es_onoff.py | `~/.cache/7dtd-loadgen` | 7dtd-loadgen dedicated userdata dir; also where the Unity-log lookup globs `server_prefab_*.txt`. Owned by 7dtd-loadgen (`start_dedicated_prefab.sh`) |
 | `SEVENDTD_CPU_AFFINITY` | run_server.sh | unset (no pinning) | `taskset -c` mask for the whole process; silently skipped when `taskset` is absent; see HOST_TUNING.md (measured loss on naive pinning) |
 | `SEVENDTD_GC_INCREMENTAL` | run_server.sh | unset | Opt-in incremental GC (sets `GC_ENABLE_INCREMENTAL=1`) |
-| `DOTNET_ROOT` | build.sh, Makefile | Makefile picks the first existing of `~/.cache/dotnet-sdk`, `~/.dotnet`; direct build.sh runs fall back to `~/.cache/dotnet-sdk` only (and export it) | Local SDK location prepended to PATH |
+| `DOTNET_ROOT` | build.sh, Makefile | Makefile picks the first of `~/.cache/dotnet-sdk`, `~/.dotnet` containing a `dotnet` binary; direct build.sh runs fall back to `~/.cache/dotnet-sdk` only (and export it) | Local SDK location prepended to PATH |
 | `SOURCE_DATE_EPOCH` | package.sh | last commit time | Zip mtime epoch for reproducible packaging |
 | `VERSION` | package.sh | `git describe --tags --always --dirty` | Override for the zip version suffix (`EfficientServer-<VERSION>.zip`); a modified tree keeps an explicit `-dirty` suffix instead of the clean release name |
 | `GC_FREE_SPACE_DIVISOR`, `GC_NPROCS`, `MONO_ENV_OPTIONS`, `MALLOC_ARENA_MAX` | run_server.sh | see script header | Boehm GC / Mono JIT tuning with A/B-measured defaults |
