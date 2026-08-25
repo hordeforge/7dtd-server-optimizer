@@ -21,7 +21,7 @@ jobs:
     steps:
       # Actions pinned to the commit the mutable v4 tag currently names;
       # floating major tags are a supply-chain risk (reproducibility).
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         # The gate performs no git operations; not persisting the token removes
         # it from the runner workspace entirely instead of trusting every step
         # with it for the job's lifetime.
@@ -30,7 +30,7 @@ jobs:
       # SDK pinned by global.json (rollForward latestFeature); setup-dotnet
       # reads it when dotnet-version is omitted. Cache NuGet packages keyed
       # on the locked dependency graph so restore stops re-downloading.
-      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
         with:
           cache: true
           cache-dependency-path: Source/EfficientServer.Tests/packages.lock.json
@@ -52,8 +52,13 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+      # Same rationale as the optimizer job: every authenticated git operation
+      # below passes its own token URL explicitly, so the checkout's embedded
+      # credential is not needed anywhere and is dropped from the workspace.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
         with:
           cache: true
           cache-dependency-path: Source/EfficientServer.Tests/packages.lock.json
@@ -67,7 +72,10 @@ jobs:
         run: |
           set -euo pipefail
           url="https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-          if git ls-remote --exit-code --heads origin badges >/dev/null 2>&1; then
+          # Explicit token URL, not the workspace "origin": the checkout no
+          # longer persists credentials, and this must work the same on a
+          # private repo where an anonymous ls-remote would fail.
+          if git ls-remote --exit-code --heads "$url" badges >/dev/null 2>&1; then
             git clone --depth 1 --branch badges "$url" badge-repo
           else
             git init -q -b badges badge-repo

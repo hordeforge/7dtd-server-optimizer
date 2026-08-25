@@ -136,7 +136,12 @@ install:
 # $(SEVENDTD_DS_DIR), not $(DS): an exported SEVENDTD_DS_DIR overrides ?=, so
 # $(DS) would still hold the stock default and this could delete from a
 # directory install.sh never touched. The variable equals DS when DS was used.
+# Empty guard: `DS= make uninstall` leaves both spellings defined-but-empty
+# (?= never fires on an existing empty variable), which would expand to
+# rm -rf "/Mods/EfficientServer" at the filesystem root instead of failing.
 uninstall:
+	@if [ -z "$(SEVENDTD_DS_DIR)" ]; then \
+	  echo "ERROR: uninstall got an empty install dir; pass DS=\"/path/to/7 Days to Die Dedicated Server\"." >&2; exit 1; fi
 	rm -rf "$(SEVENDTD_DS_DIR)/Mods/EfficientServer"
 run:
 	$(ROOT)/scripts/run_server.sh

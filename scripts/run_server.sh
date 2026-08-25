@@ -34,7 +34,13 @@ ROOT="$(cd "$SCRIPTDIR/.." && pwd)"
 
 # Resolve dedicated server directory
 SRV="${SEVENDTD_DS_DIR:-${DS:-$HOME/.local/share/Steam/steamapps/common/7 Days to Die Dedicated Server}}"
-if [[ $# -ge 2 && "$1" == "--ds" ]]; then
+# A bare --ds with no path must fail here, not fall through and pass "--ds"
+# to the server binary as a stray launch argument.
+if [[ "${1:-}" == "--ds" ]]; then
+  if [[ $# -lt 2 ]]; then
+    echo "ERROR: --ds needs a path argument: scripts/run_server.sh [--ds /path/to/server] [extra server args...]" >&2
+    exit 1
+  fi
   SRV="$2"
   shift 2
 fi

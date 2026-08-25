@@ -51,6 +51,7 @@ acceptance (`docs/FEATURES.md` fidelity checks).
 | `scripts/check_version.py` (+ `--selftest`) | versions disagree across `ModInfo.xml` / `AssemblyInfo.cs`, docs claim a version newer than shipped, the changelog lacks the shipped version, or the gate's own parsing broke | bump `Source/EfficientServer/ModInfo.xml` and `AssemblyInfo.cs` together and add the matching `CHANGELOG.md` entry in the same change, or fix the script; its selftest is the spec |
 | `scripts/es_cfg_guard.py --selftest` | the config backup/restore guard broke its own protocol | fix the script; its selftest is the spec |
 | `scripts/gen_sbom.py --selftest` | the SBOM generator broke (determinism, lock parsing, CycloneDX structure) | fix the script; its selftest is the spec |
+| `scripts/coverage_badge.py --selftest` | the coverage-badge generator broke (Cobertura parsing or SVG rendering; CI uses it to publish the README badge) | fix the script; its selftest is the spec |
 
 ## PR expectations beyond the gates
 
