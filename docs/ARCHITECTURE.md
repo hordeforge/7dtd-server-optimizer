@@ -69,6 +69,15 @@ must preserve:
   (`AstarGraphThrottlePatch`, `EntityDistributionStridePatch`) advance their
   counters through `TickStride`, whose `Interlocked.Increment` keeps the stride
   exact even if a caller ever runs off-main.
+- **The one intentional receive-thread surface:** `ClientListSnapshotPatch`
+  transpiles the connection-request duplicate-IP scan, which LiteNetLib dispatches
+  inline on the socket-receive thread (`UnsyncedEvents=true`). Its helper is
+  stateless and touches shared state only through the sanctioned cross-thread read
+  set (`ModApi.Config` reference read, `ShouldRun`'s volatile publication) plus an
+  exception-free `ICollection.CopyTo` snapshot of `Clients.List`, so no lock is
+  needed and nothing main-owned is mutated. It fixes a stock race: the vanilla
+  code enumerates that live list on the receive thread while the main thread
+  mutates it (network.md 4.0).
 
 ## Process model
 

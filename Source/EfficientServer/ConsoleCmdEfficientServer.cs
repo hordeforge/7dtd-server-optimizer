@@ -103,7 +103,8 @@ namespace EfficientServer
                 + $"poolInitScan={c.Pathfinding.PoolInitScanNodes} "
                 + $"pathCap={c.Pathfinding.MaxPathEnqueuesPerTick} pathDropFarSq={c.Pathfinding.DropPathWhenFarDistSq.ToString(CultureInfo.InvariantCulture)}");
             SdtdConsole.Instance.Output(
-                $"{EsLog.LogPrefix}fastSend={c.Network.FastSingleTargetSend} stride={c.Network.EntityDistributionEveryTicks} "
+                $"{EsLog.LogPrefix}fastSend={c.Network.FastSingleTargetSend} clientListSnapshot={c.Network.ClientListSnapshot} "
+                + $"stride={c.Network.EntityDistributionEveryTicks} "
                 + $"chunkBatch={c.WorldTransfer.ChunkPackagesPerObserverPerTick} "
                 + $"dynamicMesh={c.DynamicMesh.Enabled}(buffer={c.DynamicMesh.PlayerAreaChunkBuffer} regionMs={c.DynamicMesh.MaxRegionLoadMsPerFrame}) | "
                 + $"targetFps={c.Server.TargetFps} jobWorkers={c.Server.JobWorkerCount}");

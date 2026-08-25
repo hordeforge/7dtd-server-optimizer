@@ -147,6 +147,15 @@ namespace EfficientServer
         // strides trade visible rubber-banding for CPU; needs a human-eye fidelity
         // pass before production use.
         public int EntityDistributionEveryTicks { get; set; } = 1;
+
+        // Stock join-churn race fix: the connection-request duplicate-IP scan runs on
+        // the LiteNetLib receive thread and enumerates the live Clients list the main
+        // thread mutates, throwing "Collection was modified" under churn and cascading
+        // into RemoteConnectionClose for connected clients (engine RE, network.md 4.0).
+        // true = the scan enumerates a private point-in-time snapshot instead (decision
+        // semantics preserved up to one copy instant, crash mode removed). false =
+        // exact vanilla enumerator. See ClientListSnapshotPatch.
+        public bool ClientListSnapshot { get; set; } = true;
     }
 
     // Chunk/world transfer to joining clients (independent toggle).
@@ -287,6 +296,7 @@ namespace EfficientServer
         public const string KeyMoveThreshold = "MoveThreshold";
         public const string KeyPathAdmission = "PathAdmission";
         public const string KeyFastSend = "FastSend";
+        public const string KeyClientListSnapshot = "ClientListSnapshot";
         public const string KeyInitScanPool = "InitScanPool";
         public const string KeyChunkSendThrottle = "ChunkSendThrottle";
         public const string KeyExplosionParticles = "ExplosionParticles";
@@ -573,6 +583,8 @@ namespace EfficientServer
                         && (Pathfinding.MaxPathEnqueuesPerTick > 0 || Pathfinding.DropPathWhenFarDistSq > 0f);
                 case KeyFastSend:
                     return Network != null && Network.FastSingleTargetSend;
+                case KeyClientListSnapshot:
+                    return Network != null && Network.ClientListSnapshot;
                 case KeyInitScanPool:
                     return Pathfinding != null && Pathfinding.PoolInitScanNodes;
                 case KeyChunkSendThrottle:

@@ -220,6 +220,25 @@ One-way per process: the collector mode is a P/Invoke that cannot be undone, so
 - **Gameplay impact: none, provably** - entityId is unique, so vanilla also
   enqueues to exactly the one client the map returns. Default ON per policy.
 
+### `ClientListSnapshot` (default `true`)
+- **Mechanism:** transpiler on
+  `LiteNetLibAuthWrapperServer.ConnectionRequestCheck` reroutes the duplicate-IP
+  scan's `Clients.List` enumeration through a private point-in-time snapshot
+  (`ICollection.CopyTo`, which does not version-check) instead of the live list.
+  The scan runs on the LiteNetLib receive thread (`UnsyncedEvents=true`), so the
+  vanilla live enumeration races the main thread's join/disconnect mutations and
+  throws "Collection was modified" under churn; the exception escapes the event
+  dispatch and cascades into `RemoteConnectionClose` bursts for connected clients
+  (engine RE: network.md 4.0; measured 302 close events over 4 min at 16-28 bot
+  churn on stock).
+- **Gameplay impact: none** - rate limiting, the pending-IP and password rejects,
+  and Accept are untouched, and the decision semantics hold up to one copy
+  instant (a client added mid-copy can be missed once). If the copy itself races
+  a resize, the scan passes empty (fail open to accept), never crashes.
+- **Default ON per policy**: removes a stock crash mode with no behavior change;
+  set false only to reproduce the stock race in a controlled A/B (false restores
+  the exact vanilla enumerator).
+
 ### `EntityDistributionEveryTicks` (default `1` = vanilla, clamp [1,4])
 - **Mechanism:** prefix on `NetEntityDistribution.OnUpdateEntities` runs the whole
   replication pass every Nth tick. The pass is a state-driven scan (interest

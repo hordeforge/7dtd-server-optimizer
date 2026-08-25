@@ -24,6 +24,16 @@ So `EfficientServer-0.1.0.zip` logging `mod=1.17.0` is correct, not drift.
 ## [Unreleased]
 
 ### Fixed
+- Stock join-churn race: the connection-request duplicate-IP scan ran on the
+  LiteNetLib receive thread and enumerated the live `Clients` list the main
+  thread mutates during joins/disconnects, throwing "Collection was modified"
+  under churn and cascading into `RemoteConnectionClose` bursts that dropped
+  connected clients (the same stock bug that capped live validation cohorts at
+  ~12 bots). The new `Network.ClientListSnapshot` lever (default on) enumerates
+  a private point-in-time snapshot instead; rate limiting, rejects, and Accept
+  are untouched, decision semantics hold up to one copy instant, and a raced
+  copy fails open to an empty scan instead of crashing. Set it false to
+  reproduce the vanilla behavior in a controlled A/B.
 - The apply-once knobs (`Server.TargetFps`, `Server.JobWorkerCount`,
   `DynamicMesh.*` budgets) now undo their effect when a reload disables them:
   reloading to `TargetFps: 0`, `JobWorkerCount: 0`, or

@@ -475,6 +475,13 @@ namespace EfficientServer.Tests
             Check(strideNeg.AiLod.MidTickStride == 1, "MidTickStride -3 -> 1 (clamp)");
             var net = LoadTemp("{\"Network\":{\"FastSingleTargetSend\":false}}");
             Check(!net.Network.FastSingleTargetSend, "Network round-trip FastSingleTargetSend=false (opt-out)");
+            // v1.17.x: join-churn race fix ships ON (removes the stock receive-thread
+            // crash; the opt-out restores the exact vanilla enumerator).
+            Check(d2.Network.ClientListSnapshot, "default ClientListSnapshot=true (join-churn race fix ships on)");
+            var clsOff = LoadTemp("{\"Network\":{\"ClientListSnapshot\":false}}");
+            Check(clsOff.Network != null && !clsOff.Network.ClientListSnapshot,
+                "ClientListSnapshot round-trip false (vanilla enumerator opt-out)");
+            Check(net.Network.ClientListSnapshot, "FastSingleTargetSend=false leaves sibling ClientListSnapshot at default");
 
             // v1.9.0: WorldTransfer chunk batch cap. Default 3 = vanilla; floor 1 is a
             // correctness guard (0 would deadlock the send loop).
@@ -815,6 +822,7 @@ namespace EfficientServer.Tests
             Check(fa.FeatureActive("BenchGod", true), "BenchGod -> active when console flag on");
             Check(fa.FeatureActive("ExplosionParticles"), "default ExplosionParticles -> active (ships on)");
             Check(fa.FeatureActive("FastSend"), "default FastSend -> active (opt-out feature)");
+            Check(fa.FeatureActive("ClientListSnapshot"), "default ClientListSnapshot -> active (race fix ships on)");
             Check(fa.FeatureActive("Governor"), "default Governor -> active (inert when healthy)");
             // Both levers of the Gc AND-gate ship true, so a default flip of either
             // would silently deactivate the forced-collect guard; every other
@@ -830,7 +838,7 @@ namespace EfficientServer.Tests
                 "{\"AiLod\":{\"Enabled\":true},\"TickGuard\":{\"Enabled\":true}," +
                 "\"Pathfinding\":{\"GraphUpdateEveryTicks\":8,\"MoveRescanThresholdSq\":400," +
                 "\"MaxPathEnqueuesPerTick\":64,\"PoolInitScanNodes\":true}," +
-                "\"Network\":{\"EntityDistributionEveryTicks\":4}," +
+                "\"Network\":{\"EntityDistributionEveryTicks\":4,\"ClientListSnapshot\":true}," +
                 "\"WorldTransfer\":{\"ChunkPackagesPerObserverPerTick\":8}," +
                 "\"SkipOnDedicated\":{\"ExplosionParticles\":true}," +
                 "\"AnimatorLod\":{\"Enabled\":true},\"CrowdCollisionLod\":{\"Enabled\":true}," +
@@ -842,6 +850,7 @@ namespace EfficientServer.Tests
             Check(faOn.FeatureActive("PathAdmission"), "MaxPathEnqueuesPerTick 64 -> active");
             Check(faOn.FeatureActive("InitScanPool"), "PoolInitScanNodes -> active");
             Check(faOn.FeatureActive("EntityDistributionStride"), "EntityDistributionEveryTicks 4 -> active");
+            Check(faOn.FeatureActive("ClientListSnapshot"), "ClientListSnapshot true -> active");
             Check(faOn.FeatureActive("ChunkSendThrottle"), "ChunkPackagesPerObserverPerTick 8 -> active");
             Check(faOn.FeatureActive("ExplosionParticles"), "SkipOnDedicated.ExplosionParticles -> active");
             Check(faOn.FeatureActive("AnimatorLod"), "AnimatorLod enabled -> active");
@@ -856,7 +865,8 @@ namespace EfficientServer.Tests
             var faOff = LoadTemp(
                 "{\"Pathfinding\":{\"GraphUpdateEveryTicks\":1,\"MoveRescanThresholdSq\":100," +
                 "\"MaxPathEnqueuesPerTick\":0,\"PoolInitScanNodes\":false}," +
-                "\"Network\":{\"FastSingleTargetSend\":false,\"EntityDistributionEveryTicks\":1}," +
+                "\"Network\":{\"FastSingleTargetSend\":false,\"EntityDistributionEveryTicks\":1," +
+                "\"ClientListSnapshot\":false}," +
                 "\"WorldTransfer\":{\"ChunkPackagesPerObserverPerTick\":3}," +
                 "\"Server\":{\"TargetFps\":0},\"SkipOnDedicated\":{\"ExplosionParticles\":false}}");
             Check(!faOff.FeatureActive("GraphThrottle"), "GraphUpdateEveryTicks 1 -> inactive");
@@ -864,6 +874,7 @@ namespace EfficientServer.Tests
             Check(!faOff.FeatureActive("PathAdmission"), "no path admission knobs -> inactive");
             Check(!faOff.FeatureActive("InitScanPool"), "PoolInitScanNodes false -> inactive");
             Check(!faOff.FeatureActive("FastSend"), "FastSingleTargetSend false -> inactive");
+            Check(!faOff.FeatureActive("ClientListSnapshot"), "ClientListSnapshot false -> inactive");
             Check(!faOff.FeatureActive("EntityDistributionStride"), "EntityDistributionEveryTicks 1 -> inactive");
             Check(!faOff.FeatureActive("ChunkSendThrottle"), "ChunkPackagesPerObserverPerTick 3 (vanilla) -> inactive");
             Check(!faOff.FeatureActive("TargetFps"), "TargetFps 0 -> inactive");

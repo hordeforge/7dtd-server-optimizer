@@ -236,6 +236,32 @@ holds the scan) **-0.2% -> -5.2%**. Marginal at low player counts (the scan is a
 handful of cheap int-compares), it grows toward the 450-500 player death-spiral
 regime it targets. Correct, safe, and the benefit rises with load.
 
+## Network: join-churn duplicate-IP race fix (stock bug, default on)
+
+`ClientListSnapshotPatch` fixes a stock managed race, not a perf lever. With
+LiteNetLib's `UnsyncedEvents=true`, the connection-request handler
+(`LiteNetLibAuthWrapperServer.ConnectionRequestCheck`: IP rate limit, duplicate
+in-flight-IP reject, password check, Accept) runs inline on the socket-receive
+thread. Its duplicate-IP check enumerates `ConnectionManager.Clients.List`
+directly while the main thread adds/removes clients during join churn; the
+version-checked enumerator throws "Collection was modified" on the receive
+thread, which drops in-flight packets and cascades into `RemoteConnectionClose`
+bursts (engine evidence: network.md 4.0, runtime bursts at 16-28 bot churn). This
+race is what capped live validation cohorts at ~12 bots.
+
+The transpiler reroutes only the enumerator acquisition: the scan enumerates a
+private snapshot built with `ICollection.CopyTo` (no version check, fixed-size
+array -> cannot throw). Rate limiting, both rejects, and Accept stay on the
+receive thread unchanged. Decision semantics hold up to one copy instant; a copy
+that races a resize fails open to an empty scan (accept path), never a crash.
+This is the mod's one intentional receive-thread surface: stateless helper,
+cross-thread reads limited to the sanctioned reference/volatile set
+(ARCHITECTURE concurrency model).
+
+Config: `Network.ClientListSnapshot` (default **true**; false restores the exact
+vanilla enumerator for A/B reproduction). Server-internal, no wire change;
+code -> EAC-off.
+
 ## Pathfinding node-array pool (P4, UNSAFE, v1.8.0)
 
 `InitScanPoolPatch` is the first **unsafe** lever (opt-in, default off). It attacks

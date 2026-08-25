@@ -159,6 +159,7 @@ namespace EfficientServer
             new KeyValuePair<Type, string>(typeof(Patches.AstarMoveThresholdPatch), ServerPerfConfig.KeyMoveThreshold),
             new KeyValuePair<Type, string>(typeof(Patches.PathAdmissionPatch), ServerPerfConfig.KeyPathAdmission),
             new KeyValuePair<Type, string>(typeof(Patches.FastSendPatch), ServerPerfConfig.KeyFastSend),
+            new KeyValuePair<Type, string>(typeof(Patches.ClientListSnapshotPatch), ServerPerfConfig.KeyClientListSnapshot),
             new KeyValuePair<Type, string>(typeof(Patches.InitScanPoolPatch), ServerPerfConfig.KeyInitScanPool),
             new KeyValuePair<Type, string>(typeof(Patches.ChunkSendThrottlePatch), ServerPerfConfig.KeyChunkSendThrottle),
             new KeyValuePair<Type, string>(typeof(Patches.ExplosionParticlesPatch), ServerPerfConfig.KeyExplosionParticles),
