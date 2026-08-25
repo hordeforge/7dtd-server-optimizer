@@ -167,7 +167,8 @@ Rank the site by **total bytes** and attribute to the first game frame under the
 Source sessions: player fit `session_20260717_{022851,015855,072731,081439,030120}`;
 entity fit `session_20260717_{224604,225502,231311}_pid2415896`. Scaling JSON:
 `~/.local/share/7dtd-server-apm/{ladder_scaling,zladder_scaling}.json`. Operational
-how-to lives in the repo-root `RUNBOOK.md`; graded candidates in
+how-to lives in the workspace runbook ([`../../docs/RUNBOOK.md`](../../docs/RUNBOOK.md));
+graded candidates in
 `7dtd-server-optimizer/docs/OPTIMIZATION_CANDIDATES.md` §4b/§4d.
 
 ## Related docs
