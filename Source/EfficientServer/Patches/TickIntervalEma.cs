@@ -20,7 +20,7 @@ namespace EfficientServer.Patches
     /// tests can replay identical tick sequences deterministically instead of
     /// inheriting host scheduler jitter into governor/tick-guard transitions.
     /// </summary>
-    sealed class TickIntervalEma
+    internal sealed class TickIntervalEma
     {
         readonly Stopwatch _clock = Stopwatch.StartNew();
         double _lastTickMs;

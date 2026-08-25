@@ -48,7 +48,12 @@ namespace EfficientServer.Patches
 
             float d = __instance.aiClosestPlayerDistSq;
             bool far = d >= cfg.SkipTasksFarDistSq;
-            bool mid = !far && cfg.MidTickStride > 1 && d >= cfg.MediumAiDistSq;
+            // Mid striding needs a live TickClock: with the clock patch missing,
+            // Ticks would freeze at 0 and OwnsCurrentSlot would become a constant per
+            // entityId, permanently freezing most mid-band entities off their AI
+            // tail. Fail open to full-rate AI instead (far-skip does not read the
+            // clock and stays available).
+            bool mid = !far && cfg.MidTickStride > 1 && TickClock.Alive && d >= cfg.MediumAiDistSq;
             if (!far && !mid) return true; // close band (or striding off): full rate
 
             // Keep full AI when hunting / investigating / recently alerted (the
@@ -64,7 +69,7 @@ namespace EfficientServer.Patches
                 // windows. The clock steps per UpdateTick invocation (= frames,
                 // RESULTS 3k): exact at the vanilla 20 fps, and coverage-complete
                 // above 20 fps whenever gcd(fps/20, stride) = 1.
-                if (TickClock.SlotOwn(__instance.entityId, cfg.MidTickStride))
+                if (TickClock.OwnsCurrentSlot(__instance.entityId, cfg.MidTickStride))
                     return true; // this entity's stride tick
             }
 

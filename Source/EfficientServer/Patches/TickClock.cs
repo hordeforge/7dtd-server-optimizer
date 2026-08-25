@@ -17,13 +17,35 @@ namespace EfficientServer.Patches
     /// the same hazard a raw Time.frameCount modulo carries. What the dedicated
     /// counter still buys vs Time.frameCount: deterministic zero seed, immunity to
     /// pre-game frames, and game-type-free state the test harness can replay.
+    ///
+    /// Liveness contract: this counter is advanced by <see cref="TickClockPatch"/>,
+    /// a SEPARATE required patch group. If that one target drifts on a game update,
+    /// Ticks freezes at 0 and every consumer reading slots would silently corrupt
+    /// behavior (mid-band entities frozen off their AI tail forever, most zombies
+    /// stripped of neighbor collision forever, the path-admission window collapsed
+    /// into a lifetime budget). <see cref="Alive"/> exposes whether the driver has
+    /// fired at least once, so consumers fail OPEN to vanilla instead - the same
+    /// degrade-don't-corrupt rule as AiAlertGate's probe and the CheckDespawn
+    /// fallback. Advance() runs unconditionally before any consumer can observe a
+    /// tick body (it is an UpdateTick prefix; all consumers run inside or after the
+    /// tick), so Alive==false in practice means "driver patch missing", not "boot
+    /// has not reached the first frame yet". Main-thread confined like every
+    /// consumer, so a plain bool suffices.
     /// </summary>
     internal static class TickClock
     {
         static int _ticks;
+        static bool _alive;
 
         /// <summary>Index of the current logical tick (0 until the first tick runs).</summary>
         public static int Ticks { get { return _ticks; } }
+
+        /// <summary>
+        /// True once <see cref="Advance"/> has run at least once, i.e. the driver
+        /// patch matched and slots are meaningful. Consumers gate on this and fall
+        /// back to vanilla when false.
+        /// </summary>
+        public static bool Alive { get { return _alive; } }
 
         // Called once per GameManager.UpdateTick (prefix: constant during the whole
         // tick body, including slice-drained entity work that spills onto later
@@ -32,19 +54,20 @@ namespace EfficientServer.Patches
         public static void Advance()
         {
             _ticks = unchecked(_ticks + 1);
+            _alive = true;
         }
 
         /// <summary>
         /// Does this entity own its Nth-tick slot right now? Striped by entityId so
         /// owners spread evenly across the stride window instead of clumping.
         /// </summary>
-        public static bool SlotOwn(int entityId, int everyTicks)
+        public static bool OwnsCurrentSlot(int entityId, int everyTicks)
         {
             return OwnsSlot(entityId, _ticks, everyTicks);
         }
 
         /// <summary>
-        /// Pure slot predicate behind <see cref="SlotOwn"/>, taking the tick index
+        /// Pure slot predicate behind <see cref="OwnsCurrentSlot"/>, taking the tick index
         /// explicitly so tests can replay tick sequences deterministically; also
         /// drives the per-frame animator stripe in <see cref="AnimatorLodPatch"/>
         /// with Time.frameCount as the cursor. Cast through uint so the signed wrap

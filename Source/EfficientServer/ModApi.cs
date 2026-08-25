@@ -44,36 +44,21 @@ namespace EfficientServer
                 // apply their own Harmony patches at GameStartDone and log their own
                 // status ("skip-patch ...", "mesh budgets ..."), so they are not
                 // listed here (the class processor would find nothing on them).
-                Type[] groups =
-                {
-                    typeof(Patches.AiLodPatch), typeof(Patches.UpdateTasksLodPatch),
-                    typeof(Patches.GcGuardPatch), typeof(Patches.AstarGraphThrottlePatch),
-                    typeof(Patches.AstarMoveThresholdPatch), typeof(Patches.PathAdmissionPatch),
-                    typeof(Patches.FastSendPatch),
-                    typeof(Patches.InitScanPoolPatch), typeof(Patches.ChunkSendThrottlePatch),
-                    typeof(Patches.ExplosionParticlesPatch),
-                    typeof(Patches.EntityDistributionStridePatch),
-                    typeof(Patches.GovernorPatch), typeof(Patches.TickGuardPatch),
-                    typeof(Patches.BenchGodPatch), typeof(Patches.CrowdCollisionLodPatch),
-                    typeof(Patches.TargetFpsPatch), typeof(Patches.TickClockPatch),
-                    typeof(Patches.AnimatorLodPatch.UpdatePatch),
-                    typeof(Patches.AnimatorLodPatch.LateUpdatePatch),
-                };
                 int methods = 0, missing = 0;
-                foreach (Type g in groups)
+                foreach (KeyValuePair<Type, string> row in RequiredGroups)
                 {
-                    List<MethodInfo> matched = PatchAllSafe(g);
+                    List<MethodInfo> matched = PatchAllSafe(row.Key);
                     if (matched.Count > 0)
                     {
                         methods += matched.Count;
-                        EsLog.Log($"patched {g.Name} -> " + string.Join(", ",
+                        EsLog.Log($"patched {row.Key.Name} -> " + string.Join(", ",
                             matched.Select(mm => (mm.DeclaringType != null ? mm.DeclaringType.Name + "." : "") + mm.Name).ToArray())
-                            + ConfigNote(g));
+                            + ConfigNote(row));
                     }
                     else
                     {
                         missing++;
-                        EsLog.Warn($"MISSING TARGET: {g.Name} matched no game method (version drift?) - this optimization is INACTIVE");
+                        EsLog.Warn($"MISSING TARGET: {row.Key.Name} matched no game method (version drift?) - this optimization is INACTIVE");
                     }
                 }
                 string summary = $"init {(missing == 0 ? "OK" : "with " + missing + " MISSING required target(s)")}. "
@@ -142,38 +127,49 @@ namespace EfficientServer
                     : " (NO CONFIG FILE at " + path + " - built-in defaults applied)"));
         }
 
-        // A patch can IL-match yet be inert because its config toggle is off. Say so
-        // in the init summary so an operator can tell "matched" from "active".
-        // Feature keys are the shared ServerPerfConfig.Key* constants, so this map
-        // and FeatureActive cannot drift apart by typo; a new patch group adds one
-        // constant plus one entry here and one case there.
-        static readonly Dictionary<Type, string> FeatureKeys = new Dictionary<Type, string>
+        // One ordered table owns BOTH lists that used to live apart: the required
+        // patch groups InitMod installs (in this order) and the
+        // ServerPerfConfig.Key* feature key each group's status note reports
+        // against. A single row per group means the apply list and the note map
+        // cannot drift apart; under the old array + dictionary pair, a new group
+        // added to only one side either silently never patched or silently lost
+        // its "(matched but config-disabled)" note. A null feature marks a group
+        // with no config knob behind it - TickClockPatch is unconditional by
+        // design (no gate may stop a clock other stripes read), so it can never
+        // be config-disabled.
+        static readonly KeyValuePair<Type, string>[] RequiredGroups =
         {
-            { typeof(Patches.AiLodPatch), ServerPerfConfig.KeyAiLod },
-            { typeof(Patches.UpdateTasksLodPatch), ServerPerfConfig.KeyAiLod },
-            { typeof(Patches.GcGuardPatch), ServerPerfConfig.KeyGc },
-            { typeof(Patches.AstarGraphThrottlePatch), ServerPerfConfig.KeyGraphThrottle },
-            { typeof(Patches.AstarMoveThresholdPatch), ServerPerfConfig.KeyMoveThreshold },
-            { typeof(Patches.PathAdmissionPatch), ServerPerfConfig.KeyPathAdmission },
-            { typeof(Patches.FastSendPatch), ServerPerfConfig.KeyFastSend },
-            { typeof(Patches.InitScanPoolPatch), ServerPerfConfig.KeyInitScanPool },
-            { typeof(Patches.ChunkSendThrottlePatch), ServerPerfConfig.KeyChunkSendThrottle },
-            { typeof(Patches.ExplosionParticlesPatch), ServerPerfConfig.KeyExplosionParticles },
-            { typeof(Patches.EntityDistributionStridePatch), ServerPerfConfig.KeyEntityDistributionStride },
-            { typeof(Patches.GovernorPatch), ServerPerfConfig.KeyGovernor },
-            { typeof(Patches.TickGuardPatch), ServerPerfConfig.KeyTickGuard },
-            { typeof(Patches.TargetFpsPatch), ServerPerfConfig.KeyTargetFps },
-            { typeof(Patches.BenchGodPatch), ServerPerfConfig.KeyBenchGod },
-            { typeof(Patches.CrowdCollisionLodPatch), ServerPerfConfig.KeyCrowdCollisionLod },
-            { typeof(Patches.AnimatorLodPatch.UpdatePatch), ServerPerfConfig.KeyAnimatorLod },
-            { typeof(Patches.AnimatorLodPatch.LateUpdatePatch), ServerPerfConfig.KeyAnimatorLod },
+            new KeyValuePair<Type, string>(typeof(Patches.AiLodPatch), ServerPerfConfig.KeyAiLod),
+            new KeyValuePair<Type, string>(typeof(Patches.UpdateTasksLodPatch), ServerPerfConfig.KeyAiLod),
+            new KeyValuePair<Type, string>(typeof(Patches.GcGuardPatch), ServerPerfConfig.KeyGc),
+            new KeyValuePair<Type, string>(typeof(Patches.AstarGraphThrottlePatch), ServerPerfConfig.KeyGraphThrottle),
+            new KeyValuePair<Type, string>(typeof(Patches.AstarMoveThresholdPatch), ServerPerfConfig.KeyMoveThreshold),
+            new KeyValuePair<Type, string>(typeof(Patches.PathAdmissionPatch), ServerPerfConfig.KeyPathAdmission),
+            new KeyValuePair<Type, string>(typeof(Patches.FastSendPatch), ServerPerfConfig.KeyFastSend),
+            new KeyValuePair<Type, string>(typeof(Patches.InitScanPoolPatch), ServerPerfConfig.KeyInitScanPool),
+            new KeyValuePair<Type, string>(typeof(Patches.ChunkSendThrottlePatch), ServerPerfConfig.KeyChunkSendThrottle),
+            new KeyValuePair<Type, string>(typeof(Patches.ExplosionParticlesPatch), ServerPerfConfig.KeyExplosionParticles),
+            new KeyValuePair<Type, string>(typeof(Patches.EntityDistributionStridePatch), ServerPerfConfig.KeyEntityDistributionStride),
+            new KeyValuePair<Type, string>(typeof(Patches.GovernorPatch), ServerPerfConfig.KeyGovernor),
+            new KeyValuePair<Type, string>(typeof(Patches.TickGuardPatch), ServerPerfConfig.KeyTickGuard),
+            new KeyValuePair<Type, string>(typeof(Patches.BenchGodPatch), ServerPerfConfig.KeyBenchGod),
+            new KeyValuePair<Type, string>(typeof(Patches.CrowdCollisionLodPatch), ServerPerfConfig.KeyCrowdCollisionLod),
+            new KeyValuePair<Type, string>(typeof(Patches.TargetFpsPatch), ServerPerfConfig.KeyTargetFps),
+            new KeyValuePair<Type, string>(typeof(Patches.TickClockPatch), null),
+            new KeyValuePair<Type, string>(typeof(Patches.AnimatorLodPatch.UpdatePatch), ServerPerfConfig.KeyAnimatorLod),
+            new KeyValuePair<Type, string>(typeof(Patches.AnimatorLodPatch.LateUpdatePatch), ServerPerfConfig.KeyAnimatorLod),
         };
 
-        static string ConfigNote(Type g)
+        // A patch can IL-match yet be inert because its config toggle is off. Say so
+        // in the init summary so an operator can tell "matched" from "active".
+        // Feature keys are the shared ServerPerfConfig.Key* constants from the same
+        // table InitMod patches, so this note and FeatureActive cannot drift apart
+        // by typo; a new patch group adds one constant plus one row there.
+        static string ConfigNote(KeyValuePair<Type, string> row)
         {
             if (Config == null) return "";
-            return FeatureKeys.TryGetValue(g, out string feature)
-                && !Config.FeatureActive(feature, Patches.BenchGodPatch.BenchGod)
+            return row.Value != null
+                && !Config.FeatureActive(row.Value, Patches.BenchGodPatch.BenchGod)
                 ? " (matched but config-disabled)"
                 : "";
         }

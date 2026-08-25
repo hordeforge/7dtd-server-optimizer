@@ -59,6 +59,15 @@ namespace EfficientServer.Patches
             if (maxPerTick <= 0)
                 return true;
 
+            // Window source liveness: the per-tick window is keyed on TickClock.
+            // With the clock patch missing, Ticks freezes at 0 and the window would
+            // never refill - the cap would silently become a LIFETIME cap and
+            // non-alert pathing would starve forever after the first maxPerTick
+            // requests. Fail open to vanilla admission (drop-far above does not
+            // read the clock and stays available).
+            if (!TickClock.Alive)
+                return true;
+
             // Main-thread only (EntityAlive.FindPath); window-scoped counter keyed
             // on TickClock. That clock advances once per GameManager.UpdateTick
             // INVOCATION, which is every frame (RESULTS 3k): the budget equals a

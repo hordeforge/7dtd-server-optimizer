@@ -42,13 +42,19 @@ namespace EfficientServer.Patches
                 return;
             if (!(__instance is EntityEnemy))
                 return;
+            // Slot source liveness: with the TickClock patch missing, Ticks freezes
+            // at 0 and OwnsCurrentSlot would become a constant per entityId - most zombies
+            // would lose neighbor collision on EVERY tick, forever. Fail open to
+            // vanilla collision instead.
+            if (!TickClock.Alive)
+                return;
             // Slot from TickClock, which steps per UpdateTick invocation (= per
             // frame, RESULTS 3k). At the vanilla 20 fps one frame hosts one tick and
             // every id owns exactly one resolve slot per window; above 20 fps the
             // counter jumps F = fps/20 between an entity's resolve ticks, so
             // coverage is guaranteed only when gcd(F, stride) = 1 (jitter usually
             // breaks other resonances). Same boundary as the mid-band AI stride.
-            if (TickClock.SlotOwn(__instance.entityId, cfg.ResolveEveryNTicks))
+            if (TickClock.OwnsCurrentSlot(__instance.entityId, cfg.ResolveEveryNTicks))
                 return; // this zombie's resolve tick: full collision
             var cck = __instance.m_characterController as CharacterControllerKinematic;
             KinematicCharacterMotor motor = cck != null ? cck.motor : null;

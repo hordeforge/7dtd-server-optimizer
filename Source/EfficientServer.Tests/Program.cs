@@ -586,19 +586,29 @@ namespace EfficientServer.Tests
                 Check(everyIdOwnsExactlyOncePerWindow,
                     "tick clock slot coverage: every id owns exactly one slot per window of " + strideLen);
             }
-            // Advance() steps Ticks by exactly one and SlotOwn reads the current
-            // index: pin a full cycle from the zero seed so the wrapper cannot
-            // drift off the pure predicate it wraps.
-            int cyc = EfficientServer.Patches.TickClock.Ticks;
-            bool cycleHeld = cyc == 0;
-            for (int t = 1; t <= 12 && cycleHeld; t++)
+            // Liveness seam: consumers (updateTasks mid-stride, crowd-collision
+            // striping, path-admission window) fail open to vanilla until the
+            // driver prefix has fired at least once, so a MISSING TickClockPatch
+            // degrades instead of freezing slots at 0. Alive must start false and
+            // latch true on the first Advance - never flip back.
+            Check(!EfficientServer.Patches.TickClock.Alive,
+                "tick clock liveness: not alive before the first Advance (consumers fail open)");
+            EfficientServer.Patches.TickClock.Advance();
+            Check(EfficientServer.Patches.TickClock.Alive,
+                "tick clock liveness: alive after the first Advance");
+            // Advance() steps Ticks by exactly one and OwnsCurrentSlot reads the current
+            // index: pin a full cycle so the wrapper cannot drift off the pure
+            // predicate it wraps. One advance was already consumed by the liveness
+            // pin above, so Ticks reads 1 here and the loop continues from t=2.
+            bool cycleHeld = EfficientServer.Patches.TickClock.Ticks == 1;
+            for (int t = 2; t <= 12 && cycleHeld; t++)
             {
                 EfficientServer.Patches.TickClock.Advance();
                 if (EfficientServer.Patches.TickClock.Ticks != t) { cycleHeld = false; break; }
                 bool expected = t % 4 == 0; // id 0, stride 4 -> owns ticks 4, 8, 12
-                if (EfficientServer.Patches.TickClock.SlotOwn(0, 4) != expected) cycleHeld = false;
+                if (EfficientServer.Patches.TickClock.OwnsCurrentSlot(0, 4) != expected) cycleHeld = false;
             }
-            Check(cycleHeld, "tick clock Advance/SlotOwn track consecutive ticks from the zero seed");
+            Check(cycleHeld, "tick clock Advance/OwnsCurrentSlot track consecutive ticks from the zero seed");
             // Signed-wrap boundary via the uint cast: with id=2 and stride=3 the
             // sums 2+(int.MaxValue-1), 2+int.MaxValue, 2+int.MinValue cross zero as
             // unsigned values 2147483648..50, whose residues mod 3 are 2, 0, 1 -

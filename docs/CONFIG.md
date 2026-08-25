@@ -64,7 +64,9 @@ sleeping/idle far zombies cost near zero. Alert/aggro always restores full AI.
   gated inside it (RESULTS 3k) - so striping is exact at the vanilla 20 fps
   (one counter step per tick); above 20 fps coverage of all stripe slots is
   guaranteed only when gcd(fps/20, N) = 1.
-  `CheckDespawn` still runs every tick; alerted entities never stride.
+  `CheckDespawn` still runs every tick; alerted entities never stride. If the
+  TickClock driver patch is missing (MISSING TARGET at init), the mid band fails
+  open to full-rate AI instead of freezing stripe slots.
 - **Measured: no win** (RESULTS: the mid band is a thin shell - close entities need
   full AI, far ones are already skipped). Kept for experimentation.
 - **Gameplay impact at >1:** mid-range zombies path/react on a delay.
@@ -192,7 +194,10 @@ One-way per process: the collector mode is a P/Invoke that cannot be undone, so
   20 fps and refills fps/20 times per tick at higher `Server.TargetFps`.
   `0` = unlimited (vanilla). Priority (attack target,
   investigate, alert ticks, active sleeper) always admits and does **not**
-  consume the budget.
+  consume the budget. If the TickClock driver patch is missing (MISSING TARGET
+  at init), the cap fails open to vanilla admission (else it would silently
+  become a lifetime cap); `DropPathWhenFarDistSq` does not read the clock and
+  stays available.
 - **Does not** change path *compute* drain (~8 starts/frame stock).
 - **When to raise/set:** blood-moon path-spam A/B only; start around 32-128.
 - **Default 0:** no behavior change until explicitly tuned.
@@ -244,7 +249,9 @@ human A/B (see RESULTS §3r for the null finding).
 - **Mechanism:** each zombie fully resolves entity collision every Nth tick,
   striped by entityId on the mod's TickClock (exact at the vanilla 20 fps; above
   it the clock steps per frame, so coverage is guaranteed only when
-  gcd(fps/20, N) = 1 - see `MidTickStride`).
+  gcd(fps/20, N) = 1 - see `MidTickStride`). If the TickClock driver patch is
+  missing (MISSING TARGET at init), staggering fails open to vanilla collision
+  on every tick instead of freezing stripe slots.
   `4` = vanilla's own response-stagger cadence family.
 - **Gameplay impact:** lower N is closer to vanilla; higher N trades collision
   fidelity for CPU. Disabled entirely while `CrowdCollisionLod.Enabled` is

@@ -45,6 +45,26 @@ namespace EfficientServer.Patches
         public static bool Active { get; private set; }
 
         /// <summary>
+        /// Every animator rig on a living (non-corpse) enemy. The one enumeration
+        /// behind both the Enter sweep and the Exit restore, so the two passes
+        /// cannot disagree on what counts as a live rig - corpses stay in
+        /// Entities.list and are skipped by this filter on both sides.
+        /// </summary>
+        static IEnumerable<Animator> LivingEnemyAnimators(World world)
+        {
+            List<Entity> entities = world.Entities.list;
+            for (int i = 0; i < entities.Count; i++)
+            {
+                if (!(entities[i] is EntityEnemy enemy)) continue;
+                // Corpses stay in Entities.list; leave death pose alone.
+                if (enemy.IsDead()) continue;
+                Animator[] anims = enemy.GetComponentsInChildren<Animator>(true);
+                for (int a = 0; a < anims.Length; a++)
+                    if (anims[a] != null) yield return anims[a];
+            }
+        }
+
+        /// <summary>
         /// Enter emergency (or re-sweep while already active so mid-emergency
         /// spawns are covered). Idempotent on already-culled rigs.
         /// </summary>
@@ -54,28 +74,19 @@ namespace EfficientServer.Patches
             if (world == null) return;
             int swept = 0;
             SweepIds.Clear();
-            List<Entity> entities = world.Entities.list;
-            for (int i = 0; i < entities.Count; i++)
+            foreach (Animator anim in LivingEnemyAnimators(world))
             {
-                if (!(entities[i] is EntityEnemy enemy)) continue;
-                if (enemy.IsDead()) continue;
-                Animator[] anims = enemy.GetComponentsInChildren<Animator>(true);
-                for (int a = 0; a < anims.Length; a++)
-                {
-                    Animator anim = anims[a];
-                    if (anim == null) continue;
-                    int id = anim.GetInstanceID();
-                    // Record BEFORE the culling check so an already-culled rig's
-                    // existing saved entry is not mistaken for a despawned one.
-                    SweepIds.Add(id);
-                    // Never touch enabled. Only change cullingMode.
-                    if (anim.cullingMode == AnimatorCullingMode.CullCompletely)
-                        continue;
-                    if (!SavedModes.ContainsKey(id))
-                        SavedModes[id] = anim.cullingMode;
-                    anim.cullingMode = AnimatorCullingMode.CullCompletely;
-                    swept++;
-                }
+                int id = anim.GetInstanceID();
+                // Record BEFORE the culling check so an already-culled rig's
+                // existing saved entry is not mistaken for a despawned one.
+                SweepIds.Add(id);
+                // Never touch enabled. Only change cullingMode.
+                if (anim.cullingMode == AnimatorCullingMode.CullCompletely)
+                    continue;
+                if (!SavedModes.ContainsKey(id))
+                    SavedModes[id] = anim.cullingMode;
+                anim.cullingMode = AnimatorCullingMode.CullCompletely;
+                swept++;
             }
             PruneDespawnedSavedModes();
             if (!Active || swept > 0)
@@ -118,36 +129,26 @@ namespace EfficientServer.Patches
             World world = GameManager.Instance != null ? GameManager.Instance.World : null;
             if (world == null) return 0;
             int restored = 0;
-            List<Entity> entities = world.Entities.list;
-            for (int i = 0; i < entities.Count; i++)
+            foreach (Animator anim in LivingEnemyAnimators(world))
             {
-                if (!(entities[i] is EntityEnemy enemy)) continue;
-                // Corpses stay in Entities.list; leave death pose alone.
-                if (enemy.IsDead()) continue;
-                Animator[] anims = enemy.GetComponentsInChildren<Animator>(true);
-                for (int a = 0; a < anims.Length; a++)
+                int id = anim.GetInstanceID();
+                AnimatorCullingMode prior;
+                if (!SavedModes.TryGetValue(id, out prior))
                 {
-                    Animator anim = anims[a];
-                    if (anim == null) continue;
-                    int id = anim.GetInstanceID();
-                    AnimatorCullingMode prior;
-                    if (!SavedModes.TryGetValue(id, out prior))
-                    {
-                        // Probe may have entered without a dict entry if the rig
-                        // was already CullCompletely, or spawn arrived mid-exit.
-                        // Healthy server zombies use CullUpdateTransforms (RE).
-                        if (anim.cullingMode != AnimatorCullingMode.CullCompletely)
-                            continue;
-                        prior = AnimatorCullingMode.CullUpdateTransforms;
-                    }
-                    if (anim.cullingMode == prior) continue;
-                    anim.cullingMode = prior;
-                    // Ensure enabled stayed true (never force-disable in this path).
-                    if (!anim.enabled)
-                        anim.enabled = true;
-                    anim.Update(0f);
-                    restored++;
+                    // Probe may have entered without a dict entry if the rig
+                    // was already CullCompletely, or spawn arrived mid-exit.
+                    // Healthy server zombies use CullUpdateTransforms (RE).
+                    if (anim.cullingMode != AnimatorCullingMode.CullCompletely)
+                        continue;
+                    prior = AnimatorCullingMode.CullUpdateTransforms;
                 }
+                if (anim.cullingMode == prior) continue;
+                anim.cullingMode = prior;
+                // Ensure enabled stayed true (never force-disable in this path).
+                if (!anim.enabled)
+                    anim.enabled = true;
+                anim.Update(0f);
+                restored++;
             }
             return restored;
         }

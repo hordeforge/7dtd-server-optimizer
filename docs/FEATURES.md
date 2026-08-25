@@ -16,7 +16,10 @@ quests, and multiplayer separation.
 bands on `aiClosestPlayerDistSq`: close = full rate; **mid (`MediumAiDistSq` <= d <
 `SkipTasksFarDistSq`) = run the heavy `updateTasks` tail every `AiLod.MidTickStride`-th
 tick, striped by entity id on the mod's TickClock** (exact at the vanilla 20 fps; the
-clock steps per `UpdateTick` invocation, i.e. per frame above it - see CONFIG); far = skip. The tail includes the 1236-IL
+clock steps per `UpdateTick` invocation, i.e. per frame above it - see CONFIG); far = skip.
+If the TickClock driver patch ever misses on a game update (MISSING TARGET at init), the
+mid band fails open to full-rate AI instead of freezing slots - far-skip stays active
+(the clock is only needed for striping). The tail includes the 1236-IL
 `UpdateMoveHelper` that stock does not throttle via `aiActiveScale`, so at high zombie
 counts (the standard 64p+300z load, entity-axis dominated) this spreads the per-tick
 entity cost by up to the stride factor. `MidTickStride` default **1 = off** (every
@@ -407,7 +410,10 @@ because it is low-risk and default-inert, not because it is proven. See
 per TickClock window (a frame above the vanilla 20 fps; an exact game-tick budget
 only at 20 fps - see CONFIG) and/or drops far non-alert path requests. Defaults
 both off (vanilla).
-Alerted / attack-target / investigate / active-sleeper always path. See CONFIG
+Alerted / attack-target / investigate / active-sleeper always path. The window
+half fails open to vanilla admission if the TickClock driver patch is missing
+(else the cap would silently become a lifetime cap); the drop-far half does not
+read the clock and stays available. See CONFIG
 `Pathfinding.MaxPathEnqueuesPerTick` and `DropPathWhenFarDistSq`.
 
 ## Animator emergency (v1.17.0 CullCompletely)

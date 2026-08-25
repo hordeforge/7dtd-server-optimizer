@@ -13,7 +13,9 @@ namespace EfficientServer.Patches
     /// Unconditional on purpose: no config gate may stop a clock other stripes read.
     /// Class-annotated and required to match like every sibling group, so a game
     /// update that moves UpdateTick surfaces as MISSING TARGET instead of silently
-    /// freezing every striping gate at slot 0.
+    /// freezing every striping gate at slot 0; <see cref="TickClock.Alive"/> is the
+    /// second line of defense - consumers fail open to vanilla when this prefix has
+    /// never run.
     /// </summary>
     [HarmonyPatch(typeof(GameManager), "UpdateTick")]
     internal static class TickClockPatch
