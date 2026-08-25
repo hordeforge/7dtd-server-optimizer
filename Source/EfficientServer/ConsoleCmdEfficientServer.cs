@@ -188,8 +188,35 @@ namespace EfficientServer
         // `es rigoff` calls since the last `es rigon`. Cumulative by design: a
         // repeated rigoff must not drop the first batch from tracking, or `es
         // rigon` would restore only the newest sweep and leave every earlier
-        // component disabled until restart.
+        // component disabled until restart. Destroyed rigs are pruned each
+        // sweep (PruneDestroyedTracked), so the bound is "live components",
+        // not lifetime spawns.
         static readonly List<Behaviour> _rigDisabled = new List<Behaviour>();
+
+        // Tracked components whose entity died or despawned while disabled can
+        // never be restored (only an unusable Unity wrapper remains), so keep
+        // sweeping them would grow one entry per spawn/despawn for the whole
+        // bench session. Drop them at every rigoff, the same prune-per-sweep
+        // contract as AnimatorEmergency.PruneDespawnedSavedModes: alive entries
+        // stay tracked, so a repeated rigoff still converges additive and one
+        // rigon undoes everything still alive.
+        static void PruneDestroyedTracked()
+        {
+            int removed = 0;
+            for (int i = _rigDisabled.Count - 1; i >= 0; i--)
+            {
+                // Unity's overloaded null comparison: a destroyed component
+                // reads == null even though the reference is non-null.
+                if (_rigDisabled[i] == null)
+                {
+                    _rigDisabled.RemoveAt(i);
+                    removed++;
+                }
+            }
+            if (removed > 0)
+                EsLog.Log("rigprobe: pruned " + removed + " tracked component(s) whose "
+                    + "rig despawned (tracked=" + _rigDisabled.Count + ")");
+        }
 
         static void RigProbe(string sub)
         {
@@ -205,6 +232,7 @@ namespace EfficientServer
                 // Additive sweep: only still-enabled, not-yet-tracked components
                 // are disabled and appended, so rigoff N times converges to the
                 // same state as rigoff once and one rigon undoes it all.
+                PruneDestroyedTracked();
                 int disabled = 0;
                 List<Entity> entities = world.Entities.list;
                 for (int i = 0; i < entities.Count; i++)
