@@ -37,7 +37,9 @@ jobs:
       # Runners ship shellcheck + python3 but not ruff or mypy. Pinned to the
       # exact versions used locally so rule/checker behavior cannot diverge
       # between a green local run and a red remote one (and vice versa).
-      - uses: astral-sh/setup-uv@v5
+      # SHA-pinned like checkout/setup-dotnet above: a moved v5 tag must not be
+      # able to inject code into the pipeline.
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
       - run: uv tool install ruff==0.16.4
       - run: uv tool install mypy==2.1.0
       - run: make test
