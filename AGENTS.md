@@ -3,7 +3,7 @@
 Harmony optimization mod for **7 Days to Die** dedicated servers (target **V3.1.0**).
 Owns only reviewed runtime optim patches. Sibling projects own measurement and load.
 
-Workspace root guide: [`../MODDING_BEST_PRACTICES.md`](../MODDING_BEST_PRACTICES.md)
+Workspace root guide: [`hordeforge/.github` MODDING_BEST_PRACTICES.md](https://github.com/hordeforge/.github/blob/main/MODDING_BEST_PRACTICES.md)
 
 ## Scope
 
