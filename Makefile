@@ -4,10 +4,14 @@ DS ?= $(HOME)/.local/share/Steam/steamapps/common/7 Days to Die Dedicated Server
 # variable through so both spellings work and cannot drift apart.
 export SEVENDTD_DS_DIR ?= $(DS)
 
-# Prefer a local SDK if present (cache or ~/.dotnet), like 7dtd-loadgen
+# Prefer a local SDK if present (cache or ~/.dotnet), like 7dtd-loadgen.
+# Probe for the muxer binary, not bare directory existence: ~/.dotnet also
+# collects telemetry sentinels from system-wide installs that contain no SDK,
+# and exporting such a dir as DOTNET_ROOT would point SDK resolution at an
+# empty tree. build.sh applies the same executability check.
 DOTNET_ROOT ?= $(firstword \
-	$(wildcard $(HOME)/.cache/dotnet-sdk) \
-	$(wildcard $(HOME)/.dotnet) \
+	$(foreach d,$(HOME)/.cache/dotnet-sdk $(HOME)/.dotnet,\
+	  $(if $(wildcard $d/dotnet),$d)) \
 	)
 ifneq ($(DOTNET_ROOT),)
   export DOTNET_ROOT
@@ -60,8 +64,10 @@ build-mcs:
 	SEVENDTD_BUILD_BACKEND=mcs $(ROOT)/scripts/build.sh
 # Preflight so a clean machine gets a named error plus the fix instead of a
 # bare "No such file or directory" (Error 127) from whichever gate runs first.
-# Runs after PATH setup above, so a local SDK under ~/.cache/dotnet-sdk or
-# ~/.dotnet counts as found.
+# Runs after PATH setup above, so a real SDK under ~/.cache/dotnet-sdk or
+# ~/.dotnet counts as found. The second dotnet gate catches runtime-only
+# hosts (distro 'dotnet' with zero SDKs) that would otherwise sail past
+# `command -v` and die mid-gate inside `dotnet restore` with resolver noise.
 test:
 	@if ! command -v shellcheck >/dev/null 2>&1; then \
 	  echo "ERROR: make test needs shellcheck (lint gate for scripts/*.sh)." >&2; \
@@ -84,8 +90,14 @@ test:
 	  echo "  Checker behavior diverges between versions, so CI and local runs must agree:" >&2; \
 	  echo "  uv tool install --force mypy=$(MYPY_VERSION)." >&2; exit 1; fi
 	@if ! command -v dotnet >/dev/null 2>&1; then \
-	  echo "ERROR: make test needs the .NET SDK pinned by global.json (8.0 band), but dotnet is not on PATH." >&2; \
-	  echo "  A local SDK in ~/.cache/dotnet-sdk or ~/.dotnet is picked up automatically; otherwise install the SDK and rerun make test." >&2; exit 127; fi
+	  echo "ERROR: make test needs the .NET SDK pinned by global.json (8.0 band), but no dotnet is on PATH." >&2; \
+	  echo "  A real SDK install under ~/.cache/dotnet-sdk or ~/.dotnet is picked up automatically;" >&2; \
+	  echo "  otherwise install the pinned band and rerun make test, e.g.:" >&2; \
+	  echo "    dotnet-install.sh --channel 8.0 --install-dir \"\$$HOME/.cache/dotnet-sdk\"" >&2; exit 127; fi
+	@if ! dotnet --list-sdks 2>/dev/null | grep -q .; then \
+	  echo "ERROR: make test needs the .NET SDK pinned by global.json (8.0 band); the dotnet on PATH resolved no installed SDKs (runtime-only host?)." >&2; \
+	  echo "  Install the pinned band, e.g.: dotnet-install.sh --channel 8.0 --install-dir \"\$$HOME/.cache/dotnet-sdk\"" >&2; \
+	  echo "  (auto-detected by this Makefile), or your distro's dotnet-sdk-8.0 package, and rerun make test." >&2; exit 127; fi
 # -x follows sourced files so checks see through `. ./lib.sh` style sharing.
 	shellcheck -x $(wildcard $(ROOT)/scripts/*.sh)
 	ruff check $(ROOT)/scripts
