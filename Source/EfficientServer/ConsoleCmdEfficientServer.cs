@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using UnityEngine;
@@ -23,7 +24,7 @@ namespace EfficientServer
 
         public override void Execute(List<string> _params, CommandSenderInfo _senderInfo)
         {
-            string sub = ConsoleCommandUtil.Arg(_params, 0);
+            string sub = Arg(_params, 0);
             if (sub.Length == 0) sub = "status";
             switch (sub)
             {
@@ -58,6 +59,37 @@ namespace EfficientServer
                         + "es animoff | es animon | es animstate | es rigoff | es rigon | es benchgod on|off (diagnostics)");
                     break;
             }
+        }
+
+        // Subcommand/argument matching is case-insensitive everywhere, so the
+        // lookup folds case itself; both call sites are subcommand words.
+        static string Arg(List<string> args, int index)
+        {
+            if (args == null || index < 0 || index >= args.Count) return "";
+            return (args[index] ?? "").Trim().ToLowerInvariant();
+        }
+
+        /// <summary>
+        /// One choke point for command output that must outlive the console
+        /// session: echoes to the live console AND persists via EsLog.Log, so
+        /// state-changing commands (animprobe, rigprobe, benchgod) leave an audit
+        /// trail in the server log for incident investigation. Read-only bulk
+        /// output (status, animstate dumps) stays on SdtdConsole only.
+        /// Pass text WITHOUT the mod prefix; both sinks get exactly one.
+        /// </summary>
+        static void Output(string message)
+        {
+            try
+            {
+                var console = SingletonMonoBehaviour<SdtdConsole>.Instance;
+                if (console != null)
+                    console.Output(EsLog.LogPrefix + message);
+            }
+            catch (Exception ex)
+            {
+                EsLog.Warn("console output failed [" + ex.GetType().Name + "]: " + ex.Message);
+            }
+            EsLog.Log(message);
         }
 
         static void Status()
@@ -100,14 +132,14 @@ namespace EfficientServer
             if (sub == "animoff")
             {
                 Patches.AnimatorEmergency.Enter();
-                ConsoleCommandUtil.Output(
+                Output(
                     "animprobe: ENTER CullCompletely emergency "
                     + $"(active={Patches.AnimatorEmergency.Active}) - read frame time, then 'es animon'");
             }
             else
             {
                 Patches.AnimatorEmergency.Exit();
-                ConsoleCommandUtil.Output(
+                Output(
                     "animprobe: EXIT emergency; "
                     + "check 'es animstate' for dp>0 on moving zombies");
             }
@@ -177,7 +209,7 @@ namespace EfficientServer
                         _rigDisabled.Add(behaviours[b]);
                     }
                 }
-                ConsoleCommandUtil.Output(
+                Output(
                     $"rigprobe: DISABLED {_rigDisabled.Count} rig components (bench only)");
             }
             else
@@ -186,7 +218,7 @@ namespace EfficientServer
                 for (int i = 0; i < _rigDisabled.Count; i++)
                     if (_rigDisabled[i] != null) { _rigDisabled[i].enabled = true; restored++; }
                 _rigDisabled.Clear();
-                ConsoleCommandUtil.Output($"rigprobe: restored {restored} components");
+                Output($"rigprobe: restored {restored} components");
             }
         }
 
@@ -194,7 +226,7 @@ namespace EfficientServer
         {
             // BENCH ONLY: player damage immunity so synthetic bots survive
             // endgame hordes and the load stays an active siege (RESULTS 3q).
-            string arg = ConsoleCommandUtil.Arg(_params, 1);
+            string arg = Arg(_params, 1);
             bool changed = arg == "on" || arg == "off";
             if (arg == "on")
             {
@@ -205,7 +237,7 @@ namespace EfficientServer
                 // output path (console AND log), not just an echo.
                 if (!ServerPerfConfig.BenchGodArmAllowed(ModApi.Config))
                 {
-                    ConsoleCommandUtil.Output(
+                    Output(
                         "benchgod REFUSED (flag stays OFF): arming global player damage immunity "
                         + "requires Diagnostics.AllowBenchGod=true in Config/efficientserver.json "
                         + "+ es reload; see docs/CONFIG.md");
@@ -217,7 +249,7 @@ namespace EfficientServer
             string state = $"benchgod={(Patches.BenchGodPatch.BenchGod ? "ON (bench only!)" : "off")}";
             // A real toggle is audited in the server log (the flag is invisible
             // in game state); a bare `es benchgod` stays a read-only peek.
-            if (changed) ConsoleCommandUtil.Output(state);
+            if (changed) Output(state);
             else SdtdConsole.Instance.Output(EsLog.LogPrefix + state + " (use on|off)");
         }
 

@@ -54,8 +54,8 @@ jobs:
         with:
           cache: true
           cache-dependency-path: Source/EfficientServer.Tests/packages.lock.json
-      - run: pipx install ruff==0.16.4
-      - run: pipx install mypy==2.1.0
+      # No ruff/mypy installs here: make coverage and coverage_badge.py touch
+      # neither, unlike the optimizer job above.
       - run: make coverage
       - run: python3 scripts/coverage_badge.py TestResults/coverage.cobertura.xml "$RUNNER_TEMP/coverage.svg"
       - name: Publish the badge to the badges branch
