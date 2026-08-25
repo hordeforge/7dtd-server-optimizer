@@ -52,7 +52,8 @@ What ships and how it is protected:
   (`Assembly-CSharp`, `0Harmony`, `Newtonsoft.Json`, Unity modules, and so on)
   is resolved from the dedicated server's own `Managed/` directory with
   `Private=false`; the zip contains only `EfficientServer.dll`,
-  `ModInfo.xml`, the default config, and the SBOM below.
+  `ModInfo.xml`, the default config, the MIT license text, and the SBOM
+  below.
 - The single NuGet dependency (`Newtonsoft.Json` for the test harness) is
   exact-pinned in the csproj, hash-pinned in a committed
   `packages.lock.json`, and restored with `dotnet restore --locked-mode` by

@@ -11,7 +11,9 @@ defaults, measured gains).
 Two independent version numbers apply to every release, by design:
 
 - The **GitHub release tag** (`vX.Y.Z`) versions this repository's releases.
-  Downloadable zips are named after it (`EfficientServer-<tag>.zip`).
+  Downloadable zips are named after it minus the leading `v`
+  (`EfficientServer-<version>.zip`; `scripts/package.sh` strips the prefix,
+  and a modified tree keeps an explicit `-dirty` suffix instead).
 - The **mod version** (`ModInfo.xml` / assembly version, currently `1.17.0`)
   tracks the feature history of the mod itself and is what the server log
   reports at startup (`versions: mod=...`). It is independent of the release
@@ -78,6 +80,15 @@ So `EfficientServer-0.1.0.zip` logging `mod=1.17.0` is correct, not drift.
   the `make verify-reproducible` guarantee. A selftest gate
   (`scripts/gen_sbom.py --selftest`) runs in `make test`. See the new
   "Supply chain" section in `SECURITY.md`.
+- License text now ships in the artifact: every build copies the repo's MIT
+  `LICENSE` to `EfficientServer/LICENSE.txt`, so release zips and installed
+  mod directories carry it instead of pointing at the repository.
+- `make install` preflights its runtime dependency: when the target server has
+  no `Mods/0_TFP_Harmony/0Harmony.dll`, install.sh warns by name instead of
+  completing silently into a state where the game skips the mod with only
+  generic log errors. The check targets `$SRV` itself, so installs staged from
+  a client-side compile are covered too; it warns rather than fails, keeping
+  cross-host staging possible.
 
 ### Changed
 - Internal refactor: feature-gating keys shared between config parsing and

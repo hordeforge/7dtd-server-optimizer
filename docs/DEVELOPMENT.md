@@ -134,6 +134,9 @@ Each zip also embeds `EfficientServer/bom.json`, a deterministic CycloneDX 1.5
 SBOM generated from the committed `packages.lock.json` by `gen_sbom.py`
 (component versions plus NuGet content hashes; game-provided libraries are
 marked not-bundled). It is part of the reproducibility guarantee above. The
+zip (and any installed mod directory, since both flow from `build.sh`'s dist
+output) also carries `EfficientServer/LICENSE.txt`, so redistributed copies
+are self-contained under the MIT license terms. The
 supply-chain posture this documents: [`SECURITY.md`](../SECURITY.md),
 "Supply chain".
 

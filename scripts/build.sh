@@ -31,6 +31,10 @@ SRC="$ROOT/Source/EfficientServer"
 finish() {
   cp "$SRC/ModInfo.xml" "$OUT/ModInfo.xml"
   cp "$ROOT/config/efficientserver.json" "$OUT/Config/efficientserver.json"
+  # MIT requires the license text to accompany redistribution, and the zip and
+  # an installed mod must carry the same file set: copy into dist here so both
+  # package.sh (zips dist wholesale) and install.sh inherit it.
+  cp "$ROOT/LICENSE" "$OUT/LICENSE.txt"
   echo "OK -> $OUT/EfficientServer.dll"
   ls -la "$OUT"
 }

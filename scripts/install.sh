@@ -5,6 +5,16 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 SRV="${SEVENDTD_DS_DIR:-$HOME/.local/share/Steam/steamapps/common/7 Days to Die Dedicated Server}"
 DEST="$SRV/Mods/EfficientServer"
+# Runtime-dependency preflight: the mod loads only through the stock
+# 0_TFP_Harmony loader (README "Requirements"), which must live in the TARGET
+# server's Mods/. build.sh may have compiled against a client install's
+# Harmony while $SRV is the install destination, so check $SRV itself.
+# Warning, not failure: staging an install for another host stays possible,
+# and the game skips the mod with only generic log errors when this is missing.
+if [[ ! -f "$SRV/Mods/0_TFP_Harmony/0Harmony.dll" ]]; then
+  echo "WARNING: $SRV has no Mods/0_TFP_Harmony/0Harmony.dll." >&2
+  echo "WARNING: EfficientServer requires the stock 0_TFP_Harmony mod at load time; without it the server will not load this mod." >&2
+fi
 # Preserve a user-edited config across upgrade/reinstall: back up the installed
 # one before wiping, and keep it if it differs from the newly shipped default.
 BACKUP=""
