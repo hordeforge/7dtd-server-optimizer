@@ -133,8 +133,8 @@ supported retarget: rebuild with `make build` and reinstall.
   paths, GNU coreutils, `taskset`); the packaged DLL itself is OS-neutral
   managed code loaded by the game's own runtime on any dedicated-server host
 - `make test` additionally needs `shellcheck`, `ruff` (pinned install:
-  `pipx install ruff==0.16.4`; config in `ruff.toml`), `mypy` (pinned install:
-  `pipx install mypy==2.1.0`; config in `mypy.ini`), and Python 3
+  `uv tool install ruff==0.16.4`; config in `ruff.toml`), `mypy` (pinned install:
+  `uv tool install mypy==2.1.0`; config in `mypy.ini`), and Python 3
   (CI installs the pinned linters itself; the SDK comes from `global.json`)
 - Requires `0_TFP_Harmony` installed in the game's `Mods/` (the Harmony runtime
   the patches load through)

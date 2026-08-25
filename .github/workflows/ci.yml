@@ -37,8 +37,9 @@ jobs:
       # Runners ship shellcheck + python3 but not ruff or mypy. Pinned to the
       # exact versions used locally so rule/checker behavior cannot diverge
       # between a green local run and a red remote one (and vice versa).
-      - run: pipx install ruff==0.16.4
-      - run: pipx install mypy==2.1.0
+      - uses: astral-sh/setup-uv@v5
+      - run: uv tool install ruff==0.16.4
+      - run: uv tool install mypy==2.1.0
       - run: make test
 
   coverage-badge:
