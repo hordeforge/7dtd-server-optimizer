@@ -41,17 +41,24 @@ attacks the top allocators named by the corrected APM attribution
 |---|---|---|---|---|
 | 1 | `AstarVoxelGrid.InitScan` | pathfinding | nav-graph node array, rebuilt per grid move | **A (P4 pooling)** |
 | 2 | `TerrainSubMesh.Add` | dynamic mesh | sub-mesh vertex/index buffers | C |
-| 3 | `PooledBinaryWriter.Write` | network | per-player entity package serialization | **B (L1 serialize-once)** |
+| 3 | `PooledBinaryWriter.Write` | network | per-player entity package serialization | ~~B (L1 serialize-once)~~ refuted, see §3 |
 | 4 | `ItemStack.Clone` | inventory | defensive item copies | C |
 | 5 | `ChunkBlockChannel.Write` | chunk send | chunk block serialization buffers | C (overlaps B) |
 
 `InitScan` is both the #1 large-allocation spike **and** the #1 steady-churn
-source, so Lever A is the single biggest gross-MB/s reduction; Lever B is the
-biggest at pure player-scale (the O(players x entities) replication wall).
+source, so Lever A is the single biggest gross-MB/s reduction. Lever B was
+graded the biggest at pure player-scale, but the 2026-07-20 RE correction (§3)
+refuted it: the build layer already serializes once and the residual is
+off-tick writer-thread work.
+
+**Outcome update (2026-07-20):** Lever A shipped as `InitScanPoolPatch` (v1.8.0,
+default off) and was **parked** - allocation eliminated but no benchable tick win
+([PATHFINDING_OPTIMIZATION.md](PATHFINDING_OPTIMIZATION.md) §P4,
+[RESULTS.md](RESULTS.md) §3c-3d).
 
 ---
 
-## 2. Lever A - Pathfinding node-array pooling (P4). Attacks #1.
+## 2. Lever A - Pathfinding node-array pooling (P4). Attacks #1. **BUILT (v1.8.0, default off) - no benchable tick win; parked.**
 
 ### Source (RE-verified)
 `AstarManager.UpdateGraphs` -> (on a queued move) `UpdateMoveGraph` -> `MoveGraph`
@@ -137,8 +144,9 @@ times into N byte streams. A true serialize-once would encode the package to byt
 once and memcpy per connection. BUT this runs **off the main sim thread** (so it does
 NOT cost `ms_per_tick`), feeds only the **#4** allocator (`PooledBinaryWriter.Write`),
 and needs a thread-safe shared buffer across N writer threads. **Poor risk/reward -
-deprioritized.** The genuinely worthwhile network lever remains the send-path scan
-(shipped, `FastSendPatch`) and the O(N^2) interest spatial grid, not serialize-once.
+deprioritized.** The send-path scan shipped (`FastSendPatch`); the spatial interest
+grid was later refuted as a lever for that wall
+([bottlenecks.md](bottlenecks.md) §5), not serialize-once's replacement either.
 
 ### Surface, effort, risk
 - **Surface:** Harmony on `NetEntityDistributionEntry.updatePlayerEntity`.
@@ -149,8 +157,9 @@ deprioritized.** The genuinely worthwhile network lever remains the send-path sc
   copies bytes into each connection's buffer (so the package can be freed after
   the broadcast) before changing ownership.
 - **Effort:** M-L. **Risk:** medium (pool double-free, desync if a per-viewer
-  field leaks into the shared package). **Impact:** cuts serialization CPU **and**
-  alloc at player-scale; the confirmed dominant lever above ~64 players.
+  field leaks into the shared package). **Impact:** superseded by the RE
+  correction above - the main-tick build is already serialize-once; only the
+  off-tick writer-thread residual remains, which does not cost ms_per_tick.
 - **EAC:** server-side only, wire-compatible (same packages, fewer serializations)
   -> vanilla client connects; code -> EAC-off.
 
@@ -194,11 +203,10 @@ deprioritized.** The genuinely worthwhile network lever remains the send-path sc
 
 ## 6. Sequencing
 
-1. **B (L1 serialize-once)** first: biggest at player-scale, target fully RE'd, no
-   external DLL, and it builds the pooled-broadcast harness Lever C reuses.
-2. **A (P4 node pooling)** second: biggest single allocator, concurrency now
-   proven safe, but external-DLL iterator rewrite - do it after B proves the
-   pooling + measurement harness.
+1. ~~**B (L1 serialize-once)**~~ - REFUTED (see §3 correction): the game already
+   serializes once on the tick path; the writer-thread residual is deprioritized.
+2. **A (P4 node pooling)** - BUILT v1.8.0 (`InitScanPoolPatch`), default off,
+   parked after measurement: alloc eliminated, no benchable tick win.
 3. **C** situational, only if it survives A/B in the top allocators.
 
 Each ships behind a config flag, default vanilla, fidelity-gated (B: no desync

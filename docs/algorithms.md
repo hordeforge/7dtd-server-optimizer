@@ -69,7 +69,9 @@ Two distinct systems, often conflated:
   velocity if motion^2 > 0.04; plus player-independent `EntityAliveFlags`,
   `PlayerStats`, `PlayerTwitchStats`, `PlayerEquipment`, `EntitySpeeds`. These
   player-independent packages are **re-serialized per receiving player** (identical
-  bytes N times) - the serialize-once (L1) target.
+  bytes N times) - the serialize-once (L1) target (deprioritized 2026-07-20: the
+  build layer already serializes once; the residual is off-tick writer-thread work,
+  see [RESULTS.md](RESULTS.md) §5).
 - **Serialization** - `PooledBinaryWriter` over `PooledExpandableMemoryStream`. Both
   are **pooled objects** (`MemoryPools`); the stream `Reset()` = `SetLength(0)`
   **retains** its backing `byte[]` (no steady realloc). Chunks: `ChunkBlockChannel.

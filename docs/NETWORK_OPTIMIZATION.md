@@ -6,10 +6,13 @@ levers from this space already SHIPPED - `Network.FastSingleTargetSend` (O(1)
 single-target recipient lookup, default on) and
 `Network.EntityDistributionEveryTicks` (whole-pass replication stride; also moved
 dynamically by the governor) - see [FEATURES.md](FEATURES.md) / [CONFIG.md](CONFIG.md).
-The structural levers below (L1 serialize-once - note stock RE later showed the
-build layer already serializes once, see PERF_RESEARCH_BRIEF refutations; L2
-spatial grid, L3 interest LOD bands, L4 round-robin budget, L5 per-player caps)
-are NOT yet built. Promote each
+Of the structural levers below, two were later **REFUTED** by measurement + deep
+RE (2026-07-20): **L1 serialize-once** (the build layer already serializes once;
+the residual writer-thread re-serialization is off-tick and deprioritized -
+[RESULTS.md](RESULTS.md) §5, [ALLOCATION_UPSTREAM.md](ALLOCATION_UPSTREAM.md) §3)
+and **L2 spatial grid** (interest is already distance-gated and cheap; the
+O(N^2.26) is inherent replication a grid cannot cull -
+[bottlenecks.md](bottlenecks.md) §5). L3-L6 remain unbuilt ideas. Promote any
 lever only with APM before/after + a desync/fidelity check.
 
 **Owns:** the detailed attack plan for `NetEntityDistribution` / `ConnectionManager`
@@ -43,7 +46,7 @@ Replication runs after `TickEntities` in `UpdateTick`: `OnUpdateEntities`
 iterates entities and, per entity, `updatePlayerList` evaluates **every player's
 interest**. That is the all-pairs eval - ~128 × 131 ≈ **16.7 k pair-evaluations
 per tick** at 128 players, each doing: interest `distSq`, delta-encode vs that
-player's last-known state, a package-type state machine, and a **serialize**.
+player's last-known state, a package-type state machine, and a send enqueue.
 
 Per-player package choice (B3 thresholds, from IL):
 - interest refresh when last pos `distSq > 16`
@@ -55,8 +58,11 @@ Per-player package choice (B3 thresholds, from IL):
 
 Key observation: **absolute/full packages (`PosAndRot`, `Teleport`, `Rotation`,
 flags, stats) are player-independent** - the same entity state. Only
-`RelPosAndRot` (delta vs a specific player's last-sent) is per-player. Yet each
-is serialized once **per interested player** today.
+`RelPosAndRot` (delta vs a specific player's last-sent) is per-player. Deep RE
+correction (2026-07-20): the package objects are already **built once and
+broadcast** via `SendToPlayers` (player-independent ones change-gated); the
+residual per-viewer byte-serialization happens off-tick on the connection writer
+threads - which is why L1 below was refuted ([RESULTS.md](RESULTS.md) §5).
 
 ---
 
@@ -65,7 +71,14 @@ is serialized once **per interested player** today.
 Each lever notes: mechanism, expected impact, implementation surface, wire /
 client compatibility, risk, and how to validate with APM.
 
-### L1: "Serialize once, send many" (TOP PICK: hits CPU *and* GC)
+### L1: "Serialize once, send many" ~~(TOP PICK)~~ REFUTED (2026-07-20)
+
+**Outcome:** the stock build layer already serializes once (`updatePlayerList`
+builds each package once + broadcasts via `SendToPlayers`, player-independent
+packages change-gated); the only residual re-serialization is per-connection in
+the off-tick writer threads - poor risk/reward. See [RESULTS.md](RESULTS.md) §5
+and [ALLOCATION_UPSTREAM.md](ALLOCATION_UPSTREAM.md) §3. Grading below is kept
+for the reasoning trail.
 
 **Mechanism.** For player-independent packages, serialize the entity's state
 **once per tick** into a shared byte buffer and send those identical bytes to all
@@ -95,7 +108,16 @@ identical (same bytes).
 
 **Effort:** medium. **Priority:** 1.
 
-### L2: Spatial interest culling (kills the exponent)
+### L2: Spatial interest culling ~~(kills the exponent)~~ REFUTED for this wall (2026-07-20)
+
+**Outcome:** deep RE showed the interest eval is **already distance-gated**
+(`updatePlayerEntity` distSq vs `trackingDistanceThreshold`) and cheap (~0.5%
+main-thread); the O(N^2.26) is **inherent replication** to genuinely-nearby
+players, which a grid cannot cull (clustered players are all genuinely nearby),
+and a conservative cull cannot safely skip far *tracked* players without stale
+interest (desync). The only real lever for the wall is the vanilla
+`ServerMaxAllowedViewDistance` config. See [bottlenecks.md](bottlenecks.md) §5
+and [RESULTS.md](RESULTS.md) §3b. Grading below is kept for the reasoning trail.
 
 **Mechanism.** Replace the all-pairs interest eval with a spatial grid / hash:
 bucket entities and players into cells; an entity evaluates only players within
@@ -199,14 +221,19 @@ read-only compute is a candidate, and only behind a job barrier.
 
 ## 3. Sequencing
 
-1. **L1 serialize-once** - biggest immediate win, cuts CPU + GC, no wire change,
-   low risk. Build + APM before/after at 64 and 128 players.
-2. **L3 network LOD** (config) in parallel as the tunable safety valve, behind a
-   fidelity gate.
-3. **L2 spatial culling** - the exponent fix for the real 500+ ceiling; larger
-   effort, do after L1 proves the harness.
-4. **L4 / L5** as bounded-work backstops.
-5. **L6** only if L1-L4 leave a main-thread wall.
+1. ~~**L1 serialize-once**~~ - REFUTED (see §2): stock already serializes once.
+2. ~~**L2 spatial culling**~~ - REFUTED for the replication wall (see §2 and
+   [bottlenecks.md](bottlenecks.md) §5).
+3. **L3 network LOD** - same close-high-interest wall as the AI mid-band stride:
+   far entities have few interested players, so throttling them saves little
+   ([bottlenecks.md](bottlenecks.md) §5); high risk, last.
+4. **L4 / L5** as bounded-work backstops, only if a loaded profile ever shows
+   connection-service or per-player volume as the top cost.
+5. **L6** only if L3-L5 leave a main-thread wall.
+
+The two shipped levers (`FastSingleTargetSend`, `EntityDistributionEveryTicks`)
+came from this space; per the ledger there is currently **no safe EfficientServer
+lever left for the O(N^2) replication wall** beyond vanilla view-distance config.
 
 Every lever is server-side-only and wire-compatible (identical or fewer valid
 packets, no protocol change), so a vanilla client connects and nothing desyncs -
