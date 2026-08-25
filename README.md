@@ -89,7 +89,7 @@ reference: [`docs/CONFIG.md`](docs/CONFIG.md). Deploying:
 Docs:
 
 - Local docs hub: [`docs/INDEX.md`](docs/INDEX.md)
-- Workspace modding guide: [`../MODDING_BEST_PRACTICES.md`](../MODDING_BEST_PRACTICES.md)
+- Workspace modding guide: [`hordeforge/.github` MODDING_BEST_PRACTICES.md](https://github.com/hordeforge/.github/blob/main/MODDING_BEST_PRACTICES.md)
 - EfficientServer workflow: [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md)
 - Hot path RE: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 - Host CCD/NUMA/affinity: [`docs/HOST_TUNING.md`](docs/HOST_TUNING.md)

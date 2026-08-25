@@ -1,0 +1,13 @@
+# The test project's NuGet packages (hash-pinned in packages.lock.json) and
+# the SHA-pinned CI actions are the two dependency surfaces.
+version: 2
+updates:
+  - package-ecosystem: nuget
+    directories:
+      - /Source/EfficientServer.Tests
+    schedule:
+      interval: weekly
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
