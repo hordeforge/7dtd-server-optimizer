@@ -21,7 +21,7 @@ jobs:
     steps:
       # Actions pinned to the commit the mutable v4 tag currently names;
       # floating major tags are a supply-chain risk (reproducibility).
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         # The gate performs no git operations; not persisting the token removes
         # it from the runner workspace entirely instead of trusting every step
         # with it for the job's lifetime.
@@ -55,7 +55,7 @@ jobs:
       # Same rationale as the optimizer job: every authenticated git operation
       # below passes its own token URL explicitly, so the checkout's embedded
       # credential is not needed anywhere and is dropped from the workspace.
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
