@@ -183,6 +183,11 @@ namespace EfficientServer
             "EyeLidController", "CharacterGazeController", "FeatherFlutter",
             "LightLODHeld", "DroneRunningLight", "DroneBeamParticle",
         };
+        // Components this probe disabled and has not yet restored, across ALL
+        // `es rigoff` calls since the last `es rigon`. Cumulative by design: a
+        // repeated rigoff must not drop the first batch from tracking, or `es
+        // rigon` would restore only the newest sweep and leave every earlier
+        // component disabled until restart.
         static readonly List<Behaviour> _rigDisabled = new List<Behaviour>();
 
         static void RigProbe(string sub)
@@ -196,7 +201,10 @@ namespace EfficientServer
             if (world == null) { SdtdConsole.Instance.Output(EsLog.LogPrefix + "no world"); return; }
             if (sub == "rigoff")
             {
-                _rigDisabled.Clear();
+                // Additive sweep: only still-enabled, not-yet-tracked components
+                // are disabled and appended, so rigoff N times converges to the
+                // same state as rigoff once and one rigon undoes it all.
+                int disabled = 0;
                 List<Entity> entities = world.Entities.list;
                 for (int i = 0; i < entities.Count; i++)
                 {
@@ -205,12 +213,14 @@ namespace EfficientServer
                     {
                         if (behaviours[b] == null || !behaviours[b].enabled) continue;
                         if (!RigTypes.Contains(behaviours[b].GetType().Name)) continue;
+                        if (_rigDisabled.Contains(behaviours[b])) continue;
                         behaviours[b].enabled = false;
                         _rigDisabled.Add(behaviours[b]);
+                        disabled++;
                     }
                 }
                 Output(
-                    $"rigprobe: DISABLED {_rigDisabled.Count} rig components (bench only)");
+                    $"rigprobe: DISABLED {disabled} rig components ({_rigDisabled.Count} tracked; bench only)");
             }
             else
             {

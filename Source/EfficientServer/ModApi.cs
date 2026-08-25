@@ -19,6 +19,19 @@ namespace EfficientServer
         {
             try
             {
+                // Idempotency guard: patches under this Harmony id already present
+                // means a second EfficientServer copy loaded (or init re-ran) in
+                // this process. Re-running from here would STACK every prefix -
+                // TickClock.Advance would step the shared tick clock twice per tick
+                // and corrupt every stride consumer, per-patch counters would double,
+                // and GameStartDone would fire this handler twice - so converge to a
+                // logged no-op and leave the process to the first-loaded copy.
+                if (Harmony.HasAnyPatches(HarmonyId))
+                {
+                    EsLog.Warn("EfficientServer is already patched in this process "
+                        + "(duplicate mod copy or repeated init); skipping init");
+                    return;
+                }
                 ModPath = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? "";
                 // Name the exact file that was consulted BEFORE loading, so an
                 // operator who edited a copy in the wrong place sees why their knobs
