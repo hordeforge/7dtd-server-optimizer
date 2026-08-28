@@ -20,7 +20,9 @@ import re
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+from repo_root import repo_root
+
+ROOT = repo_root()
 MODINFO = ROOT / "Source" / "EfficientServer" / "ModInfo.xml"
 DIST_MODINFO = ROOT / "dist" / "EfficientServer" / "ModInfo.xml"
 ASSEMBLY = ROOT / "Source" / "EfficientServer" / "AssemblyInfo.cs"

@@ -71,10 +71,17 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          url="https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-          # Explicit token URL, not the workspace "origin": the checkout no
-          # longer persists credentials, and this must work the same on a
-          # private repo where an anonymous ls-remote would fail.
+          # Credential helper reading the token from the environment, rather
+          # than a https://x-access-token:$TOKEN@... URL: that URL form puts
+          # the token in argv (readable in the runner's process table) and
+          # `git remote add` would persist it into badge-repo/.git/config on
+          # disk. The helper keeps it in this step's env only. Explicit auth,
+          # not the workspace "origin": the checkout no longer persists
+          # credentials, and this must work the same on a private repo where
+          # an anonymous ls-remote would fail.
+          git config --global credential.helper \
+            '!f() { printf "username=x-access-token\npassword=%s\n" "$GITHUB_TOKEN"; }; f'
+          url="https://github.com/${GITHUB_REPOSITORY}.git"
           if git ls-remote --exit-code --heads "$url" badges >/dev/null 2>&1; then
             git clone --depth 1 --branch badges "$url" badge-repo
           else

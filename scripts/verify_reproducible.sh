@@ -14,6 +14,12 @@
 set -euo pipefail
 export LC_ALL=C TZ=UTC
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+# Leg 3 copies the whole tree including .git; the stock /tmp is tmpfs on most
+# Linux hosts, so that copy plus a full recompile would run out of RAM instead
+# of disk. mktemp honors TMPDIR, and .scratch/ is gitignored (and excluded from
+# the tar below, or the copy would recurse into its own destination).
+export TMPDIR="$ROOT/.scratch/tmp"
+mkdir -p "$TMPDIR"
 
 for tool in git zip sha256sum find tar; do
   command -v "$tool" >/dev/null 2>&1 || { echo "ERROR: required tool '$tool' not found" >&2; exit 1; }
@@ -47,12 +53,14 @@ H2="$(sha256sum "$Z2")"
 echo "  identical"
 
 echo "== leg 3: full recompile from a copied tree at another path"
-STAGE="$(mktemp -d "${TMPDIR:-/tmp}/es-repro.XXXXXX")"
+STAGE="$(mktemp -d "$TMPDIR/es-repro.XXXXXX")"
 trap 'rm -rf "$STAGE"' EXIT
 # Copy including .git so version resolution sees the same history; exclude
-# build outputs and local launch state so nothing but sources carries over.
+# build outputs, local launch state and .scratch (which holds $STAGE itself)
+# so nothing but sources carries over.
 tar -C "$ROOT" --exclude=./dist --exclude=./Source/EfficientServer/obj \
-  --exclude=./Source/EfficientServer/bin --exclude=./server -cf - . | tar -C "$STAGE" -xf -
+  --exclude=./Source/EfficientServer/bin --exclude=./server --exclude=./.scratch \
+  -cf - . | tar -C "$STAGE" -xf -
 DLL_REF="$ROOT/dist/EfficientServer/EfficientServer.dll"
 rm -f "$ROOT"/dist/EfficientServer-*.zip
 "$STAGE/scripts/build.sh" >/dev/null || fail "out-of-tree build failed"

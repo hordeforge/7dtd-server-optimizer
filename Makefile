@@ -1,4 +1,10 @@
 ROOT := $(CURDIR)
+# The stock /tmp is tmpfs on most Linux hosts, so temp files there are held in
+# RAM and vanish on reboot. Route every gate's scratch onto disk: mktemp,
+# Python's tempfile and .NET's Path.GetTempPath all honor TMPDIR, so this one
+# export covers the shell, Python and C# sides. .scratch/ is gitignored.
+export TMPDIR := $(ROOT)/.scratch/tmp
+
 DS ?= $(HOME)/.local/share/Steam/steamapps/common/7 Days to Die Dedicated Server
 # Scripts read SEVENDTD_DS_DIR; route the documented `make install DS=...`
 # variable through so both spellings work and cannot drift apart.
@@ -69,6 +75,7 @@ build-mcs:
 # hosts (distro 'dotnet' with zero SDKs) that would otherwise sail past
 # `command -v` and die mid-gate inside `dotnet restore` with resolver noise.
 test:
+	@mkdir -p "$(TMPDIR)"
 	@if ! command -v shellcheck >/dev/null 2>&1; then \
 	  echo "ERROR: make test needs shellcheck (lint gate for scripts/*.sh)." >&2; \
 	  echo "  Install it (e.g. apt-get install shellcheck) and rerun make test." >&2; exit 127; fi
@@ -110,6 +117,7 @@ test:
 # packages.lock.json, instead of silently floating to newer versions.
 	dotnet restore --locked-mode $(ROOT)/Source/EfficientServer.Tests
 	dotnet run --project $(ROOT)/Source/EfficientServer.Tests -c Release --no-restore
+	python3 $(ROOT)/scripts/repo_root.py --selftest
 	python3 $(ROOT)/scripts/check_config_doc.py
 	python3 $(ROOT)/scripts/check_config_doc.py --selftest
 	python3 $(ROOT)/scripts/check_version.py
@@ -127,7 +135,7 @@ test:
 # resolve them. Output format flag is 18.x spelling (-f/--output-format).
 coverage:
 	dotnet tool restore
-	mkdir -p "$(ROOT)/TestResults"
+	mkdir -p "$(ROOT)/TestResults" "$(TMPDIR)"
 	# Same locked restore make test runs: the collect below passes --no-restore.
 	dotnet restore --locked-mode $(ROOT)/Source/EfficientServer.Tests
 	dotnet tool run dotnet-coverage -- collect -f cobertura -o "$(ROOT)/TestResults/coverage.cobertura.xml" -- dotnet run --project "$(ROOT)/Source/EfficientServer.Tests" -c Release --no-restore

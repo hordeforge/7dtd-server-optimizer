@@ -31,6 +31,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import NoReturn
 
+from repo_root import repo_root
+
 BOM_FORMAT = "CycloneDX"
 SPEC_VERSION = "1.5"
 ROOT_REF = "root"
@@ -272,8 +274,7 @@ def selftest() -> int:
               f"package in two TFM groups dedupes to one component "
               f"(got {len(bom_multi['components'])})")
 
-    real_lock = Path(__file__).resolve().parent.parent / (
-        "Source/EfficientServer.Tests/packages.lock.json")
+    real_lock = repo_root() / "Source/EfficientServer.Tests/packages.lock.json"
     if real_lock.exists():
         bom = build_bom("t", "t", 0, real_lock)
         check(len(bom["components"]) >= 1, "in-repo lock file inventories >= 1 component")

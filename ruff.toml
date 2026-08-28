@@ -10,14 +10,12 @@ src = ["scripts"]
 # must pass on the tree before its selector lands. Deliberately not selected:
 # - T20 (print): these are CLI harnesses; stdout is the product.
 # - SIM / RET / PTH: style churn with no defect signal in this tree yet.
-# The S (bandit) group is selected minus the three rules with standing,
+# The S (bandit) group is selected minus the two rules with standing,
 # documented findings on this tree:
 # - S110 (except-pass): teardown paths log-and-continue on purpose so a
 #   failed cleanup never masks the real result.
 # - S314 (xml parse): coverage_badge.py parses CI-generated Cobertura XML,
 #   not untrusted input, and defusedxml would be a new dependency.
-# - S607 (partial executable path): the pkill/teardown calls are deliberate
-#   and bracket their patterns to avoid self-matching.
 select = [
     "E",    # pycodestyle errors (incl. E501 at 100 via line-length)
     "W",    # pycodestyle warnings
@@ -42,7 +40,6 @@ select = [
 ignore = [
     "S110",
     "S314",
-    "S607",
 ]
 
 [lint.per-file-ignores]

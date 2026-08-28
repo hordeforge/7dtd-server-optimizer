@@ -34,7 +34,7 @@ Game version pin: **V3.1.0** dedicated `Assembly-CSharp`. Do not redistribute ga
 
 | Grade | Meaning |
 |---|---|
-| **A** | Clear hot path; Harmony/config-shaped; high leverage |
+| **A** | Clear hot path; Harmony/config-shaped; large win per line |
 | **B** | Real cost, more fidelity risk or larger surface |
 | **C** | Situational / content-dependent / measure first |
 | **Ops** | Host, config, schedule, not EfficientServer code |
@@ -571,7 +571,7 @@ Regenerate dumps with the RE tooling in `../../7dtd-engine-research/tools/` (see
 
 Full ranked catalog + bang-for-buck ordering:
 [`bottlenecks.md`](bottlenecks.md) (42 verified
-findings). New/actionable levers not already graded above, by impact-per-line:
+findings). New levers not already graded above, by impact-per-line:
 
 | Lever | Grade | Code | Impact |
 |---|---|---|---|

@@ -109,6 +109,11 @@ namespace EfficientServer
                 if (gcDisabled)
                 {
                     gcDisabled = false;
+                    // Swallows the same DllNotFoundException/EntryPointNotFound
+                    // class the outer catch is already reporting: if the Boehm
+                    // symbols are unreachable the disable never took effect
+                    // either, so there is nothing left to restore and a second
+                    // log line would only duplicate the one below.
                     try { BoehmNative.GC_enable(); } catch { }
                 }
                 // Name the type + library: DllNotFoundException (host OS ships the

@@ -26,6 +26,11 @@ So `EfficientServer-0.1.0.zip` logging `mod=1.17.0` is correct, not drift.
 ## [Unreleased]
 
 ### Fixed
+- `make test` was red on `main`: the config harness failed to compile
+  (`Program.cs` CS8602) because a `d2.Network != null` comparison narrows the
+  reference to maybe-null for the rest of the method, and a later
+  `ClientListSnapshot` assertion dereferenced it bare. Null-guarded like its
+  neighbours.
 - Stock join-churn race: the connection-request duplicate-IP scan ran on the
   LiteNetLib receive thread and enumerated the live `Clients` list the main
   thread mutates during joins/disconnects, throwing "Collection was modified"
@@ -110,7 +115,28 @@ So `EfficientServer-0.1.0.zip` logging `mod=1.17.0` is correct, not drift.
 - CI: the workflow now triggers on PRs and direct pushes to `main` instead of
   every branch push, so a pushed PR branch no longer starts a duplicate run,
   and checkout no longer persists the GitHub token into the runner workspace
-  (the test gate performs no git operations).
+  (the test gate performs no git operations). The coverage-badge job now
+  authenticates through an environment-reading credential helper instead of a
+  `https://x-access-token:$TOKEN@...` URL, which put the token in argv and
+  persisted it into the badge clone's `.git/config` on disk.
+- Temp files no longer land in `/tmp`, which is tmpfs on most Linux hosts: the
+  package staging tree, `verify-reproducible`'s full tree copy, install.sh's
+  pre-upgrade config backup and every gate's test temp directory are RAM-backed
+  and lost on reboot there. All of them now route through `TMPDIR`, pointed at
+  the gitignored `.scratch/tmp` on disk. install.sh's backup is the copy that
+  matters: after a failed install it is the only place the operator's tuning
+  still exists.
+- The harnesses reap stray loadgen and dedicated-server processes with a
+  `/proc` walk instead of `pkill -f`, dropping an external-process dependency
+  and the bracketed-glob trick that kept the pattern from matching its own
+  command line. The current process is now excluded by pid.
+- Scripts resolve the repository root by walking up for marker files
+  (`scripts/repo_root.py`, selftested in `make test`) instead of counting
+  `parent.parent` levels, so moving one into a subdirectory fails loudly
+  rather than silently reading the parent tree.
+- Dropped `*.lock` from `.gitignore`: nothing in this repo produces such a
+  file, and the pattern would have silently excluded a future lockfile from
+  version control.
 
 ## [0.1.0] - 2026-08-22
 

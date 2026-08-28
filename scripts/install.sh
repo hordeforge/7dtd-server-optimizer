@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+# Back up on disk, never the stock /tmp: it is tmpfs on most Linux hosts, and
+# after a failed install that copy is the only place the operator's tuning
+# still exists - it must survive a reboot. mktemp honors TMPDIR.
+export TMPDIR="$ROOT/.scratch/tmp"
+mkdir -p "$TMPDIR"
 "$ROOT/scripts/build.sh"
 
 SRV="${SEVENDTD_DS_DIR:-$HOME/.local/share/Steam/steamapps/common/7 Days to Die Dedicated Server}"
