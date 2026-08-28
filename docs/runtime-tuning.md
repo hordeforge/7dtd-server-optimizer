@@ -62,7 +62,7 @@ single FULL mark scales with heap (~480 ms measured at a 7 GB full collect), so 
 <= ~12 GB. **`GC_NPROCS`** (= core count) enables parallel marking (~NPROCS-1 threads). Do not
 combine a low divisor with a huge preallocated heap - that recreates the megapause.
 
-**4-way A/B (2026-07-20, 32 cores, ~320-360 zombies): only the divisor is a robust
+**4-way A/B (2026-07-20, 32 cores, ~320-360 zombies): only the divisor is a repeatable
 win.** default / div1 / div1+NPROCS=32 / div1+8G-heap+USE_ENTIRE_HEAP:
 - **`FREE_SPACE_DIVISOR=1` cut full collections 2 -> 1, total STW ~-40%** (again).
 - **`GC_NPROCS=32` parallel marking: no measured steady-state benefit** - worst STW

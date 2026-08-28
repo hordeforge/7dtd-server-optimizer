@@ -477,7 +477,12 @@ namespace EfficientServer.Tests
             Check(!net.Network.FastSingleTargetSend, "Network round-trip FastSingleTargetSend=false (opt-out)");
             // v1.17.x: join-churn race fix ships ON (removes the stock receive-thread
             // crash; the opt-out restores the exact vanilla enumerator).
-            Check(d2.Network.ClientListSnapshot, "default ClientListSnapshot=true (join-churn race fix ships on)");
+            // Null-guarded like every other d2.Network assertion here: the
+            // earlier `d2.Network != null` comparison narrows the reference to
+            // maybe-null for the rest of the method, so a bare dereference is a
+            // CS8602 build error under this project's nullable settings.
+            Check(d2.Network != null && d2.Network.ClientListSnapshot,
+                "default ClientListSnapshot=true (join-churn race fix ships on)");
             var clsOff = LoadTemp("{\"Network\":{\"ClientListSnapshot\":false}}");
             Check(clsOff.Network != null && !clsOff.Network.ClientListSnapshot,
                 "ClientListSnapshot round-trip false (vanilla enumerator opt-out)");

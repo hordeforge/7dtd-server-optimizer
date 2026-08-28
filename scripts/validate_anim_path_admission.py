@@ -33,15 +33,16 @@ from __future__ import annotations
 import json
 import os
 import re
-import subprocess
 import sys
 import time
 
 from harness_common import (
     CFG_SWAP,
+    DEDICATED_CMDLINE_MARKER,
     OUT_DIR,
     B,
     ensure_server_ready,
+    kill_matching_processes,
     log,
     teardown_bots,
     write_atomic,
@@ -369,9 +370,7 @@ def main() -> int:
         # Default: leave dedicated running so multi-phase/tool-timeout runs can resume.
         # Set VALIDATE_KILL_SERVER=1 to tear down.
         if os.environ.get("VALIDATE_KILL_SERVER", "0") == "1":
-            subprocess.run(
-                ["pkill", "-9", "-f", "7DaysToDieServer.x86_6[4]"], check=False
-            )
+            kill_matching_processes(DEDICATED_CMDLINE_MARKER)
         write_report("validate_anim_path", report)
         # Fixed-name copy of the same report so tooling can tail one path.
         # Atomic: a kill mid-write must not strand truncated JSON at the one

@@ -16,6 +16,11 @@
 set -euo pipefail
 export LC_ALL=C TZ=UTC
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+# Stage on disk, never the stock /tmp: it is tmpfs on most Linux hosts, so a
+# full mod staging tree would be held in RAM and lost on reboot. mktemp honors
+# TMPDIR, and .scratch/ is gitignored.
+export TMPDIR="$ROOT/.scratch/tmp"
+mkdir -p "$TMPDIR"
 
 "$ROOT/scripts/build.sh"
 

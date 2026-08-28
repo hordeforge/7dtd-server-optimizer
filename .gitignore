@@ -10,7 +10,6 @@ TestResults/
 __pycache__/
 # Type-checker cache from local mypy runs
 .mypy_cache/
-*.lock
 
 # Scratch: every temporary, experimental, or bisect file lives here and is
 # never committed. See the org REPOSITORY_STANDARDS.md.

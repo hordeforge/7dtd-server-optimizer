@@ -207,11 +207,15 @@ namespace EfficientServer
         {
             string mod = Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "?";
             string asm = "?";
+            // Both reads are best-effort version REPORTING, not a gate: a build
+            // whose assembly metadata or Constants shape differs must still get
+            // an init log, so an unreadable field stays "?" instead of aborting
+            // init. Nothing downstream branches on these strings.
             try { asm = typeof(GameManager).Assembly.GetName().Version?.ToString() ?? "?"; }
-            catch { /* ignore */ }
+            catch { }
             string game = "?";
             try { game = Constants.cVersionInformation?.LongString ?? "?"; }
-            catch { /* older/newer builds may differ */ }
+            catch { }
             bool inc = Config.Gc != null && Config.Gc.Incremental;
             EsLog.Log($"versions: mod={mod} Assembly-CSharp={asm} game={game}; "
                 + $"config(enabled={Config.Enabled}, dedicatedOnly={Config.DedicatedOnly}, "

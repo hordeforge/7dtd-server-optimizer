@@ -87,6 +87,7 @@ All optional; scripts fall back to defaults. The Makefile routes its documented
 | `SEVENDTD_CPU_AFFINITY` | run_server.sh | unset (no pinning) | `taskset -c` mask for the whole process; silently skipped when `taskset` is absent; see HOST_TUNING.md (measured loss on naive pinning) |
 | `SEVENDTD_GC_INCREMENTAL` | run_server.sh | unset | Opt-in incremental GC (sets `GC_ENABLE_INCREMENTAL=1`) |
 | `DOTNET_ROOT` | build.sh, Makefile | Makefile picks the first of `~/.cache/dotnet-sdk`, `~/.dotnet` containing a `dotnet` binary; direct build.sh runs fall back to `~/.cache/dotnet-sdk` only (and export it) | Local SDK location prepended to PATH |
+| `TMPDIR` | make `test`/`coverage`, install.sh, package.sh, verify_reproducible.sh | `.scratch/tmp` in this repo | Overridden away from the stock `/tmp`, which is tmpfs on most Linux hosts: staging trees, config backups and test temp files would be held in RAM and lost on reboot. Honored by `mktemp`, Python's `tempfile` and .NET's `Path.GetTempPath`, so one setting covers all three |
 | `SOURCE_DATE_EPOCH` | package.sh | last commit time | Zip mtime epoch for reproducible packaging |
 | `VERSION` | package.sh | `git describe --tags --always --dirty` | Override for the zip version suffix (`EfficientServer-<VERSION>.zip`); a modified tree keeps an explicit `-dirty` suffix instead of the clean release name |
 | `GC_FREE_SPACE_DIVISOR`, `GC_NPROCS`, `MONO_ENV_OPTIONS`, `MALLOC_ARENA_MAX` | run_server.sh | see script header | Boehm GC / Mono JIT tuning with A/B-measured defaults |
@@ -144,6 +145,7 @@ supply-chain posture this documents: [`SECURITY.md`](../SECURITY.md),
 
 | Script | Role |
 |---|---|
+| `repo_root.py` | Shared repository-root lookup (marker walk, not `parent.parent`) used by the gates below; selftest pins the walk |
 | `check_config_doc.py` | Regression gate (in `make test`): every `ServerPerfConfig` field must be documented in CONFIG.md; selftest pins its parsing/comparison logic |
 | `check_version.py` | Regression gate (in `make test`): ModInfo (source+dist) == AssemblyVersion, no doc claims a future minor; selftest pins version extraction/normalization |
 | `gen_sbom.py` | Release SBOM generator (called by `package.sh`; selftest in `make test`): deterministic CycloneDX 1.5 inventory from packages.lock.json |

@@ -13,12 +13,15 @@ from __future__ import annotations
 
 import json
 import os
+import signal
 import subprocess
 import sys
 import time
 from pathlib import Path
 
-OPT_ROOT = Path(__file__).resolve().parent.parent
+from repo_root import repo_root
+
+OPT_ROOT = repo_root()
 LOADGEN_ROOT = OPT_ROOT.parent / "7dtd-loadgen"
 sys.path.insert(0, str(LOADGEN_ROOT / "scripts"))
 
@@ -34,11 +37,14 @@ from es_cfg_guard import ConfigSwap, write_atomic
 # may import exactly these; B and write_atomic are deliberate re-exports).
 __all__ = [
     "CFG_SWAP",
+    "DEDICATED_CMDLINE_MARKER",
     "DS",
     "ES_CFG",
+    "LOADGEN_CMDLINE_MARKER",
     "OUT_DIR",
     "B",
     "ensure_server_ready",
+    "kill_matching_processes",
     "log",
     "teardown_bots",
     "write_atomic",
@@ -63,6 +69,42 @@ OUT_DIR = Path(os.environ.get("VALIDATE_OUT", str(OPT_ROOT / "server" / "logs"))
 
 def log(msg: str) -> None:
     print(f"[{time.strftime('%H:%M:%S')}] {msg}", flush=True)
+
+
+# argv substrings, as they appear in /proc/<pid>/cmdline, of the two long-lived
+# processes these harnesses start and must be able to reap after a killed run:
+# the loadgen bot runner (published dotnet output path) and the dedicated
+# server binary.
+LOADGEN_CMDLINE_MARKER = "net8.0/7dtd-loadgen"
+DEDICATED_CMDLINE_MARKER = "7DaysToDieServer.x86_64"
+
+
+def kill_matching_processes(marker: str) -> int:
+    """SIGKILL every process whose argv contains ``marker``; return the count.
+
+    A /proc walk rather than `pkill -f`: no external process, no shell pattern
+    to get wrong, and this process is excluded by pid instead of by the
+    bracketed-glob trick pkill needed to avoid matching its own command line.
+    """
+    killed = 0
+    me = os.getpid()
+    for entry in Path("/proc").iterdir():
+        if not entry.name.isdigit() or int(entry.name) == me:
+            continue
+        try:
+            cmdline = (entry / "cmdline").read_bytes().decode("utf-8", "replace")
+        except OSError:
+            continue  # exited mid-walk, or another user's process
+        if marker not in cmdline:
+            continue
+        try:
+            os.kill(int(entry.name), signal.SIGKILL)
+            killed += 1
+        except OSError as e:
+            log(f"could not kill pid {entry.name} ({marker}): {e}")
+    if killed:
+        log(f"killed {killed} stray process(es) matching {marker}")
+    return killed
 
 
 # Knobs the path-admission A/Bs toggle. The guard restores exactly these on any
@@ -174,5 +216,4 @@ def teardown_bots(bots: subprocess.Popen[bytes] | None) -> None:
                 bots.kill()
         except Exception:
             pass
-    # Bracketed [n] so the pattern cannot match its own pkill command line.
-    subprocess.run(["pkill", "-9", "-f", "net8.0/7dtd-loadge[n]"], check=False)
+    kill_matching_processes(LOADGEN_CMDLINE_MARKER)

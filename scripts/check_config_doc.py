@@ -22,9 +22,10 @@ import json
 import math
 import re
 import sys
-from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+from repo_root import repo_root
+
+ROOT = repo_root()
 CONFIG_CS = ROOT / "Source" / "EfficientServer" / "Config.cs"
 CONFIG_MD = ROOT / "docs" / "CONFIG.md"
 CONFIG_JSON = ROOT / "config" / "efficientserver.json"
