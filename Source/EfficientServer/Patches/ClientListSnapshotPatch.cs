@@ -51,8 +51,13 @@ namespace EfficientServer.Patches
     {
         static MethodBase TargetMethod()
         {
+            // Nested type: CLR name uses '+', not '.'. The dot form silently
+            // never resolves (Harmony's TypeByName does not convert '.' to '+'),
+            // which surfaced as MISSING TARGET on every build including stock
+            // 3.1.0. Verified nested structure from engine-research IL dumps
+            // (3.1.0 and 3.2.0 identical): NetworkServerLiteNetLib+LiteNetLibAuthWrapperServer.
             Type wrapper = AccessTools.TypeByName(
-                "NetworkServerLiteNetLib.LiteNetLibAuthWrapperServer");
+                "NetworkServerLiteNetLib+LiteNetLibAuthWrapperServer");
             return wrapper != null ? AccessTools.Method(wrapper, "ConnectionRequestCheck") : null;
         }
 
