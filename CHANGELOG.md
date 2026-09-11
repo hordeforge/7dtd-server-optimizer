@@ -14,7 +14,7 @@ Two independent version numbers apply to every release, by design:
   Downloadable zips are named after it minus the leading `v`
   (`EfficientServer-<version>.zip`; `scripts/package.sh` strips the prefix,
   and a modified tree keeps an explicit `-dirty` suffix instead).
-- The **mod version** (`ModInfo.xml` / assembly version, currently `1.17.0`)
+- The **mod version** (`ModInfo.xml` / assembly version, currently `1.18.0`)
   tracks the feature history of the mod itself and is what the server log
   reports at startup (`versions: mod=...`). It is independent of the release
   tag; `scripts/check_version.py` (run by `make test`/CI) keeps it identical
@@ -24,6 +24,10 @@ Two independent version numbers apply to every release, by design:
 So `EfficientServer-0.1.0.zip` logging `mod=1.17.0` is correct, not drift.
 
 ## [Unreleased]
+
+## [1.18.0] - 2026-09-11
+
+Artifact: `EfficientServer-1.18.0.zip`, containing mod version 1.18.0.
 
 ### Fixed
 - `make test` was red on `main`: the config harness failed to compile
