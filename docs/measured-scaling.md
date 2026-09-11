@@ -2,11 +2,11 @@
 
 **Owns:** live APM scaling measurements (complement to static IL map).  
 **Not:** host CCD/NUMA ops ([HOST_TUNING](HOST_TUNING.md)), product RealEarth status.  
-**Loop/net context:** [`loop.md`](../../7dtd-engine-research/docs/loop.md), [`network.md`](../../7dtd-engine-research/docs/network.md).  
-**Ceiling map (static):** [`engine-limitations.md`](../../7dtd-engine-research/docs/engine-limitations.md).  
+**Loop/net context:** [`loop.md`](../../7dtd-engine-research/docs/loop/loop.md), [`network.md`](../../7dtd-engine-research/docs/network/network.md).  
+**Ceiling map (static):** [`engine-limitations.md`](../../7dtd-engine-research/docs/meta/engine-limitations.md).  
 **Hub:** [`INDEX.md`](INDEX.md).
 
-Empirical complement to the static IL map ([`loop.md`](../../7dtd-engine-research/docs/loop.md), [`network.md`](../../7dtd-engine-research/docs/network.md)).  
+Empirical complement to the static IL map ([`loop.md`](../../7dtd-engine-research/docs/loop/loop.md), [`network.md`](../../7dtd-engine-research/docs/network/network.md)).  
 IL surfaces named below are documented under `research/il/gaps-v3.1.0/`, `research/il/loop-complete-v3.1.0/` (historical `gmUpdate-v3.0.1` name), `research/il/dedi-complete-v3.1.0/` (e.g. `ConnectionManager.Update` IL≈215, `NetEntityDistribution.OnUpdateEntities` IL=322).  
 All numbers from live `7dtd-server-apm` captures against the V3.0.1 dedicated server with the Harmony telemetry bridge
 (DeepMode on), driven by `7dtd-loadgen` bots. Dates 2026-07-17/18.
@@ -181,9 +181,9 @@ graded candidates in
 | [SCALE_1000x10000.md](SCALE_1000x10000.md) | Extreme scale extrapolation |
 | [algorithms.md](algorithms.md) | Hot-subsystem algorithms |
 | [bottlenecks.md](bottlenecks.md) | Ranked bottleneck catalog |
-| [loop.md](../../7dtd-engine-research/docs/loop.md) | Static frame/tick map; `AstarManager.UpdateGraphs` peer (§12) |
-| [network.md](../../7dtd-engine-research/docs/network.md) | Player-axis send path (`updatePlayerList`, `PooledBinaryWriter`) |
-| [entity-ai.md](../../7dtd-engine-research/docs/entity-ai.md) | Entity-axis tick / AI onion behind the linear cost |
+| [loop.md](../../7dtd-engine-research/docs/loop/loop.md) | Static frame/tick map; `AstarManager.UpdateGraphs` peer (§12) |
+| [network.md](../../7dtd-engine-research/docs/network/network.md) | Player-axis send path (`updatePlayerList`, `PooledBinaryWriter`) |
+| [entity-ai.md](../../7dtd-engine-research/docs/entities/entity-ai.md) | Entity-axis tick / AI onion behind the linear cost |
 | [HOST_TUNING.md](HOST_TUNING.md) | Host topology |
 | [LOAD_PROFILE.md](../../7dtd-server-apm/docs/LOAD_PROFILE.md) | Canonical workload |
 | [runtime-tuning.md](runtime-tuning.md) | GC is downstream of the allocation ranked in §4b |

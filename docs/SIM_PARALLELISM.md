@@ -2,7 +2,7 @@
 
 **Hub:** [`README.md`](../README.md).  
 **Owns:** sim parallelism research notes.  
-**Not:** stock loop map ([research loop](../../7dtd-engine-research/docs/loop.md)).
+**Not:** stock loop map ([research loop](../../7dtd-engine-research/docs/loop/loop.md)).
 
 
 **Scope:** how the **sim** (entities, AI, path, combat, block ticks) can get faster, especially with threads. 
@@ -38,7 +38,7 @@ Stock already does pieces of (2)-(4): `aiActiveScale`, `TickEntitiesSlice`, `Pat
 ## 2. What stock sim looks like (constraint)
 
 ```text
-Unity frame (V3.0.1 RE - see ARCHITECTURE + 7dtd-engine-research/docs/loop-gmupdate.md):
+Unity frame (V3.0.1 RE - see ARCHITECTURE + 7dtd-engine-research/docs/loop/loop-gmupdate.md):
  GameManager.Update → gmUpdate (631 IL)
  managers / timer / EntityAsyncManager
  → UpdateTick (150 IL)

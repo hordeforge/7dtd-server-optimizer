@@ -65,7 +65,7 @@ Source: `Source/EfficientServer/`. Packaged mod name: `Mods/EfficientServer/`. H
 | `docs/SIM_PARALLELISM.md` | Threading / extract / hot-path catalog |
 | `docs/SCALE_1000x10000.md` | Extreme scale thought experiment |
 | `docs/HOST_TUNING.md` | Host ops checklist |
-| `../7dtd-engine-research/docs/loop.md` | Full dedicated loop RE map |
+| `../7dtd-engine-research/docs/loop/loop.md` | Full dedicated loop RE map |
 | `../7dtd-engine-research/docs/INDEX.md` | Research docs + dump index |
 | `TODO.md` | Phased implementation plan |
 
@@ -86,7 +86,7 @@ Anything that studies the **stock** dedicated server belongs in
 narratives (`docs/`), the Mono.Cecil dump tooling (`tools/`: general dumpers in `src/`,
 legacy per-family dumpers in `legacy/`, regen test in `tools/tests/`), wire/protocol
 analysis, and engine cost/loop RE. Add new RE there and link back; how:
-[`docs/re-methodology.md`](../7dtd-engine-research/docs/re-methodology.md). Build +
+[`docs/re-methodology.md`](../7dtd-engine-research/docs/meta/re-methodology.md). Build +
 usage of the dumpers: [`tools/README.md`](../7dtd-engine-research/tools/README.md).
 Regenerate dumps with:
 
