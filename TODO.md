@@ -41,8 +41,8 @@ Stock RE closed two brief gaps without new EfficientServer code:
 
 | Gap | Result | Research |
 |---|---|---|
-| ItemStack.Clone triage | 162 sites; ~56 XUi (ignore for dedi); mass TE+inventory+net Setup | `7dtd-engine-research/docs/items.md` |
-| Chunk encode ownership | SendChunks sole caller UpdateTick; Setup from SendChunks + RebuildTerrain | `7dtd-engine-research/docs/world-chunks.md` |
+| ItemStack.Clone triage | 162 sites; ~56 XUi (ignore for dedi); mass TE+inventory+net Setup | `7dtd-engine-research/docs/gameplay/items.md` |
+| Chunk encode ownership | SendChunks sole caller UpdateTick; Setup from SendChunks + RebuildTerrain | `7dtd-engine-research/docs/world/world-chunks.md` |
 
 **Measured 2026-08-06 (moderate 16p forensic A/B, shipping defaults):**
 

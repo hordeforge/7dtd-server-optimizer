@@ -135,6 +135,6 @@ error-throw path only. Not a valid allocation-cut target.
 
 ## See also
 - [`measured-scaling.md`](measured-scaling.md) - runtime scaling laws, GC-pause vs CPU regimes
-- [`network.md`](../../7dtd-engine-research/docs/network.md) - replication send path (the churn source)
+- [`network.md`](../../7dtd-engine-research/docs/network/network.md) - replication send path (the churn source)
 - `7dtd-server-optimizer/docs/FEATURES.md` - EfficientServer GC guard / incremental, EAC
 - `7dtd-server-optimizer/docs/NETWORK_OPTIMIZATION.md` - the network levers

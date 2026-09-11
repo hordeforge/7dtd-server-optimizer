@@ -485,7 +485,7 @@ General modding rules: [`../../MODDING_BEST_PRACTICES.md`](../../MODDING_BEST_PR
 | [HOST_TUNING.md](HOST_TUNING.md) | Host topology (not Harmony) |
 | [SIM_PARALLELISM.md](SIM_PARALLELISM.md) | Sim threading / extract-off-main |
 | [OPTIMIZATION_CANDIDATES.md](OPTIMIZATION_CANDIDATES.md) | Evidence backlog |
-| [loop.md](../../7dtd-engine-research/docs/loop.md) | Generic frame map |
+| [loop.md](../../7dtd-engine-research/docs/loop/loop.md) | Generic frame map |
 | [APM.md](../../7dtd-server-apm/docs/APM.md) | Evidence |
 
 ## Changelog

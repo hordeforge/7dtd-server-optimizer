@@ -19,7 +19,7 @@ lever only with APM before/after + a desync/fidelity check.
 serialization cost. Graded summary lives in
 [`OPTIMIZATION_CANDIDATES.md`](OPTIMIZATION_CANDIDATES.md) (B3, A4); measured
 exponents in [`measured-scaling.md`](measured-scaling.md)
-and the loop RE in [`../../7dtd-engine-research/docs/network.md`](../../7dtd-engine-research/docs/network.md).
+and the loop RE in [`../../7dtd-engine-research/docs/network/network.md`](../../7dtd-engine-research/docs/network/network.md).
 
 ---
 

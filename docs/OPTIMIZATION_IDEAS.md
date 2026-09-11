@@ -20,7 +20,7 @@ EfficientServer today: tighter AI LOD, distant task skip, dedicated presentation
 | [`SIM_PARALLELISM.md`](SIM_PARALLELISM.md) | Extract sim off main, threading policy, hot-path catalog, Amdahl |
 | [`SCALE_1000x10000.md`](SCALE_1000x10000.md) | 1k×10k data structures / single-host fantasy |
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | Stock frame RE summary |
-| [`../../7dtd-engine-research/docs/loop.md`](../../7dtd-engine-research/docs/loop.md) | Full dedicated loop RE map (evidence) |
+| [`../../7dtd-engine-research/docs/loop/loop.md`](../../7dtd-engine-research/docs/loop/loop.md) | Full dedicated loop RE map (evidence) |
 | [`../../7dtd-engine-research/oss-tools/NOTES.md`](../../7dtd-engine-research/oss-tools/NOTES.md) | IceCoffee / ServerTools / ecosystem |
 
 ---
@@ -228,7 +228,7 @@ Full grades: [`OPTIMIZATION_CANDIDATES.md`](OPTIMIZATION_CANDIDATES.md).
 Only promote after APM shows the bottleneck under a fixed loadgen scenario.
 
 **Authoritative graded inventory:** [`OPTIMIZATION_CANDIDATES.md`](OPTIMIZATION_CANDIDATES.md).
-Loop RE evidence: [`../../7dtd-engine-research/docs/loop.md`](../../7dtd-engine-research/docs/loop.md).
+Loop RE evidence: [`../../7dtd-engine-research/docs/loop/loop.md`](../../7dtd-engine-research/docs/loop/loop.md).
 
 ### 5.1 Near-term (Grade A from RE)
 
@@ -316,7 +316,7 @@ Is the bottleneck a content mod TE/NPC pack?
 - Extreme scale data structures (1k players / 10k zombies): [`SCALE_1000x10000.md`](SCALE_1000x10000.md)
 - Extract sim / threading policy / hot-path catalog: [`SIM_PARALLELISM.md`](SIM_PARALLELISM.md) (§5-7)
 - Stock frame RE: [`ARCHITECTURE.md`](ARCHITECTURE.md)
-- Dedicated loop RE map: [`../../7dtd-engine-research/docs/loop.md`](../../7dtd-engine-research/docs/loop.md)
+- Dedicated loop RE map: [`../../7dtd-engine-research/docs/loop/loop.md`](../../7dtd-engine-research/docs/loop/loop.md)
 - NAIWAZI ServerKit reconstruction (gateway split, free AC/Bot RE): [`../../7dtd-engine-research/oss-tools/naiwazi.md`](../../7dtd-engine-research/oss-tools/naiwazi.md)
 - ServerTools (dmustanger) admin suite, optim-relevant bits: [`../../7dtd-engine-research/oss-tools/servertools.md`](../../7dtd-engine-research/oss-tools/servertools.md)
 - Open-source tools survey (IceCoffee, SphereII, CSMM, MVirus, OCB, Allocs, …): [`../../7dtd-engine-research/oss-tools/NOTES.md`](../../7dtd-engine-research/oss-tools/NOTES.md)

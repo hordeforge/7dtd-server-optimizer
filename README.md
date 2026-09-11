@@ -115,7 +115,7 @@ Docs:
 - Perf research brief (RE + APM → optimizer backlog): [`docs/PERF_RESEARCH_BRIEF.md`](docs/PERF_RESEARCH_BRIEF.md)
 - V3.1.0 APM / loadgen evidence baseline: [`docs/V310_APM_BASELINE.md`](docs/V310_APM_BASELINE.md)
 - OSS tools survey (research): [`../7dtd-engine-research/oss-tools/NOTES.md`](../7dtd-engine-research/oss-tools/NOTES.md)
-- Dedicated game loop RE map: [`../7dtd-engine-research/docs/loop.md`](../7dtd-engine-research/docs/loop.md)
+- Dedicated game loop RE map: [`../7dtd-engine-research/docs/loop/loop.md`](../7dtd-engine-research/docs/loop/loop.md)
 - RE dump index: [`../7dtd-engine-research/docs/INDEX.md`](../7dtd-engine-research/docs/INDEX.md)
 - Backlog: [`TODO.md`](TODO.md)
 

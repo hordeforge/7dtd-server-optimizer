@@ -23,7 +23,7 @@
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | Stock hot path RE summary |
 | [`SIM_PARALLELISM.md`](SIM_PARALLELISM.md) | Threads / extract / conductor |
 | [`HOST_TUNING.md`](HOST_TUNING.md) | Ops CCD/NUMA/storage |
-| [`../../7dtd-engine-research/docs/loop.md`](../../7dtd-engine-research/docs/loop.md) | Full dedicated loop map |
+| [`../../7dtd-engine-research/docs/loop/loop.md`](../../7dtd-engine-research/docs/loop/loop.md) | Full dedicated loop map |
 | [`../../7dtd-engine-research/docs/INDEX.md`](../../7dtd-engine-research/docs/INDEX.md) | IL dump index |
 
 Game version pin: **V3.1.0** dedicated `Assembly-CSharp`. Do not redistribute game IL.
@@ -538,7 +538,7 @@ Each: feature flag, dedicated-only, soft-fail log, FEATURES fidelity notes.
 
 ## 8. Loop surfaces (cross-check)
 
-Every Grade A/B row anchors a method on the dedicated loop map ([`../../7dtd-engine-research/docs/loop.md`](../../7dtd-engine-research/docs/loop.md)).
+Every Grade A/B row anchors a method on the dedicated loop map ([`../../7dtd-engine-research/docs/loop/loop.md`](../../7dtd-engine-research/docs/loop/loop.md)).
 
 | Surface | Method anchors | Grade |
 |---|---|---|

@@ -162,21 +162,21 @@ ConnectionRequestCheck` enumerates `ConnectionManager.Clients.List` on the
 socket-receive thread (`UnsyncedEvents=true` from `NetworkCommonLiteNetLib.
 InitConfig`) while the main thread mutates it. Fix direction: run the
 duplicate-IP scan on the main thread or copy the IP set under lock. Full
-evidence: `7dtd-engine-research/docs/network.md` §4.0; a second churn bug
+evidence: `7dtd-engine-research/docs/network/network.md` §4.0; a second churn bug
 (`NetPackageMinEventFire.write` NRE on null itemValue) is in
-`7dtd-engine-research/docs/protocol-packages.md` §6.23.
+`7dtd-engine-research/docs/network/protocol-packages.md` §6.23.
 
 ## Reverse engineering helpers
 
 | Path | Role |
 |---|---|
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | Dedicated hot path notes (gmUpdate, AI, mesh, networking) |
-| [`../../7dtd-engine-research/docs/loop-gmupdate.md`](../../7dtd-engine-research/docs/loop-gmupdate.md) | V3.0.1 gmUpdate phase map |
-| [`../../7dtd-engine-research/docs/entity-ai.md`](../../7dtd-engine-research/docs/entity-ai.md) | Entity/AI/path/fall/net deep chain |
+| [`../../7dtd-engine-research/docs/loop/loop-gmupdate.md`](../../7dtd-engine-research/docs/loop/loop-gmupdate.md) | V3.0.1 gmUpdate phase map |
+| [`../../7dtd-engine-research/docs/entities/entity-ai.md`](../../7dtd-engine-research/docs/entities/entity-ai.md) | Entity/AI/path/fall/net deep chain |
 | [`../../7dtd-engine-research/tools/`](../../7dtd-engine-research/tools/) | **All RE dumpers** (general `src/` + legacy per-family `legacy/`), build + regen tests |
-| [`../../7dtd-engine-research/docs/re-methodology.md`](../../7dtd-engine-research/docs/re-methodology.md) | How to RE: dump, read IL, reconstruct layouts |
+| [`../../7dtd-engine-research/docs/meta/re-methodology.md`](../../7dtd-engine-research/docs/meta/re-methodology.md) | How to RE: dump, read IL, reconstruct layouts |
 | [`../../7dtd-engine-research/docs/INDEX.md`](../../7dtd-engine-research/docs/INDEX.md) | Index of all RE dump sets |
-| [`../../7dtd-engine-research/docs/loop.md`](../../7dtd-engine-research/docs/loop.md) | Complete dedicated game/sim loop map + open gaps |
+| [`../../7dtd-engine-research/docs/loop/loop.md`](../../7dtd-engine-research/docs/loop/loop.md) | Complete dedicated game/sim loop map + open gaps |
 | [`OPTIMIZATION_CANDIDATES.md`](OPTIMIZATION_CANDIDATES.md) | Graded optim candidates (this project) |
 | [`OPTIMIZATION_IDEAS.md`](OPTIMIZATION_IDEAS.md) | Optim idea map |
 | Sibling `7dtd-server-apm` | Host + bridge evidence (not in this repo) |
