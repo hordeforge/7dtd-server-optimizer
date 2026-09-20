@@ -14,7 +14,7 @@ Two independent version numbers apply to every release, by design:
   Downloadable zips are named after it minus the leading `v`
   (`EfficientServer-<version>.zip`; `scripts/package.sh` strips the prefix,
   and a modified tree keeps an explicit `-dirty` suffix instead).
-- The **mod version** (`ModInfo.xml` / assembly version, currently `1.18.0`)
+- The **mod version** (`ModInfo.xml` / assembly version, currently `1.19.0`)
   tracks the feature history of the mod itself and is what the server log
   reports at startup (`versions: mod=...`). It is independent of the release
   tag; `scripts/check_version.py` (run by `make test`/CI) keeps it identical
@@ -24,6 +24,32 @@ Two independent version numbers apply to every release, by design:
 So `EfficientServer-0.1.0.zip` logging `mod=1.17.0` is correct, not drift.
 
 ## [Unreleased]
+
+## [1.19.0] - 2026-09-20
+
+Artifact: `EfficientServer-1.19.0.zip`, containing mod version 1.19.0.
+
+### Changed
+- Governor throttle ceilings are `Config` constants now
+  (`EntityStrideMax`, `GraphUpdateMax`) instead of the separate
+  `GovernorTiers` helper; the semantics (throttled lever never below its
+  configured baseline, capped at the Normalize ceilings) are unchanged.
+- The cadence stride gate is gone as a shared type: the stride patches read
+  slot ownership through `TickClock` like the other levers. Behavior is the
+  same every-Nth-tick schedule.
+- The logging surface collapsed to one `EsLog.Emit(LogLevel, msg)` API with
+  an internal `LogLevel` enum; `EsLog.Log` / `Warn` / `Error` wrappers are
+  removed. Output channels are unchanged.
+- Config load no longer scans for unknown keys at runtime: a misspelled knob
+  silently keeps its default (fail-soft), exactly as before, and template
+  typos are caught pre-packaging by `scripts/check_config_doc.py`. The
+  runtime JSON walk (and its locale-sensitive comparison risk) is removed.
+
+### Removed
+- Release packaging no longer ships a CycloneDX SBOM inside the zip or a
+  `.buildinfo.txt` sidecar beside it. `scripts/gen_sbom.py` is deleted and
+  its selftest dropped from `make test`. Artifact verification rests on the
+  reproducible package plus `make verify-reproducible`.
 
 ## [1.18.0] - 2026-09-11
 
