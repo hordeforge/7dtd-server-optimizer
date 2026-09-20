@@ -31,8 +31,6 @@ namespace EfficientServer.Patches
     [HarmonyPatch(typeof(AstarManager), "UpdateGraphs", new[] { typeof(float) })]
     public static class AstarGraphThrottlePatch
     {
-        static int _tick;
-
         // Return false to skip the original UpdateGraphs on non-Nth ticks.
         static bool Prefix()
         {
@@ -40,7 +38,11 @@ namespace EfficientServer.Patches
             if (!ModApi.ShouldRun() || cfg == null) return true;
             int every = cfg.GraphUpdateEveryTicks;
             if (every <= 1) return true; // 1 = vanilla, run every tick (no throttle)
-            return TickStride.RunThisTick(ref _tick, every);
+            // UpdateGraphs runs once per UpdateTick invocation, so the shared
+            // TickClock index is a valid cadence cursor; id 0 holds the Nth
+            // run crossing. Fail open to vanilla until the clock driver fires.
+            return !TickClock.Alive
+                || TickClock.OwnsSlot(0, TickClock.Ticks, every);
         }
     }
 }

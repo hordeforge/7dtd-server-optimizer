@@ -27,7 +27,7 @@ namespace EfficientServer.Patches
     /// missing saturation stress A/B keep it opt-in (RESULTS 3t, CONFIG.md).
     ///
     /// Internal like the other support modules (<see cref="AiAlertGate"/>,
-    /// <see cref="TickClock"/>, <see cref="TickStride"/>): runtime state with
+    /// <see cref="TickClock"/>): runtime state with
     /// in-assembly consumers only (governor tier 2, animator LOD gate, es console),
     /// not a Harmony patch group and not game-discovered, so it stays off the
     /// assembly's public surface.
@@ -90,7 +90,7 @@ namespace EfficientServer.Patches
             }
             PruneDespawnedSavedModes();
             if (!Active || swept > 0)
-                EsLog.Log($"Governor: animator emergency {(Active ? "sweep" : "ENTER")} - CullCompletely on {swept} rigs (saved={SavedModes.Count})");
+                EsLog.Emit(LogLevel.Info, $"Governor: animator emergency {(Active ? "sweep" : "ENTER")} - CullCompletely on {swept} rigs (saved={SavedModes.Count})");
             Active = true;
         }
 
@@ -107,7 +107,7 @@ namespace EfficientServer.Patches
             if (StaleIds.Count == 0) return;
             for (int i = 0; i < StaleIds.Count; i++)
                 SavedModes.Remove(StaleIds[i]);
-            EsLog.Log("Governor: animator emergency pruned " + StaleIds.Count
+            EsLog.Emit(LogLevel.Info, "Governor: animator emergency pruned " + StaleIds.Count
                 + " saved mode(s) for despawned rigs (saved=" + SavedModes.Count + ")");
         }
 
@@ -117,7 +117,7 @@ namespace EfficientServer.Patches
             int restored = RestoreAllEnemyAnimators();
             SavedModes.Clear();
             Active = false;
-            EsLog.Log($"Governor: animator emergency EXIT - restored cullingMode on {restored} rigs");
+            EsLog.Emit(LogLevel.Info, $"Governor: animator emergency EXIT - restored cullingMode on {restored} rigs");
         }
 
         /// <summary>

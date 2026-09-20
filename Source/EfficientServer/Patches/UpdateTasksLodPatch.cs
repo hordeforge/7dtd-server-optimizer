@@ -83,7 +83,7 @@ namespace EfficientServer.Patches
                 if (!_despawnWarned)
                 {
                     _despawnWarned = true;
-                    EsLog.Warn("AI LOD CheckDespawn failed [" + ex.GetType().Name + "]: " + ex.Message
+                    EsLog.Emit(LogLevel.Warn, "AI LOD CheckDespawn failed [" + ex.GetType().Name + "]: " + ex.Message
                         + " - falling back to full stock updateTasks for all entities until restart");
                 }
                 return true;

@@ -44,7 +44,7 @@ namespace EfficientServer.Patches
                     yield return ins;
                 }
             }
-            EsLog.Log("GcGuardPatch: rerouted " + swapped + " GC.Collect() call(s) in gmUpdate");
+            EsLog.Emit(LogLevel.Info, "GcGuardPatch: rerouted " + swapped + " GC.Collect() call(s) in gmUpdate");
             // Matched-but-untransformed is a silent failure: Harmony still reports
             // gmUpdate as patched while the forced STW collect keeps firing. Fail
             // loudly so target/overload drift surfaces instead of pretending to work.
@@ -76,7 +76,7 @@ namespace EfficientServer.Patches
                 if (heapBytes > ceilingMB * 1024L * 1024L)
                 {
                     _safetyCollects++;
-                    EsLog.Warn("gc guard safety collect fired: heap "
+                    EsLog.Emit(LogLevel.Warn, "gc guard safety collect fired: heap "
                         + (heapBytes / 1024L / 1024L) + " MB > ceiling " + ceilingMB
                         + " MB (STW pause now; total fires " + _safetyCollects + ")");
                     GC.Collect();

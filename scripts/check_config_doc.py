@@ -155,7 +155,7 @@ def _selftest() -> int:
     when its own regexes or comparators rot (a PROP_DECL that matches nothing
     would report "all 0 fields documented" as OK). These checks use a synthetic
     Config.cs-shaped snippet and plain dicts so every helper's spec is asserted
-    directly, following the --selftest convention of es_cfg_guard/gen_sbom.
+    directly, following the --selftest convention of es_cfg_guard.
     """
     failures: list[str] = []
 

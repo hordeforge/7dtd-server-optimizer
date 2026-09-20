@@ -72,8 +72,7 @@ namespace EfficientServer.Patches
         /// drives the per-frame animator stripe in <see cref="AnimatorLodPatch"/>
         /// with Time.frameCount as the cursor. Cast through uint so the signed wrap
         /// at ~2.1 billion ticks stays a clean monotonic sequence for the modulo
-        /// instead of going negative and freezing whole id classes (same boundary
-        /// treatment as <see cref="TickStride"/>).
+        /// instead of going negative and freezing whole id classes.
         /// </summary>
         public static bool OwnsSlot(int entityId, int tickIndex, int everyTicks)
         {

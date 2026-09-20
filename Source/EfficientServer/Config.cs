@@ -1,12 +1,9 @@
 using System;
-using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
-using System.Linq;
 using System.Reflection;
 using System.Text;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 
 namespace EfficientServer
 {
@@ -92,8 +89,8 @@ namespace EfficientServer
         // 1 = vanilla (run every tick, no throttle); >1 = throttle to (20/N) Hz.
         // It does NOT enable or disable pathfinding itself - path compute and the
         // scan drain always run. Named for exactly what it controls so it cannot be
-        // misread as an on/off switch. Clamp ceiling is GovernorTiers.GraphUpdateMax,
-        // the same cap the governor's doubled throttle uses.
+        // misread as an on/off switch. Clamp ceiling 200, the same cap the
+        // governor's doubled throttle uses.
         public int GraphUpdateEveryTicks { get; set; } = 4;
 
         // Rescan dead-zone in SQUARED grid units: a follow-graph is queued for a
@@ -308,6 +305,12 @@ namespace EfficientServer
         public const string KeyCrowdCollisionLod = "CrowdCollisionLod";
         public const string KeyAnimatorLod = "AnimatorLod";
 
+        // Governor throttle-ceiling caps. Normalize clamps the operator's baseline,
+        // GovernorPatch caps its doubled lever, and Fuzz pins both, so the consts
+        // live here (single config-owner) instead of a one-file tier helper.
+        public const int EntityStrideMax = 4;
+        public const int GraphUpdateMax = 200;
+
         public bool Enabled { get; set; } = true;
         public bool DedicatedOnly { get; set; } = true;
         public AiLodConfig AiLod { get; set; } = new AiLodConfig();
@@ -335,10 +338,8 @@ namespace EfficientServer
                 // host locale default, so a non-ASCII value survives any OS.
                 string json = File.ReadAllText(path, Encoding.UTF8);
                 // A misspelled key binds to nothing and silently keeps the built-in
-                // default, so name every ignored key at load (fail-soft per group;
-                // unknown keys are still ignored, just not silently).
-                foreach (string key in FindUnknownKeys(json))
-                    EsLog.Warn("config unknown key '" + key + "' ignored (no such option; check spelling)");
+                // default (fail-soft per group). Template typos are caught
+                // pre-packaging by scripts/check_config_doc.py, so no runtime scan.
                 var loaded = JsonConvert.DeserializeObject<ServerPerfConfig>(json);
                 if (loaded == null) return new ServerPerfConfig();
                 BackfillNullSections(loaded);
@@ -349,44 +350,13 @@ namespace EfficientServer
             {
                 // Type name + message: a parse error names its JSON line in Message,
                 // and the type separates syntax errors from IO failures.
-                EsLog.Warn("Config load failed [" + ex.GetType().Name + "], using defaults: " + ex.Message);
+                EsLog.Emit(LogLevel.Warn, "Config load failed [" + ex.GetType().Name + "], using defaults: " + ex.Message);
                 return new ServerPerfConfig();
             }
         }
 
-        /// <summary>
-        /// Dotted paths of JSON keys that match no config property (typo guard).
-        /// Mirrors Newtonsoft's case-insensitive property binding, so a case variant
-        /// of a real key is NOT reported (it binds). Never throws: malformed or
-        /// non-object JSON yields an empty list and Load reports the parse error.
-        /// </summary>
-        public static List<string> FindUnknownKeys(string json)
-        {
-            var unknown = new List<string>();
-            if (string.IsNullOrEmpty(json)) return unknown;
-            JObject root;
-            try { root = JObject.Parse(json); }
-            catch { return unknown; }
-            CollectUnknown(root, typeof(ServerPerfConfig), "", unknown);
-            return unknown;
-        }
-
-        /// <summary>
-        /// The one case comparison for JSON-key-vs-property matching. Newtonsoft's
-        /// JsonPropertyCollection binds keys with StringComparer.OrdinalIgnoreCase,
-        /// so this guard must fold with exactly that rule. It must NOT use
-        /// BindingFlags.IgnoreCase: its comparison follows the host runtime's
-        /// culture rules (culture-sensitive on Mono/net48), so on a tr-TR locale a
-        /// key like "AILOD" or "PATHFINDING" would be folded apart from "AiLod" and
-        /// reported as unknown while Newtonsoft still binds it - a warning that
-        /// contradicts what actually loaded.
-        /// </summary>
-        internal static bool KeyNameMatches(string jsonKey, string propertyName) =>
-            string.Equals(jsonKey, propertyName, StringComparison.OrdinalIgnoreCase);
-
-        // The one nested-section predicate, shared by FindUnknownKeys' walk and
-        // Load's null-section backfill so both agree on what counts as a knob
-        // group and a new section cannot be covered by one and missed by the other.
+        // The one nested-section predicate, shared by the null-section backfill so
+        // a new knob group cannot be missed.
         static bool IsConfigSectionType(Type t) =>
             t.IsClass && t != typeof(string) && t.Namespace == typeof(ServerPerfConfig).Namespace;
 
@@ -408,28 +378,6 @@ namespace EfficientServer
             }
         }
 
-        static void CollectUnknown(JObject obj, Type schema, string prefix, List<string> unknown)
-        {
-            foreach (JProperty prop in obj.Properties())
-            {
-                // var on purpose: FirstOrDefault carries [MaybeNull], so this infers
-                // PropertyInfo? under the tests project's nullable context while
-                // staying plain PropertyInfo for the net48/mcs build; an explicit
-                // annotated type cannot compile in both.
-                var known = schema
-                    .GetProperties(BindingFlags.Public | BindingFlags.Instance)
-                    .FirstOrDefault(p => KeyNameMatches(prop.Name, p.Name));
-                if (known == null)
-                {
-                    unknown.Add(prefix.Length == 0 ? prop.Name : prefix + "." + prop.Name);
-                    continue;
-                }
-                Type t = known.PropertyType;
-                if (IsConfigSectionType(t) && prop.Value.Type == JTokenType.Object)
-                    CollectUnknown((JObject)prop.Value, t, prefix.Length == 0 ? prop.Name : prefix + "." + prop.Name, unknown);
-            }
-        }
-
         public void Normalize()
         {
             AiLod.FullAiDistSq = FiniteRange("AiLod.FullAiDistSq", AiLod.FullAiDistSq, 1f, 1000000f, 100f);
@@ -442,11 +390,11 @@ namespace EfficientServer
             DynamicMesh.PlayerAreaChunkBuffer = IntRange("DynamicMesh.PlayerAreaChunkBuffer", DynamicMesh.PlayerAreaChunkBuffer, 0, 64);
             DynamicMesh.MaxRegionLoadMsPerFrame = IntRange("DynamicMesh.MaxRegionLoadMsPerFrame", DynamicMesh.MaxRegionLoadMsPerFrame, 1, 1000);
             DynamicMesh.MaxActiveSyncs = IntRange("DynamicMesh.MaxActiveSyncs", DynamicMesh.MaxActiveSyncs, 1, 128);
-            // 1 = vanilla; cap at GovernorTiers.GraphUpdateMax (~0.1 Hz) so a
+            // 1 = vanilla; cap at 200 (~0.1 Hz) so a
             // fat-finger like 1e6 (nav graphs repositioning once per ~14 h) is
             // clamped and logged, not silently accepted. A legitimate low-pop tune
             // (e.g. 40) still passes.
-            Pathfinding.GraphUpdateEveryTicks = IntRange("Pathfinding.GraphUpdateEveryTicks", Pathfinding.GraphUpdateEveryTicks, 1, GovernorTiers.GraphUpdateMax);
+            Pathfinding.GraphUpdateEveryTicks = IntRange("Pathfinding.GraphUpdateEveryTicks", Pathfinding.GraphUpdateEveryTicks, 1, 200);
             Pathfinding.MoveRescanThresholdSq = FiniteRange("Pathfinding.MoveRescanThresholdSq", Pathfinding.MoveRescanThresholdSq, 100f, 10000f, 100f);
             // 0 = unlimited / off. Cap admits high enough for a full BM wave of
             // non-priority wander requests without clipping combat (combat bypasses).
@@ -458,8 +406,8 @@ namespace EfficientServer
             // floor of 1 is a correctness guard, not just a tuning bound.
             WorldTransfer.ChunkPackagesPerObserverPerTick = IntRange("WorldTransfer.ChunkPackagesPerObserverPerTick", WorldTransfer.ChunkPackagesPerObserverPerTick, 1, 32);
             // 4 = 5 Hz replication, already aggressive; anything higher is unplayable.
-            // Same ceiling the governor's doubled throttle uses (GovernorTiers).
-            Network.EntityDistributionEveryTicks = IntRange("Network.EntityDistributionEveryTicks", Network.EntityDistributionEveryTicks, 1, GovernorTiers.EntityStrideMax);
+            // Same ceiling the governor's doubled throttle uses.
+            Network.EntityDistributionEveryTicks = IntRange("Network.EntityDistributionEveryTicks", Network.EntityDistributionEveryTicks, 1, 4);
             CrowdCollisionLod.ResolveEveryNTicks = IntRange("CrowdCollisionLod.ResolveEveryNTicks", CrowdCollisionLod.ResolveEveryNTicks, 1, 16);
             AnimatorLod.FullRateDistSq = FiniteRange("AnimatorLod.FullRateDistSq", AnimatorLod.FullRateDistSq, 100f, 1000000f, 400f);
             AnimatorLod.FarStride = IntRange("AnimatorLod.FarStride", AnimatorLod.FarStride, 1, 10);
@@ -511,7 +459,7 @@ namespace EfficientServer
             if (normalized != value)
                 // Invariant floats: the "config corrected" line is grepped/parsed
                 // (tests match on it), so a comma-decimal locale must not reformat.
-                EsLog.Warn("config corrected " + name + ": "
+                EsLog.Emit(LogLevel.Warn, "config corrected " + name + ": "
                     + value.ToString(CultureInfo.InvariantCulture) + " -> "
                     + normalized.ToString(CultureInfo.InvariantCulture));
             return normalized;
@@ -521,7 +469,7 @@ namespace EfficientServer
         {
             int normalized = Math.Max(min, Math.Min(max, value));
             if (normalized != value)
-                EsLog.Warn("config corrected " + name + ": " + value + " -> " + normalized);
+                EsLog.Emit(LogLevel.Warn, "config corrected " + name + ": " + value + " -> " + normalized);
             return normalized;
         }
 
@@ -554,8 +502,7 @@ namespace EfficientServer
         /// <see cref="ShouldRunFor"/>: arming global player damage immunity via the
         /// console requires an explicit Diagnostics.AllowBenchGod opt-in, and a null
         /// config or section fails closed (false). Deliberate runtime-null probe:
-        /// NRT annotations are erased, so this guard is the only defense (same
-        /// contract as FindUnknownKeys).
+        /// NRT annotations are erased, so this guard is the only defense.
         /// </summary>
         public static bool BenchGodArmAllowed(ServerPerfConfig cfg) =>
             cfg != null && cfg.Diagnostics != null && cfg.Diagnostics.AllowBenchGod;

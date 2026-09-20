@@ -66,9 +66,9 @@ must preserve:
   method is proven main-thread (trace callers in the game IL first); anything
   reached from A* workers, DynamicMesh threads, LiteNet reader/writer threads,
   or Unity job workers needs its own synchronization. The two cadence levers
-  (`AstarGraphThrottlePatch`, `EntityDistributionStridePatch`) advance their
-  counters through `TickStride`, whose `Interlocked.Increment` keeps the stride
-  exact even if a caller ever runs off-main.
+  (`AstarGraphThrottlePatch`, `EntityDistributionStridePatch`) read slot
+  ownership from the shared `TickClock` counter, which advances once per
+  GameManager.UpdateTick invocation on the main loop.
 - **The one intentional receive-thread surface:** `ClientListSnapshotPatch`
   transpiles the connection-request duplicate-IP scan, which LiteNetLib dispatches
   inline on the socket-receive thread (`UnsyncedEvents=true`). Its helper is
@@ -370,7 +370,7 @@ See [`../../7dtd-engine-research/docs/loop/loop.md`](../../7dtd-engine-research/
 
 ## Changelog
 
-- **2026-08-24:** Concurrency-rule example updated: the cadence-lever counters now advance through the shared `TickStride` helper (its `Interlocked.Increment` is the defensive mechanism), not a patch-local `Interlocked` use.
+- **2026-08-24:** Concurrency-rule example updated: the cadence levers now read slot ownership from the shared `TickClock` counter (advanced once per UpdateTick invocation), replacing the patch-local stride gate.
 - **2026-08-23:** Concurrency model section added (main-thread confinement audit: patch surfaces, console drain, the one background thread, reload re-basing rule).
 - **2026-08-23:** Stale in-repo `tools/` dump-helper references repointed to `../7dtd-engine-research/tools/`.
 - **2026-08-08:** Stale `il/*-v3.0.1/` dump links repointed to current `*-v3.1.0/` dirs (loop-complete, deep, deeper, opt-scan).

@@ -26,7 +26,7 @@ namespace EfficientServer.Patches
             {
                 // Full exception: this wraps the whole start-time chain, so the type
                 // and stack are what say WHICH apply step broke.
-                EsLog.Error("GameStartDone handler failed: " + ex);
+                EsLog.Emit(LogLevel.Error, "GameStartDone handler failed: " + ex);
             }
         }
 
@@ -54,7 +54,7 @@ namespace EfficientServer.Patches
                     if (current != _prevWorkers)
                     {
                         Unity.Jobs.LowLevel.Unsafe.JobsUtility.JobWorkerCount = _prevWorkers;
-                        EsLog.Log($"job workers {current} -> {_prevWorkers} (config 0 or mod inactive: vanilla restored)");
+                        EsLog.Emit(LogLevel.Info, $"job workers {current} -> {_prevWorkers} (config 0 or mod inactive: vanilla restored)");
                     }
                     return;
                 }
@@ -65,11 +65,11 @@ namespace EfficientServer.Patches
                 }
                 if (current == wanted) return;
                 Unity.Jobs.LowLevel.Unsafe.JobsUtility.JobWorkerCount = wanted;
-                EsLog.Log($"job workers {current} -> {wanted}");
+                EsLog.Emit(LogLevel.Info, $"job workers {current} -> {wanted}");
             }
             catch (Exception ex)
             {
-                EsLog.Warn("job worker set failed [" + ex.GetType().Name + "]: " + ex.Message);
+                EsLog.Emit(LogLevel.Warn, "job worker set failed [" + ex.GetType().Name + "]: " + ex.Message);
             }
         }
 
@@ -110,7 +110,7 @@ namespace EfficientServer.Patches
                 if (!_fpsWarned)
                 {
                     _fpsWarned = true;
-                    EsLog.Warn("target fps apply failed [" + ex.GetType().Name + "]: " + ex.Message
+                    EsLog.Emit(LogLevel.Warn, "target fps apply failed [" + ex.GetType().Name + "]: " + ex.Message
                         + " - vanilla frame rate kept");
                 }
             }
@@ -129,7 +129,7 @@ namespace EfficientServer.Patches
                 // so fall back to the documented vanilla 20.
                 int restoreTo = _prevFps > 0 ? _prevFps : 20;
                 UnityEngine.Application.targetFrameRate = restoreTo;
-                EsLog.Log($"target frame rate {_appliedFps} -> {restoreTo} (config 0 or mod inactive: vanilla restored)");
+                EsLog.Emit(LogLevel.Info, $"target frame rate {_appliedFps} -> {restoreTo} (config 0 or mod inactive: vanilla restored)");
                 return;
             }
             if (!_fpsApplied)
@@ -140,7 +140,7 @@ namespace EfficientServer.Patches
             if (UnityEngine.Application.targetFrameRate == wanted) return;
             UnityEngine.Application.targetFrameRate = wanted;
             _appliedFps = wanted;
-            EsLog.Log($"target frame rate -> {wanted} (frame path only; full tick stays ~20 Hz)");
+            EsLog.Emit(LogLevel.Info, $"target frame rate -> {wanted} (frame path only; full tick stays ~20 Hz)");
         }
     }
 }

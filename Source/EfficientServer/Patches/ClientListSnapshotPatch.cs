@@ -85,7 +85,7 @@ namespace EfficientServer.Patches
                     yield return ins;
                 }
             }
-            EsLog.Log("ClientListSnapshotPatch: rerouted "
+            EsLog.Emit(LogLevel.Info, "ClientListSnapshotPatch: rerouted "
                 + swapped + " duplicate-IP client-list scan(s)");
             // Matched-but-untransformed would silently leave the stock race in place;
             // fail loudly so target drift surfaces as a visible init error.

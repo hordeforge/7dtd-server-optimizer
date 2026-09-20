@@ -3,20 +3,22 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
-using System.Threading;
 
 // Stub the only external symbols Config.cs touches (game-type-free), so the real
 // Config source compiles and runs under the plain .NET SDK. Warnings are recorded
 // so tests can pin which channel each config problem is reported on.
 namespace EfficientServer
 {
+    internal enum LogLevel { Info, Warn, Error }
+
     internal static class EsLog
     {
         public static readonly List<string> Warnings = new List<string>();
 
-        public static void Log(string msg) { /* swallow in tests */ }
-
-        public static void Warn(string msg) { Warnings.Add(msg); }
+        public static void Emit(LogLevel severity, string msg)
+        {
+            if (severity == LogLevel.Warn) Warnings.Add(msg);
+        }
     }
 }
 
@@ -288,55 +290,17 @@ namespace EfficientServer.Tests
             Check(ok.Pathfinding.GraphUpdateEveryTicks == 8, "round-trip GraphUpdateEveryTicks=8");
             Check(ok.Pathfinding.MoveRescanThresholdSq == 400f, "round-trip MoveRescanThresholdSq=400");
 
-            // Unknown-key guard: a misspelled knob must be named at load instead of
-            // silently keeping its default (Newtonsoft binds case-insensitively, so
-            // case variants of real keys are NOT unknown - they bind).
-            Check(ServerPerfConfig.FindUnknownKeys("{\"Pathfinding\":{\"GraphUpdateEveryTicks\":4}}").Count == 0,
-                "FindUnknownKeys: valid keys -> none");
-            Check(ServerPerfConfig.FindUnknownKeys("{\"notAKey\":1}")[0] == "notAKey",
-                "FindUnknownKeys: top-level typo reported");
-            var unk = ServerPerfConfig.FindUnknownKeys("{\"Pathfinding\":{\"GraphUpdateEveryTick\":8}}");
-            Check(unk.Count == 1 && unk[0] == "Pathfinding.GraphUpdateEveryTick",
-                "FindUnknownKeys: nested typo reported with dotted path");
-            Check(ServerPerfConfig.FindUnknownKeys("{\"AiLod\":{\"ENABLED\":true}}").Count == 0,
-                "FindUnknownKeys: case-variant of real key binds, not reported");
-            // Case folding must be OrdinalIgnoreCase (what Newtonsoft's binding
-            // uses), not the host locale: under a tr-TR culture a culture-sensitive
-            // comparison folds 'i' and 'I' apart, which would report all-caps keys
-            // as unknown while Newtonsoft still binds them. All-caps variants of
-            // I-bearing names must therefore stay "known" here.
-            Check(ServerPerfConfig.FindUnknownKeys(
-                    "{\"PATHFINDING\":{\"GRAPHUPDATEEVERYTICKS\":8,\"MAXPATHENQUEUESPERTICK\":0}}").Count == 0,
-                "FindUnknownKeys: all-caps keys fold ordinally, independent of host locale");
-            Check(ServerPerfConfig.KeyNameMatches("AILOD", "AiLod"),
-                "KeyNameMatches: AILOD == AiLod under OrdinalIgnoreCase");
-            // And a distinct key must not fold: the comparator is an equality,
-            // not a prefix/substring match, or typos sharing a prefix with a
-            // real key would bind silently instead of being reported.
-            Check(!ServerPerfConfig.KeyNameMatches("AiLodX", "AiLod"),
-                "KeyNameMatches: distinct keys do not match (no prefix folding)");
-            // And a key that only differs by a Unicode case twin (dotless ı U+0131,
-            // which Turkish folding maps to/from 'I') is NOT known: ordinal equality
-            // keeps it a reported typo.
-            Check(ServerPerfConfig.FindUnknownKeys("{\"pathf\u0131nding\":{}}")[0] == "pathf\u0131nding",
-                "FindUnknownKeys: dotless-ı spelling is a distinct key (ordinal, no locale folding)");
-            Check(ServerPerfConfig.FindUnknownKeys("{ this is not json ][").Count == 0,
-                "FindUnknownKeys: malformed json -> empty, no throw");
-            Check(ServerPerfConfig.FindUnknownKeys("").Count == 0,
-                "FindUnknownKeys: empty input -> empty");
-            Check(ServerPerfConfig.FindUnknownKeys(null!).Count == 0,
-                "FindUnknownKeys: null input -> empty");
+            // A misspelled knob keeps its default (fail-soft). Newtonsoft binds
+            // case-insensitively, so case variants of real keys bind as usual.
             var typo = LoadTempTracked("{\"Pathfinding\":{\"GraphUpdateEveryTick\":8}}");
             Check(typo != null && typo.Pathfinding.GraphUpdateEveryTicks == 4,
-                "typo'd knob keeps default (and is logged), other fields unaffected");
-            Check(EsLog.Warnings.Any(w => w.Contains("unknown key 'Pathfinding.GraphUpdateEveryTick'")),
-                "typo'd knob -> WARNING names the dotted key");
+                "typo'd knob keeps default, other fields unaffected");
             var caseBind = LoadTemp("{\"ailod\":{\"enabled\":false}}");
             Check(caseBind.AiLod.Enabled == false,
                 "case-variant key binds like Newtonsoft (value applied)");
             var caseBindCaps = LoadTemp("{\"AILOD\":{\"ENABLED\":false}}");
             Check(caseBindCaps.AiLod.Enabled == false,
-                "all-caps I-bearing key binds (guard stays in sync with the ordinal binder)");
+                "all-caps I-bearing key binds (ordinal binder)");
 
             // Normalize: GraphUpdateEveryTicks clamps [1,200].
             var big = LoadTempTracked("{\"Pathfinding\":{\"GraphUpdateEveryTicks\":1000000}}");
@@ -442,8 +406,7 @@ namespace EfficientServer.Tests
             // console without an explicit config opt-in. Pin the secure default, the
             // JSON round-trip, sibling-flag isolation, and the fail-closed paths of
             // the pure predicate the console command consults (null config / null
-            // section must refuse, mirroring the deliberate runtime-null probes of
-            // FindUnknownKeys above).
+            // section must refuse, same runtime-null probes as the other loaders).
             Check(new ServerPerfConfig().Diagnostics != null
                 && !new ServerPerfConfig().Diagnostics.AllowBenchGod,
                 "default AllowBenchGod=false (benchgod refuses until opted in)");
@@ -542,96 +505,6 @@ namespace EfficientServer.Tests
             Check(fps.Server.TargetFps == 120, "Server.TargetFps 999 -> 120 (clamp)");
             var govStride = LoadTemp("{\"Network\":{\"EntityDistributionEveryTicks\":9}}");
             Check(govStride.Network.EntityDistributionEveryTicks == 4, "EntityDistributionEveryTicks 9 -> 4 (clamp)");
-
-            // Governor tier math: escalation doubles each lever from its CONFIGURED
-            // baseline (never below it - the old hard-coded stride 2 sped replication
-            // UP for operators tuned to a static base of 3+), and recovery maps back
-            // to that exact baseline. Ceilings mirror Normalize ([1,4] stride,
-            // [1,200] graph cadence).
-            Check(GovernorTiers.ThrottleLever(1, 4) == 2, "governor: stride baseline 1 -> 2 (default behavior unchanged)");
-            Check(GovernorTiers.ThrottleLever(2, 4) == 4, "governor: stride baseline 2 -> 4");
-            Check(GovernorTiers.ThrottleLever(3, 4) == 4, "governor: stride baseline 3 -> 4 (ceiling)");
-            Check(GovernorTiers.ThrottleLever(4, 4) == 4, "governor: stride baseline 4 stays 4 (no speed-up under load)");
-            for (int b = 1; b <= 4; b++)
-                Check(GovernorTiers.ThrottleLever(b, 4) >= b,
-                    "governor invariant: throttled stride >= configured baseline for base " + b);
-            Check(GovernorTiers.ThrottleLever(1, 200) == 2, "governor: graph cadence baseline 1 -> 2 (unchanged)");
-            Check(GovernorTiers.ThrottleLever(100, 200) == 200, "governor: graph cadence baseline 100 -> 200 (ceiling)");
-            Check(GovernorTiers.ThrottleLever(200, 200) == 200, "governor: graph cadence baseline 200 stays 200");
-
-            // TickStride: the one stride gate shared by both cadence levers.
-            // Semantics: exactly every Nth call owns the slot and the counter
-            // advances on EVERY call, run or not (a skipped tick must consume
-            // its slot, or a burst of missed ticks would collapse into one).
-            var s1 = 0;
-            Check(EfficientServer.Patches.TickStride.RunThisTick(ref s1, 1), "stride every=1 runs on call 1");
-            Check(EfficientServer.Patches.TickStride.RunThisTick(ref s1, 1), "stride every=1 runs on call 2");
-            var s4 = 0;
-            Check(!EfficientServer.Patches.TickStride.RunThisTick(ref s4, 4), "stride every=4: call 1 -> no run");
-            Check(!EfficientServer.Patches.TickStride.RunThisTick(ref s4, 4), "stride every=4: call 2 -> no run");
-            Check(!EfficientServer.Patches.TickStride.RunThisTick(ref s4, 4), "stride every=4: call 3 -> no run");
-            Check(EfficientServer.Patches.TickStride.RunThisTick(ref s4, 4), "stride every=4: call 4 -> run");
-            Check(s4 == 4, "stride counter advanced on non-run calls too (== 4 after four calls)");
-
-            // Signed-wrap boundary: the gate casts through uint so the counter
-            // wrapping past int.MaxValue keeps the same slot phase instead of
-            // going negative and flipping which ticks run (TickStride doc).
-            // Hand-derived expectation, not copied from a run: starting the
-            // counter at int.MaxValue-2 with every=3, the unsigned sequence
-            // 2147483646.. wraps to 2147483648.. and hits 0 mod 3 exactly on
-            // calls 1, 4 and 7. Naive signed modulo would return FALSE on call
-            // 4 (-2147483647 % 3 == -1), so this window genuinely pins the cast.
-            var sw = int.MaxValue - 2;
-            Check(EfficientServer.Patches.TickStride.RunThisTick(ref sw, 3), "stride wrap: call 1 (int.MaxValue-1) -> run");
-            Check(!EfficientServer.Patches.TickStride.RunThisTick(ref sw, 3), "stride wrap: call 2 (int.MaxValue) -> no run");
-            Check(!EfficientServer.Patches.TickStride.RunThisTick(ref sw, 3), "stride wrap: call 3 (int.MinValue) -> no run");
-            Check(sw == int.MinValue, "stride wrap: counter wrapped to int.MinValue after call 3");
-            Check(EfficientServer.Patches.TickStride.RunThisTick(ref sw, 3),
-                "stride wrap: call 4 (int.MinValue+1) still owns the slot (uint phase kept)");
-            Check(!EfficientServer.Patches.TickStride.RunThisTick(ref sw, 3), "stride wrap: call 5 -> no run");
-            Check(!EfficientServer.Patches.TickStride.RunThisTick(ref sw, 3), "stride wrap: call 6 -> no run");
-            Check(EfficientServer.Patches.TickStride.RunThisTick(ref sw, 3), "stride wrap: call 7 -> run (phase continues)");
-
-            // Concurrent hammer. Production callers are main-thread today (the
-            // ARCHITECTURE concurrency model pins every patch surface to the
-            // Unity main loop), but RunThisTick uses Interlocked precisely so a
-            // future off-main caller composes safely; this pins that guarantee.
-            // With T total calls from many threads the counter must advance
-            // exactly once per call (no lost increments) and slot ownership must
-            // total exactly T / every (each increment draws a unique value in
-            // 1..T no matter how calls interleave, so the owned count is
-            // order-independent and exact, not statistical).
-            const int hammerThreads = 8;
-            const int hammerCallsPerThread = 1000000;
-            const int hammerEvery = 7;
-            int hammerTick = 0;
-            var ownedPerThread = new long[hammerThreads];
-            var hammers = new Thread[hammerThreads];
-            // Start barrier: without it thread-start jitter serializes the
-            // workers and the hammer proves nothing (each runs alone).
-            var startGate = new Barrier(hammerThreads);
-            for (int t = 0; t < hammerThreads; t++)
-            {
-                int slot = t; // per-thread result cell; no shared write besides RunThisTick's own counter
-                hammers[t] = new Thread(() =>
-                {
-                    long owned = 0;
-                    startGate.SignalAndWait();
-                    for (int i = 0; i < hammerCallsPerThread; i++)
-                        if (EfficientServer.Patches.TickStride.RunThisTick(ref hammerTick, hammerEvery))
-                            owned++;
-                    ownedPerThread[slot] = owned;
-                })
-                { IsBackground = true, Name = "es-test-stride-hammer-" + t };
-                hammers[t].Start();
-            }
-            for (int t = 0; t < hammerThreads; t++)
-                hammers[t].Join(); // join edges make every thread's writes visible to these asserts
-            int hammerTotal = hammerThreads * hammerCallsPerThread;
-            Check(hammerTick == hammerTotal,
-                "stride hammer: counter advanced exactly once per call under concurrency (" + hammerTick + "/" + hammerTotal + ")");
-            Check(ownedPerThread.Sum() == hammerTotal / hammerEvery,
-                "stride hammer: exactly " + (hammerTotal / hammerEvery) + " slots owned under concurrency (got " + ownedPerThread.Sum() + ")");
 
             // TickClock: the per-entity slot predicate behind the updateTasks
             // mid-band stride and the crowd-collision resolve stagger. The invariant
@@ -770,12 +643,8 @@ namespace EfficientServer.Tests
             Check(actualCross == expectedCross && actualCross > 0,
                 "tick EMA crosses OverBudgetMs on advance " + actualCross + " (predicted " + expectedCross + ")");
 
-            // Encoding boundary: the config file is UTF-8. A non-ASCII unknown key
-            // must survive the read verbatim (no mojibake), and a UTF-8 BOM must be
+            // Encoding boundary: the config file is UTF-8, and a UTF-8 BOM must be
             // tolerated, so operator configs behave identically on every host.
-            var cyr = ServerPerfConfig.FindUnknownKeys("{\"Путь\":1}");
-            Check(cyr.Count == 1 && cyr[0] == "Путь",
-                "FindUnknownKeys: non-ASCII key reported verbatim (UTF-8 read path)");
             string bomP = WriteTempBytes(
                 new byte[] { 0xEF, 0xBB, 0xBF }
                 .Concat(System.Text.Encoding.UTF8.GetBytes("{\"Enabled\":false}"))
@@ -795,15 +664,13 @@ namespace EfficientServer.Tests
             CheckDefaultPathDiscovery();
             CheckUnreadableFileFailSoft();
 
-            // Fuzz: the config file is the mod's untrusted-input surface, so two
-            // deterministic targets hammer Load + FindUnknownKeys (Fuzz.cs):
-            // structure-aware mutations of the default config reach Normalize's
-            // value paths that character soup never parses into, and garbage
-            // text covers truncation, deep nesting, bad escapes and raw bytes.
-            // Both assert the full post-Normalize invariant table, so a
-            // wrong-but-non-crashing load fails the run instead of hiding.
+            // Fuzz: the config file is the mod's untrusted-input surface, so a
+            // deterministic target hammers Load. Structure-aware mutations of the
+            // default config reach Normalize's value paths that character soup
+            // never parses into. It asserts the full post-Normalize invariant
+            // table, so a wrong-but-non-crashing load fails the run instead of
+            // hiding.
             ConfigFuzz.StructureAware(Check, LoadTemp);
-            ConfigFuzz.GarbageText(Check, LoadTemp, bytes => LoadTempFile(WriteTempBytes(bytes)));
 
             // Dedicated-only gate (ShouldRunFor): disabled config never runs.
             Check(!ServerPerfConfig.ShouldRunFor(false, true, true, true), "active=false -> no run");

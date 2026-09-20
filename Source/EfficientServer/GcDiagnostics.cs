@@ -40,13 +40,13 @@ namespace EfficientServer
             // GC_disable/GC_enable refcounts against the single collector.
             if (_started)
             {
-                EsLog.Log("GC MEGAPAUSE diagnostic already armed this process; not re-arming");
+                EsLog.Emit(LogLevel.Info, "GC MEGAPAUSE diagnostic already armed this process; not re-arming");
                 return;
             }
             _started = true;
             var t = new Thread(() => RunMegapause(cfg)) { IsBackground = true, Name = "es-gc-megapause" };
             t.Start();
-            EsLog.Log("GC MEGAPAUSE diagnostic armed (DIAGNOSTIC ONLY): warmup="
+            EsLog.Emit(LogLevel.Info, "GC MEGAPAUSE diagnostic armed (DIAGNOSTIC ONLY): warmup="
                 + cfg.WarmupSeconds + "s grow=" + cfg.GrowSeconds + "s");
         }
 
@@ -64,7 +64,7 @@ namespace EfficientServer
                 ulong heap0 = HeapBytes();
                 BoehmNative.GC_disable();
                 gcDisabled = true;
-                EsLog.Log("GC MEGAPAUSE: collector DISABLED at heap=" + Gb(heap0) + "; growing under load...");
+                EsLog.Emit(LogLevel.Info, "GC MEGAPAUSE: collector DISABLED at heap=" + Gb(heap0) + "; growing under load...");
 
                 int grow = Math.Max(1, cfg.GrowSeconds);
                 var sw = Stopwatch.StartNew();
@@ -73,10 +73,10 @@ namespace EfficientServer
                 {
                     Thread.Sleep(10000);
                     ulong h = HeapBytes();
-                    EsLog.Log("GC MEGAPAUSE: +" + (int)sw.Elapsed.TotalSeconds + "s heap=" + Gb(h));
+                    EsLog.Emit(LogLevel.Info, "GC MEGAPAUSE: +" + (int)sw.Elapsed.TotalSeconds + "s heap=" + Gb(h));
                     if (h >= SafetyCapBytes)
                     {
-                        EsLog.Warn("GC MEGAPAUSE: SAFETY CAP hit (" + Gb(h) + "), collecting early");
+                        EsLog.Emit(LogLevel.Warn, "GC MEGAPAUSE: SAFETY CAP hit (" + Gb(h) + "), collecting early");
                         aborted = true;
                         break;
                     }
@@ -94,7 +94,7 @@ namespace EfficientServer
 
                 double freedGb = (heapBefore > heapAfter)
                     ? (heapBefore - heapAfter) / (1024.0 * 1024.0 * 1024.0) : 0.0;
-                EsLog.Log("GC MEGAPAUSE RESULT: "
+                EsLog.Emit(LogLevel.Info, "GC MEGAPAUSE RESULT: "
                     + "grow=" + (int)sw.Elapsed.TotalSeconds + "s"
                     + (aborted ? " (safety-capped)" : "")
                     + " heap " + Gb(heap0) + " -> " + Gb(heapBefore) + " -> " + Gb(heapAfter)
@@ -119,7 +119,7 @@ namespace EfficientServer
                 // Name the type + library: DllNotFoundException (host OS ships the
                 // Boehm lib under another name) reads differently from a missing
                 // entry point, and the operator needs to know which one fired.
-                EsLog.Warn("GC MEGAPAUSE failed [" + ex.GetType().Name
+                EsLog.Emit(LogLevel.Warn, "GC MEGAPAUSE failed [" + ex.GetType().Name
                     + " via " + BoehmNative.Lib + "]: " + ex.Message);
             }
         }

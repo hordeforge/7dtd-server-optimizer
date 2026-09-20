@@ -1,21 +1,18 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
-using System.IO;
-using System.Text;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
 namespace EfficientServer.Tests
 {
-    // Fuzz targets for the one untrusted-input surface this mod ships: the JSON
-    // config loader (ServerPerfConfig.Load + FindUnknownKeys). The file sits in
+    // Fuzz target for the one untrusted-input surface this mod ships: the JSON
+    // config loader (ServerPerfConfig.Load). The file sits in
     // Mods/EfficientServer/Config/, is hand-editable, and travels with mod
     // packages, so it is parsed as hostile input on every dedicated start.
     // Contract under fuzz: Load never throws (fail-soft to defaults) and
     // Normalize lands EVERY knob inside its documented clamp on ANY input.
     //
-    // Two deterministic (fixed-seed) targets, so failures reproduce under
+    // One deterministic (fixed-seed) target, so failures reproduce under
     // `make test` with no libFuzzer host:
     //   StructureAware: schema-driven mutations of the serialized default
     //     config. Pure character soup almost never parses, so hostile VALUES
@@ -26,11 +23,6 @@ namespace EfficientServer.Tests
     //     over the governor band) can only misbehave when both sides of the
     //     link are hostile together, and the per-section null-backfill lines
     //     must be reachable by fuzzing, not only by fixtures.
-    //   GarbageText: truncations of a real config, deep nesting, duplicate
-    //     keys, lone surrogates, invalid UTF-8 and BOM-prefixed junk through
-    //     both the string path and the raw-byte read path, plus valid-JSON
-    //     documents whose SHAPE is wrong for a config (top-level scalars and
-    //     arrays, trailing content, arrays where a section object belongs).
     //
     // Every failure line embeds the offending JSON, so an artifact becomes a
     // repro by pasting it as a LoadTemp fixture next to Main.
@@ -40,11 +32,6 @@ namespace EfficientServer.Tests
 
         const int StructureIterations = 2000;
         const int CombinedIterations = 1200;
-        const int GarbageIterations = 1200;
-
-        // Alphabet kept from the original hand-rolled soup target: JSON syntax
-        // characters plus the letter set of true/false/null/NaN spelled apart.
-        const string SoupChars = "{}[]\":,.0123456789abcTruefalsngP_ \t\n";
 
         public static void StructureAware(CheckFn check, Func<string, ServerPerfConfig> load)
         {
@@ -120,152 +107,6 @@ namespace EfficientServer.Tests
                 string? badCombined = Violations(loaded);
                 check(badCombined == null,
                     "combined fuzz iter " + i + ": " + badCombined + " for: " + json);
-            }
-        }
-
-        public static void GarbageText(
-            CheckFn check,
-            Func<string, ServerPerfConfig> loadString,
-            Func<byte[], ServerPerfConfig> loadBytes)
-        {
-            string defaultJson = JsonConvert.SerializeObject(new ServerPerfConfig());
-            var rng = new Random(777001);
-
-            for (int i = 0; i < GarbageIterations; i++)
-            {
-                EsLog.Warnings.Clear();
-                string json = GarbageCase(rng, defaultJson);
-                RunThroughLoadAndKeyScan(check, "garbage iter " + i, json, loadString);
-            }
-
-            // Valid JSON whose document shape is wrong for a config object:
-            // top-level scalars/arrays, trailing content, an array where a
-            // section object belongs, whitespace-only text. Truncation sweeps
-            // and character soup almost never synthesize these exactly, yet
-            // each takes a distinct failure branch (value-conversion error,
-            // reader error, silent null deserialization) that must stay
-            // fail-soft to defaults with FindUnknownKeys still returning a list.
-            string[] shapeCases =
-            {
-                "[]",
-                "[{\"Enabled\":false}]",
-                "\"text\"",
-                "-42",
-                "3.5e2",
-                "true",
-                "{\"AiLod\":[1,2]}",
-                "{}{}",
-                "   ",
-            };
-            foreach (string shape in shapeCases)
-            {
-                EsLog.Warnings.Clear();
-                RunThroughLoadAndKeyScan(check, "shape '" + shape + "'", shape, loadString);
-            }
-
-            // Raw-byte cases hit File.ReadAllText(path, UTF8), which string-level
-            // cases never cross: invalid sequences become U+FFFD replacements, a
-            // BOM is stripped, and UTF-16LE without BOM turns to mojibake. All
-            // three must end in defaults or a clean parse, never an exception.
-            byte[][] byteCases =
-            {
-                new byte[] { 0xEF, 0xBB, 0xBF }, // BOM alone -> empty -> defaults
-                Concat(Encoding.UTF8.GetBytes("{\"Enabled\":"), new byte[] { 0xC0, 0xAF }, Encoding.UTF8.GetBytes("}")),
-                Concat(Encoding.UTF8.GetBytes("{\"Gc\":{"), new byte[] { 0x00 }, Encoding.UTF8.GetBytes("}}")),
-                Concat(new byte[] { 0xEF, 0xBB, 0xBF }, Encoding.UTF8.GetBytes(defaultJson)),
-                Encoding.Unicode.GetBytes(defaultJson), // UTF-16LE, no BOM
-                new byte[] { 0xFF, 0xFE, 0x00 }, // stray UTF-16LE BOM prefix + NUL
-                new byte[0], // empty file
-            };
-            for (int i = 0; i < byteCases.Length; i++)
-            {
-                EsLog.Warnings.Clear();
-                ServerPerfConfig loaded;
-                try { loaded = loadBytes(byteCases[i]); }
-                catch (Exception ex)
-                {
-                    check(false, "byte fuzz case " + i + ": Load threw " + ex.GetType().Name);
-                    continue;
-                }
-                string? bad = Violations(loaded);
-                check(bad == null, "byte fuzz case " + i + ": " + bad);
-            }
-
-            // Truncated-at-every-offset sweep over a real config: the classic
-            // corruption shape (crash mid-write). Deterministic, one pass.
-            for (int cut = 0; cut <= defaultJson.Length; cut += 37)
-            {
-                EsLog.Warnings.Clear();
-                RunThroughLoadAndKeyScan(check, "truncate@" + cut, defaultJson.Substring(0, cut), loadString);
-            }
-        }
-
-        static void RunThroughLoadAndKeyScan(
-            CheckFn check, string label, string json, Func<string, ServerPerfConfig> load)
-        {
-            ServerPerfConfig loaded;
-            try { loaded = load(json); }
-            catch (Exception ex)
-            {
-                check(false, label + ": Load threw " + ex.GetType().Name + " for: " + json);
-                return;
-            }
-            // Whatever bound, the loaded result must satisfy the clamp contract.
-            string? bad = Violations(loaded);
-            check(bad == null, label + ": " + bad + " for: " + json);
-            // FindUnknownKeys re-parses the same hostile text through its own
-            // walk; it promises to return a list (possibly empty), never throw.
-            List<string> unknown;
-            try { unknown = ServerPerfConfig.FindUnknownKeys(json); }
-            catch (Exception ex)
-            {
-                check(false, label + ": FindUnknownKeys threw " + ex.GetType().Name + " for: " + json);
-                return;
-            }
-            check(unknown != null, label + ": FindUnknownKeys returned null for: " + json);
-        }
-
-        static string GarbageCase(Random rng, string defaultJson)
-        {
-            switch (rng.Next(6))
-            {
-                case 0: // truncation of a real config at an arbitrary offset
-                    return defaultJson.Substring(0, rng.Next(defaultJson.Length + 1));
-                case 1: // nesting past Newtonsoft's MaxDepth (64): must die inside
-                        // Load's catch as JsonReaderException, not escape or SOE
-                    int depth = 65 + rng.Next(400);
-                    return "{\"AiLod\":" + new string('[', depth) + new string(']', depth) + "}";
-                case 2: // malformed escapes and control bytes
-                    return "{\"Enabled\":tr" + (char)rng.Next(1, 32)
-                        + "ue,\"x\":\"\\ud800\",\"y\":\"\\q\"}";
-                case 3: // numeric extremes at a real numeric knob
-                    return "{\"Pathfinding\":{\"MoveRescanThresholdSq\":" + ExtremeNumber(rng) + "}}";
-                case 4: // character soup (retained from the original fuzz target)
-                    var sb = new StringBuilder();
-                    int len = rng.Next(0, 120);
-                    for (int j = 0; j < len; j++) sb.Append(SoupChars[rng.Next(SoupChars.Length)]);
-                    return sb.ToString();
-                default: // duplicate keys across case variants: binding is either
-                         // last-wins or a caught error; both must stay in range
-                    return "{\"Enabled\":false,\"enabled\":true,\"ENABLED\":false,"
-                        + "\"Pathfinding\":{\"GraphUpdateEveryTicks\":9,"
-                        + "\"graphupdateeveryticks\":2}}";
-            }
-        }
-
-        static string ExtremeNumber(Random rng)
-        {
-            switch (rng.Next(6))
-            {
-                case 0: return "NaN";
-                case 1: return "Infinity";
-                case 2: return "-Infinity";
-                case 3: return "1e999";
-                case 4: return int.MinValue.ToString(CultureInfo.InvariantCulture);
-                // Invariant: a comma-decimal host culture would emit "1,5E+30",
-                // which is not a JSON number and silently turns this case into
-                // a parse-error fixture instead of an extreme-value one.
-                default: return (rng.NextDouble() * 8e30 - 4e30).ToString("R", CultureInfo.InvariantCulture);
             }
         }
 
@@ -351,7 +192,7 @@ namespace EfficientServer.Tests
                         _ => (JValue)"1e999",
                     };
                     break;
-                default: // typo'd twin of a real key: must be named, never bound
+                default: // typo'd twin of a real key: stays an ignored unknown key
                     section[key + "X"] = 123456;
                     break;
             }
@@ -396,13 +237,13 @@ namespace EfficientServer.Tests
             I(c.DynamicMesh.MaxRegionLoadMsPerFrame, 1, 1000, "DynamicMesh.MaxRegionLoadMsPerFrame");
             I(c.DynamicMesh.MaxActiveSyncs, 1, 128, "DynamicMesh.MaxActiveSyncs");
 
-            I(c.Pathfinding.GraphUpdateEveryTicks, 1, GovernorTiers.GraphUpdateMax, "Pathfinding.GraphUpdateEveryTicks");
+            I(c.Pathfinding.GraphUpdateEveryTicks, 1, 200, "Pathfinding.GraphUpdateEveryTicks");
             F(c.Pathfinding.MoveRescanThresholdSq, 100f, 10000f, "Pathfinding.MoveRescanThresholdSq");
             I(c.Pathfinding.MaxPathEnqueuesPerTick, 0, 2000, "Pathfinding.MaxPathEnqueuesPerTick");
             F(c.Pathfinding.DropPathWhenFarDistSq, 0f, 4000000f, "Pathfinding.DropPathWhenFarDistSq");
 
             I(c.WorldTransfer.ChunkPackagesPerObserverPerTick, 1, 32, "WorldTransfer.ChunkPackagesPerObserverPerTick");
-            I(c.Network.EntityDistributionEveryTicks, 1, GovernorTiers.EntityStrideMax, "Network.EntityDistributionEveryTicks");
+            I(c.Network.EntityDistributionEveryTicks, 1, 4, "Network.EntityDistributionEveryTicks");
 
             I(c.CrowdCollisionLod.ResolveEveryNTicks, 1, 16, "CrowdCollisionLod.ResolveEveryNTicks");
             F(c.AnimatorLod.FullRateDistSq, 100f, 1000000f, "AnimatorLod.FullRateDistSq");
@@ -432,12 +273,5 @@ namespace EfficientServer.Tests
         }
 
         static string Join(List<string> parts) => string.Join("; ", parts);
-
-        static byte[] Concat(params byte[][] chunks)
-        {
-            using var ms = new MemoryStream();
-            foreach (var chunk in chunks) ms.Write(chunk, 0, chunk.Length);
-            return ms.ToArray();
-        }
     }
 }

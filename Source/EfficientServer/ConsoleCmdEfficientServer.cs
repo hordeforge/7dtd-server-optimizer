@@ -87,9 +87,9 @@ namespace EfficientServer
             }
             catch (Exception ex)
             {
-                EsLog.Warn("console output failed [" + ex.GetType().Name + "]: " + ex.Message);
+                EsLog.Emit(LogLevel.Warn, "console output failed [" + ex.GetType().Name + "]: " + ex.Message);
             }
-            EsLog.Log(message);
+            EsLog.Emit(LogLevel.Info, message);
         }
 
         static void Status()
@@ -214,7 +214,7 @@ namespace EfficientServer
                 }
             }
             if (removed > 0)
-                EsLog.Log("rigprobe: pruned " + removed + " tracked component(s) whose "
+                EsLog.Emit(LogLevel.Info, "rigprobe: pruned " + removed + " tracked component(s) whose "
                     + "rig despawned (tracked=" + _rigDisabled.Count + ")");
         }
 

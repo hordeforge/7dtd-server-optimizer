@@ -1,3 +1,4 @@
+using System;
 using System.Globalization;
 using HarmonyLib;
 
@@ -20,7 +21,7 @@ namespace EfficientServer.Patches
     /// when and why fidelity was traded for tick rate.
     ///
     /// The governor only moves levers between the OPERATOR'S CONFIGURED BASELINE and
-    /// a doubled, capped throttle value (<see cref="GovernorTiers"/>) - it introduces
+    /// a doubled, capped throttle value - it introduces
     /// no new behavior, it schedules existing, individually-validated ones. Baselines
     /// are captured at first transition and restored on full recovery, so an
     /// operator's non-vanilla steady state (e.g. EntityDistributionEveryTicks=3)
@@ -116,7 +117,7 @@ namespace EfficientServer.Patches
                 // Log floats render invariant, same convention as es status / es
                 // animstate: the log is grepped across hosts, and a comma-decimal
                 // locale must not reformat these values.
-                EsLog.Warn($"Governor: tick EMA {emaMs.ToString("F1", CultureInfo.InvariantCulture)}ms > "
+                EsLog.Emit(LogLevel.Warn, $"Governor: tick EMA {emaMs.ToString("F1", CultureInfo.InvariantCulture)}ms > "
                     + $"{cfg.EmergencyOverMs.ToString(CultureInfo.InvariantCulture)}ms despite throttles "
                     + "- ANIMATOR EMERGENCY CullCompletely (combat timing degrades; clients see no visual change)");
                 AnimatorEmergency.Enter();
@@ -127,7 +128,7 @@ namespace EfficientServer.Patches
             if (level == 1)
             {
                 ApplyThrottledLevers(path, net);
-                EsLog.Log(previous == 2
+                EsLog.Emit(LogLevel.Info, previous == 2
                     ? $"Governor: tick EMA {emaMs.ToString("F1", CultureInfo.InvariantCulture)}ms < "
                       + $"{cfg.HealthyMs.ToString(CultureInfo.InvariantCulture)}ms - stepped down from emergency to THROTTLED"
                     : $"Governor: tick EMA {emaMs.ToString("F1", CultureInfo.InvariantCulture)}ms > "
@@ -138,7 +139,7 @@ namespace EfficientServer.Patches
             {
                 net.EntityDistributionEveryTicks = _baseEntityStride;
                 path.GraphUpdateEveryTicks = _baseGraphEvery;
-                EsLog.Log($"Governor: tick EMA {emaMs.ToString("F1", CultureInfo.InvariantCulture)}ms < "
+                EsLog.Emit(LogLevel.Info, $"Governor: tick EMA {emaMs.ToString("F1", CultureInfo.InvariantCulture)}ms < "
                     + $"{cfg.HealthyMs.ToString(CultureInfo.InvariantCulture)}ms - restored baseline "
                     + $"(replication /{_baseEntityStride}, graph updates /{_baseGraphEvery})");
             }
@@ -146,13 +147,17 @@ namespace EfficientServer.Patches
 
         // The one place that maps baseline -> doubled lever values. Shared by the
         // escalate path and the mid-tier config reload so they cannot drift apart.
+        // Escalation DOUBLES each lever from its configured baseline (never runs it
+        // faster than the operator set it), capped at the same ceilings Normalize
+        // enforces (stride 4, graph cadence 200).
         static void ApplyThrottledLevers(PathfindingConfig path, NetworkConfig net)
         {
-            net.EntityDistributionEveryTicks =
-                GovernorTiers.ThrottleLever(_baseEntityStride, GovernorTiers.EntityStrideMax);
-            path.GraphUpdateEveryTicks =
-                GovernorTiers.ThrottleLever(_baseGraphEvery, GovernorTiers.GraphUpdateMax);
+            net.EntityDistributionEveryTicks = ThrottleLever(_baseEntityStride, 4);
+            path.GraphUpdateEveryTicks = ThrottleLever(_baseGraphEvery, 200);
         }
+
+        static int ThrottleLever(int baseValue, int maxValue)
+            => Math.Min(maxValue, Math.Max(baseValue, baseValue * 2));
 
         /// <summary>
         /// Re-base the governor after <see cref="ModApi.ReloadConfig"/> swaps the
@@ -185,7 +190,7 @@ namespace EfficientServer.Patches
                 if (inactiveAtBaseline && AnimatorEmergency.Active)
                 {
                     AnimatorEmergency.Exit();
-                    EsLog.Log("config reloaded: governor inactive (disabled or master off) - "
+                    EsLog.Emit(LogLevel.Info, "config reloaded: governor inactive (disabled or master off) - "
                         + "released animator emergency left armed by the es animoff probe");
                 }
                 return;
@@ -207,7 +212,7 @@ namespace EfficientServer.Patches
                 if (_level >= 2)
                     AnimatorEmergency.Exit();
                 _level = 0;
-                EsLog.Log("config reloaded: governor inactive (disabled or master off) - "
+                EsLog.Emit(LogLevel.Info, "config reloaded: governor inactive (disabled or master off) - "
                     + "levers left at reloaded (baseline) values");
                 return;
             }
@@ -220,7 +225,7 @@ namespace EfficientServer.Patches
             {
                 AnimatorEmergency.Exit();
                 _level = 1;
-                EsLog.Log("config reloaded: AnimatorEmergency off - stepped down from emergency to THROTTLED");
+                EsLog.Emit(LogLevel.Info, "config reloaded: AnimatorEmergency off - stepped down from emergency to THROTTLED");
             }
 
             // Active tier (1 or 2): re-capture the baselines from the new object and
@@ -233,7 +238,7 @@ namespace EfficientServer.Patches
             _baseGraphEvery = path.GraphUpdateEveryTicks;
             _baseEntityStride = net.EntityDistributionEveryTicks;
             ApplyThrottledLevers(path, net);
-            EsLog.Log($"config reloaded: governor tier {_level} re-applied to new config "
+            EsLog.Emit(LogLevel.Info, $"config reloaded: governor tier {_level} re-applied to new config "
                 + $"(replication /{net.EntityDistributionEveryTicks}, graph updates /{path.GraphUpdateEveryTicks})");
         }
     }

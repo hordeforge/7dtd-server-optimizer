@@ -28,7 +28,7 @@ namespace EfficientServer
                 // logged no-op and leave the process to the first-loaded copy.
                 if (Harmony.HasAnyPatches(HarmonyId))
                 {
-                    EsLog.Warn("EfficientServer is already patched in this process "
+                    EsLog.Emit(LogLevel.Warn, "EfficientServer is already patched in this process "
                         + "(duplicate mod copy or repeated init); skipping init");
                     return;
                 }
@@ -39,12 +39,12 @@ namespace EfficientServer
                 string cfgPath = ServerPerfConfig.DefaultPathBesideAssembly();
                 bool cfgFound = File.Exists(cfgPath);
                 Config = ServerPerfConfig.Load(cfgPath);
-                EsLog.Log(cfgFound
+                EsLog.Emit(LogLevel.Info, cfgFound
                     ? "config: " + cfgPath
                     : "NO CONFIG FILE at " + cfgPath + " - built-in defaults applied");
                 if (!Config.Enabled)
                 {
-                    EsLog.Log("disabled by config; patches are installed so reload can enable it");
+                    EsLog.Emit(LogLevel.Info, "disabled by config; patches are installed so reload can enable it");
                 }
 
                 Active = true;
@@ -64,32 +64,32 @@ namespace EfficientServer
                     if (matched.Count > 0)
                     {
                         methods += matched.Count;
-                        EsLog.Log($"patched {row.Key.Name} -> " + string.Join(", ",
+                        EsLog.Emit(LogLevel.Info, $"patched {row.Key.Name} -> " + string.Join(", ",
                             matched.Select(mm => (mm.DeclaringType != null ? mm.DeclaringType.Name + "." : "") + mm.Name).ToArray())
                             + ConfigNote(row));
                     }
                     else
                     {
                         missing++;
-                        EsLog.Warn($"MISSING TARGET: {row.Key.Name} matched no game method (version drift?) - this optimization is INACTIVE");
+                        EsLog.Emit(LogLevel.Warn, $"MISSING TARGET: {row.Key.Name} matched no game method (version drift?) - this optimization is INACTIVE");
                     }
                 }
                 string summary = $"init {(missing == 0 ? "OK" : "with " + missing + " MISSING required target(s)")}. "
                     + $"matched methods={methods} dedicatedOnly={Config.DedicatedOnly} path={ModPath}";
-                if (missing == 0) EsLog.Log(summary); else EsLog.Warn(summary);
+                if (missing == 0) EsLog.Emit(LogLevel.Info, summary); else EsLog.Emit(LogLevel.Warn, summary);
 
                 // Post-start setup runs via the sanctioned lifecycle hook, not a
                 // Harmony patch on StartGame (no IL match needed just for timing).
                 try { ModEvents.GameStartDone.RegisterHandler(Patches.GameStartPatch.OnGameStartDone); }
                 catch (Exception ex)
                 {
-                    EsLog.Warn("GameStartDone register failed [" + ex.GetType().Name + "]: "
+                    EsLog.Emit(LogLevel.Warn, "GameStartDone register failed [" + ex.GetType().Name + "]: "
                         + ex.Message + " - start-time knobs (mesh budgets, target fps, job workers, skips) will not apply");
                 }
             }
             catch (Exception ex)
             {
-                EsLog.Error("InitMod failed: " + ex);
+                EsLog.Emit(LogLevel.Error, "InitMod failed: " + ex);
             }
         }
 
@@ -131,11 +131,11 @@ namespace EfficientServer
                 // the mod prefix (the game's own command-exception dump is unprefixed),
                 // then rethrow so the caller's success echo never prints over a
                 // partial apply.
-                EsLog.Error("config reload apply failed [" + ex.GetType().Name
+                EsLog.Emit(LogLevel.Error, "config reload apply failed [" + ex.GetType().Name
                     + "] - new config loaded, some levers may not have applied: " + ex);
                 throw;
             }
-            EsLog.Log("config reloaded; enabled=" + Config.Enabled
+            EsLog.Emit(LogLevel.Info, "config reloaded; enabled=" + Config.Enabled
                 + (File.Exists(path) ? ""
                     : " (NO CONFIG FILE at " + path + " - built-in defaults applied)"));
         }
@@ -198,7 +198,7 @@ namespace EfficientServer
             {
                 // Full exception, not just Message: Harmony failures name the failing
                 // IL stage in inner exceptions, and this fires once per group at init.
-                EsLog.Error($"patch {t.Name} failed: {ex}");
+                EsLog.Emit(LogLevel.Error, $"patch {t.Name} failed: {ex}");
                 return new List<MethodInfo>();
             }
         }
@@ -217,7 +217,7 @@ namespace EfficientServer
             try { game = Constants.cVersionInformation?.LongString ?? "?"; }
             catch { }
             bool inc = Config.Gc != null && Config.Gc.Incremental;
-            EsLog.Log($"versions: mod={mod} Assembly-CSharp={asm} game={game}; "
+            EsLog.Emit(LogLevel.Info, $"versions: mod={mod} Assembly-CSharp={asm} game={game}; "
                 + $"config(enabled={Config.Enabled}, dedicatedOnly={Config.DedicatedOnly}, "
                 + $"gcGuard={(Config.Gc != null && Config.Gc.SkipForcedCollect)}, gcIncremental={inc})");
         }

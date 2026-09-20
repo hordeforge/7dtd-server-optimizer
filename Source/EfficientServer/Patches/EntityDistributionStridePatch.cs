@@ -19,14 +19,15 @@ namespace EfficientServer.Patches
     [HarmonyPatch(typeof(NetEntityDistribution), "OnUpdateEntities")]
     public static class EntityDistributionStridePatch
     {
-        static int _tick;
-
         static bool Prefix()
         {
             NetworkConfig cfg = ModApi.Config != null ? ModApi.Config.Network : null;
             if (!ModApi.ShouldRun() || cfg == null || cfg.EntityDistributionEveryTicks <= 1)
                 return true;
-            return TickStride.RunThisTick(ref _tick, cfg.EntityDistributionEveryTicks);
+            // OnUpdateEntities runs once per UpdateTick invocation; id 0 keeps
+            // the Nth-run crossing, fail open to vanilla before the clock livers.
+            return !TickClock.Alive
+                || TickClock.OwnsSlot(0, TickClock.Ticks, cfg.EntityDistributionEveryTicks);
         }
     }
 }

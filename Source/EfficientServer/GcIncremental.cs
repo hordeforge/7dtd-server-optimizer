@@ -31,7 +31,7 @@ namespace EfficientServer
                 BoehmNative.GC_enable_incremental();
                 if (cfg.IncrementalPauseTargetMs > 0)
                     BoehmNative.GC_set_time_limit_ns((long)cfg.IncrementalPauseTargetMs * 1_000_000L);
-                EsLog.Log("GC incremental mode enabled"
+                EsLog.Emit(LogLevel.Info, "GC incremental mode enabled"
                     + (cfg.IncrementalPauseTargetMs > 0
                         ? " (pauseTargetMs=" + cfg.IncrementalPauseTargetMs + ")"
                         : ""));
@@ -43,7 +43,7 @@ namespace EfficientServer
                 // Boehm lib under another name) is a different problem from a
                 // missing entry point, and the log must say which one fired. An
                 // opt-in lever that silently did not apply is WARNING material.
-                EsLog.Warn("GC incremental enable failed [" + ex.GetType().Name
+                EsLog.Emit(LogLevel.Warn, "GC incremental enable failed [" + ex.GetType().Name
                     + " via " + BoehmNative.Lib + "]: " + ex.Message);
             }
         }
