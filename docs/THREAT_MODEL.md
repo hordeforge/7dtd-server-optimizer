@@ -15,7 +15,7 @@ patch group, every change to `scripts/install.sh` / `run_server.sh`.
 | # | Risk | Boundary | Why |
 |---|---|---|---|
 | R1 | Full-host-authority code runs inside the game server process | Mod to host | By design: a Harmony mod is arbitrary code with the server's privileges. No isolation exists or is possible while it stays a C# mod. Every bug is a server crash or worse, not a sandbox escape |
-| R2 | Unverified build artifact installed over the game tree | Build to runtime | `install.sh` wipes and copies `dist/EfficientServer/` into `Mods/` with no hash or signature check (`scripts/install.sh:17`). The zip now carries an SBOM and each build records its SHA-256 (`scripts/package.sh:49,79`), but nothing on the install path compares them. Whoever controls `dist/` or the Mods directory controls the server process |
+| R2 | Unverified build artifact installed over the game tree | Build to runtime | `install.sh` wipes and copies `dist/EfficientServer/` into `Mods/` with no hash or signature check (`scripts/install.sh:17`). Nothing on the install path compares the artifact to a trusted build. Whoever controls `dist/` or the Mods directory controls the server process |
 | R3 | Dangerous operator toggles reachable from any console-level actor, no runtime guard | Console to mod | `es benchgod on` makes ALL players damage-immune server-side; `es animoff` degrades combat; `es rigoff` strips entity rig behaviours. All are one command away for anyone with telnet/console access; the "bench only" restriction is procedural, not enforced |
 | R4 | Config-file self-denial-of-service paths | Filesystem to mod | Opt-in diagnostics deliberately freeze the server (`Diagnostics.GcMegapauseTest`); clamps bound the damage but do not prevent it |
 | R5 | Inherited telnet exposure | Network to console | Both shipped serverconfig templates enable telnet on port 8082 (`server/serverconfig.optimized.xml:33`, root copy identical); safety depends entirely on the game's loopback-fallback and failed-login limit, not on this repo |
@@ -44,7 +44,7 @@ write APIs under `Source/EfficientServer/`; only config reads,
 | B1 | Host filesystem to mod process (E2) | `Config/efficientserver.json` next to the assembly. Written by the operator; writable by anything that can write that directory. Trusted more than a network input would be, less than compiled-in constants |
 | B2 | Console-equivalent actor to mod commands (E3) | Whoever passes the game's telnet password (or connects from loopback with no password set) or holds console permission in game. This mod adds no second gate |
 | B3 | Mod to game host process (E1, E3, E4) | No boundary in a memory-safety sense: the mod shares the process, and patches rewrite game method behavior (prefix/transpiler/finalizer) |
-| B4 | Build and publish to installed server (E5) | `dist/EfficientServer/` copied verbatim into the game's `Mods/` tree; zips additionally published via `dist/*.zip` with buildinfo sidecars |
+| B4 | Build and publish to installed server (E5) | `dist/EfficientServer/` copied verbatim into the game's `Mods/` tree; zips additionally published via `dist/*.zip` |
 | B5 | Host environment to server process (E5) | Env vars consumed at process init: `GC_FREE_SPACE_DIVISOR`, `GC_NPROCS`, `MONO_ENV_OPTIONS`, optional heap/affinity vars (`scripts/run_server.sh:48-60`); plus `LD_LIBRARY_PATH` prepended with the server dir (`run_server.sh:30`) |
 | B6 | CI runner to repository (E6) | GitHub Actions with `permissions: contents: read` (`.github/workflows/ci.yml:10`), token not persisted into the runner workspace (`ci.yml:29`) |
 
@@ -131,9 +131,7 @@ write APIs under `Source/EfficientServer/`; only config reads,
   the install path. `install.sh` backs up a differing user config, then does
   `rm -rf` of the destination and copies from `dist/` (`scripts/install.sh:17`);
   `package.sh` produces a reproducible, byte-identical zip
-  (`scripts/package.sh:16`) and now records artifact SHA-256, commit, epoch, and
-  compiler in a `.buildinfo.txt` sidecar (`scripts/package.sh:79`) plus a
-  CycloneDX SBOM inside the zip (`scripts/package.sh:49`);
+  (`scripts/package.sh:16`);
   `scripts/verify_reproducible.sh` proves rebuildability. Named gap remains:
   install itself verifies none of this, and nothing signs anything. An operator
   who wants integrity must diff hashes by hand.
@@ -211,8 +209,7 @@ write APIs under `Source/EfficientServer/`; only config reads,
 | Emergency levers log as WARNING when engaged | B1/B3 unnoticed combat degradation or entity sheds | `Patches/GovernorPatch.cs:108`, `Patches/TickGuardPatch.cs:94` |
 | Commit-pinned CI actions, unpersisted read-only token, main-scoped push | B6 supply chain | `.github/workflows/ci.yml:6,10,24,29` |
 | Locked-mode restore, SDK pin | B4/B6 dependency drift | `Makefile:70`, `global.json` |
-| Reproducible package build (sorted entries, epoch mtimes, rebuilt from scratch) | B4 artifact diffing | `scripts/package.sh:16,63` |
-| SBOM in every release zip; buildinfo SHA-256/commit/compiler sidecar | B4 artifact inventory and manual verification inputs | `scripts/package.sh:49,79` |
+| Reproducible package build (sorted entries, epoch mtimes, rebuilt from scratch) | B4 artifact diffing | `scripts/package.sh:16` |
 | Reproducibility proof target | B4 rebuild-equals-release claim | `Makefile:45`, `scripts/verify_reproducible.sh` |
 | Command-execution logging kept on (game setting) | B2 repudiation | `server/serverconfig.optimized.xml:49` (template default) |
 
@@ -232,10 +229,10 @@ Checked the docs against the code; results:
   bytes" GC incremental (`GcIncremental.cs:13`); "EAC-safe" env vars
   (`run_server.sh:34`). Each is falsifiable by sec-review against the named
   code.
-- Gaps (ranked): R2 install path verifies nothing even though hashes are now
-  recorded (candidate fix: compare buildinfo SHA-256 in `install.sh` before
-  copying); R3 no runtime guard on bench-only toggles; no signing or release
-  provenance process documented anywhere.
+- Gaps (ranked): R2 install path verifies nothing (candidate fix: compare a
+  recorded artifact hash in `install.sh` before copying); R3 no runtime guard
+  on bench-only toggles; no signing or release provenance process documented
+  anywhere.
 
 ## Response readiness (notes only)
 

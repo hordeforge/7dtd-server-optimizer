@@ -52,19 +52,14 @@ What ships and how it is protected:
   (`Assembly-CSharp`, `0Harmony`, `Newtonsoft.Json`, Unity modules, and so on)
   is resolved from the dedicated server's own `Managed/` directory with
   `Private=false`; the zip contains only `EfficientServer.dll`,
-  `ModInfo.xml`, the default config, the MIT license text, and the SBOM
-  below.
+  `ModInfo.xml`, the default config, and the MIT license text.
 - The single NuGet dependency (`Newtonsoft.Json` for the test harness) is
   exact-pinned in the csproj, hash-pinned in a committed
   `packages.lock.json`, and restored with `dotnet restore --locked-mode` by
   `make test`, so a changed dependency fails instead of floating.
-- Every release zip carries a deterministic CycloneDX 1.5 SBOM at
-  `EfficientServer/bom.json` (generated from that lock file by
-  `scripts/gen_sbom.py`), so scanners and deployers can inventory exactly what
-  shipped without unpacking assumptions.
-- Packaging is reproducible (`make verify-reproducible`) and each run records
-  artifact SHA-256, source epoch, commit, and compiler in
-  `dist/EfficientServer-*.buildinfo.txt`.
+- Packaging is reproducible (`make verify-reproducible`);
+  `SOURCE_DATE_EPOCH` normalizes timestamps so two builds of the same tree
+  zip byte-identically.
 - CI actions are pinned to commit SHAs (not mutable tags) and the workflow
   token is read-only.
 

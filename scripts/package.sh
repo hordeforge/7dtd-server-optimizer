@@ -25,8 +25,8 @@ mkdir -p "$TMPDIR"
 "$ROOT/scripts/build.sh"
 
 # --dirty is mandatory here: without it a modified working tree describes as
-# the clean tag and ships a different zip under the release name and SBOM
-# serial of the untouched release.
+# the clean tag and ships a different zip under the release name of the
+# untouched release.
 VERSION="${VERSION:-$(git -C "$ROOT" describe --tags --always --dirty 2>/dev/null || true)}"
 VERSION="${VERSION#v}"
 if [[ -z "$VERSION" || "$VERSION" == *-* && "$VERSION" != *-dirty ]]; then
@@ -54,17 +54,6 @@ finish() {
 trap finish EXIT
 cp -a "$ROOT/dist/EfficientServer" "$STAGE/"
 
-# Supply-chain inventory inside the zip: a deterministic CycloneDX SBOM built
-# from the committed packages.lock.json graph. All inputs are in-tree values,
-# so it stays byte-identical across rebuilds (verify_reproducible.sh proves
-# this). Written before permission/mtime normalization below.
-python3 "$ROOT/scripts/gen_sbom.py" \
-  --version "$VERSION" \
-  --commit "$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || echo unknown)" \
-  --epoch "$EPOCH" \
-  --lock "$ROOT/Source/EfficientServer.Tests/packages.lock.json" \
-  --out "$STAGE/EfficientServer/bom.json"
-
 # Normalize all filesystem-dependent metadata before archiving.
 find "$STAGE" -type d -exec chmod 755 {} +
 find "$STAGE/EfficientServer" -type f -exec chmod 644 {} +
@@ -83,20 +72,3 @@ ZIP_TMP="$OUT.tmp.$$"
 mv -f "$ZIP_TMP" "$OUT"
 ZIP_TMP=""
 echo "Packaged -> $OUT (entry mtime epoch $EPOCH)"
-
-# Build-environment record next to (not inside) the zip, so a faithful rebuild
-# can be attempted and verified with scripts/verify_reproducible.sh. Host-
-# specific by design; kept out of the zip to preserve byte-identical artifacts.
-if command -v dotnet >/dev/null 2>&1 && dotnet --list-sdks 2>/dev/null | grep -q .; then
-  COMPILER="dotnet SDK $(dotnet --version 2>/dev/null || echo unknown)"
-else
-  COMPILER="mcs $(mcs --version 2>/dev/null | head -n1 || echo unknown)"
-fi
-{
-  echo "artifact: $(basename "$OUT")"
-  echo "zip_sha256: $(sha256sum "$OUT" | cut -d' ' -f1)"
-  echo "source_date_epoch: $EPOCH"
-  echo "git_commit: $(git -C "$ROOT" rev-parse HEAD 2>/dev/null || echo unknown)"
-  echo "git_describe: $(git -C "$ROOT" describe --tags --always --dirty 2>/dev/null || echo unknown)"
-  echo "compiler: $COMPILER"
-} > "${OUT%.zip}.buildinfo.txt"

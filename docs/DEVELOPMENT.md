@@ -125,21 +125,10 @@ but not the package build. The zip is reproducible (sorted entries,
 SOURCE_DATE_EPOCH-normalized mtimes, stripped owner data); verify with
 `make verify-reproducible`, which packages twice, recompiles from scratch at
 a copied tree path, and compares hashes (the manual equivalent:
-two `make package` runs plus `sha256sum dist/EfficientServer-*.zip`). Each
-package run also writes `dist/EfficientServer-<version>.buildinfo.txt`
-(toolchain versions, commit, epoch, zip hash) next to the zip so any release
-artifact records the environment that produced it; the buildinfo lives
-outside the zip to keep artifacts byte-identical.
+two `make package` runs plus `sha256sum dist/EfficientServer-*.zip`).
 
-Each zip also embeds `EfficientServer/bom.json`, a deterministic CycloneDX 1.5
-SBOM generated from the committed `packages.lock.json` by `gen_sbom.py`
-(component versions plus NuGet content hashes; game-provided libraries are
-marked not-bundled). It is part of the reproducibility guarantee above. The
-zip (and any installed mod directory, since both flow from `build.sh`'s dist
-output) also carries `EfficientServer/LICENSE.txt`, so redistributed copies
-are self-contained under the MIT license terms. The
-supply-chain posture this documents: [`SECURITY.md`](../SECURITY.md),
-"Supply chain".
+Each zip carries `EfficientServer/LICENSE.txt`, so redistributed copies
+are self-contained under the MIT license terms.
 
 ### Validation tooling (scripts/)
 
@@ -148,7 +137,6 @@ supply-chain posture this documents: [`SECURITY.md`](../SECURITY.md),
 | `repo_root.py` | Shared repository-root lookup (marker walk, not `parent.parent`) used by the gates below; selftest pins the walk |
 | `check_config_doc.py` | Regression gate (in `make test`): every `ServerPerfConfig` field must be documented in CONFIG.md; selftest pins its parsing/comparison logic |
 | `check_version.py` | Regression gate (in `make test`): ModInfo (source+dist) == AssemblyVersion, no doc claims a future minor; selftest pins version extraction/normalization |
-| `gen_sbom.py` | Release SBOM generator (called by `package.sh`; selftest in `make test`): deterministic CycloneDX 1.5 inventory from packages.lock.json |
 | `verify_reproducible.sh` (`make verify-reproducible`) | Rebuild-and-compare proof of the packaging reproducibility claim: same-tree repackage, full recompile, out-of-tree path variation; needs a game install |
 | `validate_anim_path_admission.py` | Live A/B: animator-emergency + path-admission against real bots/zombies (telnet + loadgen); see RESULTS |
 | `validate_bloodmoon_path.py` | Live blood-moon path-admission A/B: real director-spawned horde, baseline vs path knobs on; writes a JSON report |
