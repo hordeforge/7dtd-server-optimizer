@@ -164,17 +164,6 @@ persist;
 buys nothing - send timing and tick cadence are identical at fps 20 vs 60; the only
 effect is per-frame loop overhead (RESULTS 3k).
 
-## GC megapause diagnostic (opt-in, never ship enabled)
-
-`GcDiagnostics` (`Diagnostics.GcMegapauseTest`, default **false**) proves *why*
-deferring GC is not a performance win. It P/Invokes Boehm `GC_disable`, grows the
-heap under live load for `GrowSeconds`, then re-enables and times one forced
-`GC_gcollect`. Measured (v1.5.1, heavy load): a single collect of a **6.91 GB heap
-(~5.6 GB live)** froze the server **479 ms** (~10 missed ticks). It confirms a
-never-collect-then-one-big-collect scheme just concentrates the pause; the real
-lever is cutting allocation ([`ALLOCATION_UPSTREAM.md`](ALLOCATION_UPSTREAM.md)).
-Diagnostic only - it disables the collector, so never enable it on a live server.
-
 ## Pathfinding graph throttle (B12 / P1)
 
 `AstarGraphThrottlePatch` is a Harmony prefix on `AstarManager.UpdateGraphs`, the

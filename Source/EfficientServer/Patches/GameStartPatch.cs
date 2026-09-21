@@ -18,7 +18,6 @@ namespace EfficientServer.Patches
                 DynamicMeshBudgetPatch.ApplyBudgets();
                 DedicatedSkipPatch.ApplyOptional();
                 GcIncremental.Apply();
-                GcDiagnostics.StartMegapauseTest(ModApi.Config != null ? ModApi.Config.Diagnostics : null);
                 ApplyTargetFps();
                 ApplyJobWorkers();
             }

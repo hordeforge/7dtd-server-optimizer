@@ -170,7 +170,8 @@ Dominant allocators feeding the megapause, ranked (corrected `GC_malloc` uprobe)
 steady floor; every allocator is one lever against the same 479 ms STW pause.
 
 **Note (2026-07-20):** the 479 ms figure is a *forced* full collect on a GC-disabled
-6.9 GB heap (the `GcMegapauseTest` probe). At runtime the launch env
+6.9 GB heap (the one-off megapause probe, removed from the mod in 2.6.0; the
+measurement lives in RESULTS.md). At runtime the launch env
 `GC_FREE_SPACE_DIVISOR=1` gives enough headroom that *natural* full collections drop to
 **0 in a 150 s window** (vanilla did 3 + a 274 ms freeze at the same load) - see the
 aggregate A/B in [`../../7dtd-server-optimizer/docs/RESULTS.md`](RESULTS.md)

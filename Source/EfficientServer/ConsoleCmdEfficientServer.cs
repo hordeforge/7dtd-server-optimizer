@@ -118,7 +118,7 @@ namespace EfficientServer
                 + $"skip(music={c.SkipOnDedicated.DynamicMusicSystem} waterSplash={c.SkipOnDedicated.WaterSplashParticles} "
                 + $"envAudio={c.SkipOnDedicated.EnvironmentAudioUpdates} cloth={c.SkipOnDedicated.ClothAndJiggleBoneSimulation} "
                 + $"lightSpectrum={c.SkipOnDedicated.AmbientLightSpectrumUpdates} explosionFx={c.SkipOnDedicated.ExplosionParticles}) | "
-                + $"diagGcMegapauseProbe={c.Diagnostics.GcMegapauseTest} benchgodAllow={c.Diagnostics.AllowBenchGod}");
+                + $"benchgodAllow={c.Diagnostics.AllowBenchGod}");
             OutputRuntime();
         }
 

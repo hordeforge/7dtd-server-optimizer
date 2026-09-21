@@ -264,19 +264,13 @@ namespace EfficientServer
         public int MinEnemiesKept { get; set; } = 60;
     }
 
-    // DIAGNOSTIC ONLY (default off). Not a performance feature.
+    // Runtime allow-switch container for `es benchgod on` (global player damage
+    // immunity). Default off: the console command refuses to arm the flag
+    // until the operator opted in here, so reaching telnet/console alone is
+    // not enough to make every player immortal on a live server. Turning the
+    // flag OFF is always allowed. Pure decision: BenchGodArmAllowed.
     public sealed class DiagnosticsConfig
     {
-        // Disable Boehm, grow the heap under load, then time one forced full collect
-        // to measure the "megapause" freeze. Never enable on a live server.
-        public bool GcMegapauseTest { get; set; } = false;
-        public int WarmupSeconds { get; set; } = 60;
-        public int GrowSeconds { get; set; } = 240;
-        // Runtime allow-switch for `es benchgod on` (global player damage
-        // immunity). Default false: the console command refuses to arm the flag
-        // until the operator opted in here, so reaching telnet/console alone is
-        // not enough to make every player immortal on a live server. Turning the
-        // flag OFF is always allowed. Pure decision: BenchGodArmAllowed.
         public bool AllowBenchGod { get; set; } = false;
     }
 
@@ -440,13 +434,6 @@ namespace EfficientServer
             Gc.SafetyCollectAboveMB = IntRange("Gc.SafetyCollectAboveMB", Gc.SafetyCollectAboveMB, 0, 1048576);
             Gc.SafetyCollectRamFraction = FiniteRange("Gc.SafetyCollectRamFraction", Gc.SafetyCollectRamFraction, 0f, 0.95f, 0.5f);
             Gc.IncrementalPauseTargetMs = IntRange("Gc.IncrementalPauseTargetMs", Gc.IncrementalPauseTargetMs, 0, 10000);
-            // Diagnostics seconds feed Thread.Sleep(WarmupSeconds * 1000) and bound the
-            // grow loop, so they must be clamped like every other knob: an unclamped
-            // fat-finger above ~2.1M makes `seconds * 1000` wrap negative (Sleep throws,
-            // probe dies with a misleading log), and a huge GrowSeconds runs the grow
-            // loop for months. Caps: 1 h warmup, 2 h grow.
-            Diagnostics.WarmupSeconds = IntRange("Diagnostics.WarmupSeconds", Diagnostics.WarmupSeconds, 0, 3600);
-            Diagnostics.GrowSeconds = IntRange("Diagnostics.GrowSeconds", Diagnostics.GrowSeconds, 1, 7200);
         }
 
         static float FiniteRange(string name, float value, float min, float max, float fallback)

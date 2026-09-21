@@ -266,8 +266,6 @@ namespace EfficientServer.Tests
             I(c.Gc.SafetyCollectAboveMB, 0, 1048576, "Gc.SafetyCollectAboveMB");
             F(c.Gc.SafetyCollectRamFraction, 0f, 0.95f, "Gc.SafetyCollectRamFraction");
             I(c.Gc.IncrementalPauseTargetMs, 0, 10000, "Gc.IncrementalPauseTargetMs");
-            I(c.Diagnostics.WarmupSeconds, 0, 3600, "Diagnostics.WarmupSeconds");
-            I(c.Diagnostics.GrowSeconds, 1, 7200, "Diagnostics.GrowSeconds");
 
             return v.Count == 0 ? null : Join(v);
         }

@@ -15,7 +15,7 @@ invariant**: at 128 players the forced / guard / incremental configs churned
 confirm the same thing from opposite ends:
 
 - **Never collect (GC_disable):** the megapause diagnostic (v1.5.1,
-  `Diagnostics.GcMegapauseTest`) disabled Boehm under heavy load, grew the heap
+  one-off megapause probe, removed in 2.6.0) disabled Boehm under heavy load, grew the heap
   120s, then timed one forced full collect: **PAUSE_MS = 479** on a **6.91 GB heap
   (~5.6 GB live)** = a **479 ms stop-the-world freeze** (~10 missed 50 ms ticks).
   Note: the live working heap is already ~5.6 GB under heavy load, and it grew at

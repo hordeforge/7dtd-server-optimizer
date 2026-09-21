@@ -53,10 +53,6 @@ must preserve:
   (`ServerConsoleCommand` -> `ExecuteSync`) runs where packages are processed,
   i.e. the main-thread `ConnectionManager.Update` pump. So config reload and
   governor transitions can interleave only at main-thread frame boundaries.
-- **The one mod-owned background thread:** `GcDiagnostics`' opt-in megapause
-  probe (default off). It touches nothing shared except P/Invoke into Boehm and
-  `Log.Out`; it is one-shot per process (`_started`, set on the sequential
-  main-thread GameStartDone).
 - **Cross-thread reads are reference/int atomic only:** patches snapshot
   `ModApi.Config` per call; `ReloadConfig` swaps the whole object rather than
   mutating fields, so readers see one consistent snapshot (no torn state).

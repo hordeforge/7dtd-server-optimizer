@@ -422,14 +422,11 @@ horde.
 
 ---
 
-## Diagnostics - never enable on a live server
+## Diagnostics
 
-### `GcMegapauseTest` (false) + `WarmupSeconds` (60, clamp [0,3600]) + `GrowSeconds` (240, clamp [1,7200])
-Disables Boehm, grows the heap under load, then times one forced full collect to
-measure the worst-case freeze (measured 479 ms at 6.9 GB). A destructive probe for
-research only. `WarmupSeconds` clamps to [0, 3600] and `GrowSeconds` to [1, 7200]:
-the warmup feeds `Thread.Sleep(seconds * 1000)`, so an unclamped value above ~2.1M
-would wrap the millisecond product negative and kill the probe.
+The former GC megapause probe (`GcMegapauseTest` + `WarmupSeconds` +
+`GrowSeconds`) was removed in 2.6.0; RESULTS.md keeps the evidence it produced
+(measured 479 ms forced collect at 6.9 GB). Remaining knob:
 
 ### `AllowBenchGod` (false)
 Runtime allow-switch for `es benchgod on` (global player damage immunity,

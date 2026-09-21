@@ -218,8 +218,6 @@ namespace EfficientServer.Tests
                 && dAll.TickGuard.ShedBatch == 15 && dAll.TickGuard.CooldownTicks == 100
                 && dAll.TickGuard.MinEnemiesKept == 60,
                 "TickGuard defaults: shed at 70 ms, batch 15, horde floor 60");
-            Check(dAll.Diagnostics.WarmupSeconds == 60 && dAll.Diagnostics.GrowSeconds == 240,
-                "Diagnostics defaults: warmup 60 s, grow 240 s");
 
             // Shipped-default drift: Normalize on untouched defaults must be a silent
             // no-op (FiniteRange/IntRange warn exactly when a value moves). A default
@@ -388,20 +386,6 @@ namespace EfficientServer.Tests
                 CultureInfo.CurrentCulture = prevCulture;
             }
 
-            // Diagnostics seconds: WarmupSeconds feeds Sleep(seconds * 1000), so a
-            // value above ~2.1M would wrap the int product negative (Sleep throws);
-            // GrowSeconds bounds the grow loop. Both must clamp like every other knob.
-            var diagBig = LoadTemp(
-                "{\"Diagnostics\":{\"WarmupSeconds\":2500000,\"GrowSeconds\":2000000000}}");
-            Check(diagBig.Diagnostics.WarmupSeconds == 3600, "WarmupSeconds 2500000 -> 3600 (ms overflow guard)");
-            Check(diagBig.Diagnostics.GrowSeconds == 7200, "GrowSeconds 2000000000 -> 7200 (grow-loop bound)");
-            var diagNeg = LoadTemp("{\"Diagnostics\":{\"WarmupSeconds\":-1,\"GrowSeconds\":-50}}");
-            Check(diagNeg.Diagnostics.WarmupSeconds == 0, "WarmupSeconds -1 -> 0");
-            Check(diagNeg.Diagnostics.GrowSeconds == 1, "GrowSeconds -50 -> 1");
-            var diagOk = LoadTemp("{\"Diagnostics\":{\"WarmupSeconds\":30,\"GrowSeconds\":120}}");
-            Check(diagOk.Diagnostics.WarmupSeconds == 30 && diagOk.Diagnostics.GrowSeconds == 120,
-                "valid Diagnostics seconds round-trip");
-
             // Bench-god arm gate: global player damage immunity must NOT arm from the
             // console without an explicit config opt-in. Pin the secure default, the
             // JSON round-trip, sibling-flag isolation, and the fail-closed paths of
@@ -413,8 +397,6 @@ namespace EfficientServer.Tests
             var bgOn = LoadTemp("{\"Diagnostics\":{\"AllowBenchGod\":true}}");
             Check(bgOn.Diagnostics != null && bgOn.Diagnostics.AllowBenchGod,
                 "Diagnostics.AllowBenchGod=true round-trips");
-            Check(bgOn.Diagnostics != null && !bgOn.Diagnostics.GcMegapauseTest,
-                "AllowBenchGod=true leaves sibling diagnostic flags at defaults");
             Check(!ServerPerfConfig.BenchGodArmAllowed(null!),
                 "BenchGodArmAllowed(null config) -> fail closed");
             Check(!ServerPerfConfig.BenchGodArmAllowed(new ServerPerfConfig()),
@@ -431,7 +413,6 @@ namespace EfficientServer.Tests
             var d2 = new ServerPerfConfig();
             Check(d2.AiLod.MidTickStride == 1, "default MidTickStride=1 (off)");
             Check(d2.Network != null && d2.Network.FastSingleTargetSend, "default FastSingleTargetSend=true (v1.13.0: provably equivalent, no gameplay impact)");
-            Check(d2.Diagnostics != null && !d2.Diagnostics.GcMegapauseTest, "default GcMegapauseTest=false");
             var stride = LoadTemp("{\"AiLod\":{\"MidTickStride\":999}}");
             Check(stride.AiLod.MidTickStride == 20, "MidTickStride 999 -> 20 (clamp)");
             var strideNeg = LoadTemp("{\"AiLod\":{\"MidTickStride\":-3}}");
@@ -804,8 +785,7 @@ namespace EfficientServer.Tests
                 "\"TickGuard\":{\"ShedAboveMs\":1000,\"WindowTicks\":6000,\"ShedBatch\":100," +
                 "\"CooldownTicks\":36000,\"MinEnemiesKept\":10000}," +
                 "\"Gc\":{\"SafetyCollectAboveMB\":1048576,\"SafetyCollectRamFraction\":0.95," +
-                "\"IncrementalPauseTargetMs\":10000}," +
-                "\"Diagnostics\":{\"WarmupSeconds\":3600,\"GrowSeconds\":7200}}");
+                "\"IncrementalPauseTargetMs\":10000}}");
             Check(atMax.AiLod.FullAiDistSq == 1000000f && atMax.AiLod.MediumAiDistSq == 1000000f
                 && atMax.AiLod.SkipTasksFarDistSq == 4000000f && atMax.AiLod.MidTickStride == 20
                 && atMax.AiLod.FullScale == 1f && atMax.AiLod.MediumScale == 1f && atMax.AiLod.FarScale == 1f,
@@ -831,8 +811,6 @@ namespace EfficientServer.Tests
                 && atMax.TickGuard.MinEnemiesKept == 10000, "TickGuard upper endpoints preserved verbatim");
             Check(atMax.Gc.SafetyCollectAboveMB == 1048576 && atMax.Gc.SafetyCollectRamFraction == 0.95f
                 && atMax.Gc.IncrementalPauseTargetMs == 10000, "Gc upper endpoints preserved verbatim");
-            Check(atMax.Diagnostics.WarmupSeconds == 3600 && atMax.Diagnostics.GrowSeconds == 7200,
-                "Diagnostics upper endpoints preserved verbatim");
             Check(EsLog.Warnings.Count == 0, "upper endpoints load without any 'config corrected' warning");
 
             EsLog.Warnings.Clear();
@@ -852,8 +830,7 @@ namespace EfficientServer.Tests
                 "\"TickGuard\":{\"ShedAboveMs\":60,\"WindowTicks\":20,\"ShedBatch\":1," +
                 "\"CooldownTicks\":20,\"MinEnemiesKept\":0}," +
                 "\"Gc\":{\"SafetyCollectAboveMB\":0,\"SafetyCollectRamFraction\":0," +
-                "\"IncrementalPauseTargetMs\":0}," +
-                "\"Diagnostics\":{\"WarmupSeconds\":0,\"GrowSeconds\":1}}");
+                "\"IncrementalPauseTargetMs\":0}}");
             Check(atMin.AiLod.FullAiDistSq == 1f && atMin.AiLod.MediumAiDistSq == 1f
                 && atMin.AiLod.SkipTasksFarDistSq == 1f && atMin.AiLod.MidTickStride == 1
                 && atMin.AiLod.FullScale == 0f && atMin.AiLod.MediumScale == 0f && atMin.AiLod.FarScale == 0f,
@@ -879,8 +856,6 @@ namespace EfficientServer.Tests
                 && atMin.TickGuard.MinEnemiesKept == 0, "TickGuard lower endpoints preserved verbatim");
             Check(atMin.Gc.SafetyCollectAboveMB == 0 && atMin.Gc.SafetyCollectRamFraction == 0f
                 && atMin.Gc.IncrementalPauseTargetMs == 0, "Gc lower endpoints preserved verbatim");
-            Check(atMin.Diagnostics.WarmupSeconds == 0 && atMin.Diagnostics.GrowSeconds == 1,
-                "Diagnostics lower endpoints preserved verbatim");
             Check(EsLog.Warnings.Count == 0, "lower endpoints load without any 'config corrected' warning");
 
             // Idempotency: re-normalizing an already-normalized config must be
