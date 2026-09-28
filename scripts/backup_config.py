@@ -37,6 +37,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import TypedDict
 
+from es_cfg_guard import CFG_ENCODING
 from repo_root import repo_root
 from selftest_support import Checks
 
@@ -56,11 +57,6 @@ _SNAPSHOT_NAME = re.compile(r"(\d{8}_\d{6})(?:_(\d+))?")
 # Width of the same-second collision suffix, so directory names sort in
 # creation order (see snapshot's suffix loop and snapshot_dirs).
 STAMP_SUFFIX_DIGITS = 3
-
-# The game's own reader (Config.Load) decodes the config as UTF-8 with a leading
-# BOM tolerated, so a BOM is a legal config here too; utf-8-sig is a strict
-# superset of utf-8. Same rule es_cfg_guard.py reads the file under.
-CFG_ENCODING = "utf-8-sig"
 
 USAGE = """\
 Snapshot, verify and restore the live config

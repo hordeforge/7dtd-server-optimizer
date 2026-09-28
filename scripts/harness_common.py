@@ -54,7 +54,6 @@ __all__ = [
     "DEDICATED_CMDLINE_MARKER",
     "DS",
     "ES_CFG",
-    "LOADGEN_CMDLINE_MARKER",
     "OUT_DIR",
     "B",
     "ensure_server_ready",

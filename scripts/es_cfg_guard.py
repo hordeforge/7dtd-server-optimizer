@@ -88,8 +88,13 @@ def _read_doc(path: Path) -> dict[str, object]:
     return doc
 
 
-def _canonical(doc: dict[str, object]) -> str:
-    return json.dumps(doc, sort_keys=True, separators=(",", ":"))
+def _canonical(node: object) -> str:
+    """Order-independent text form of a document, for equality and failure lines.
+
+    Takes `object` so the fuzz projection (which can yield a scalar or a list)
+    and the dict-shaped protocol path share one spelling.
+    """
+    return json.dumps(node, sort_keys=True, separators=(",", ":"))
 
 
 def _write_atomic(path: Path, data: bytes) -> None:
@@ -581,11 +586,6 @@ def _fuzz_temp_litter(root: Path) -> list[str]:
     return sorted(p.name for p in root.iterdir() if TEMP_INFIX in p.name)
 
 
-def _fuzz_canonical(node: object) -> str:
-    """`_canonical` over any projected value, for a failure line."""
-    return json.dumps(node, sort_keys=True, separators=(",", ":"))
-
-
 def _fuzz_protocol(failures: list[str], iteration: int) -> None:
     """One randomized protocol case. Appends to `failures`; never raises."""
     import tempfile
@@ -701,8 +701,8 @@ def _fuzz_protocol(failures: list[str], iteration: int) -> None:
                         failures.append(
                             f"iter {iteration}: restore changed keys outside the "
                             "managed scope ("
-                            f"{_fuzz_canonical(_fuzz_unmanaged(after_doc, _FUZZ_KEYS))}"
-                            f" vs {_fuzz_canonical(_fuzz_unmanaged(live_doc, _FUZZ_KEYS))})"
+                            f"{_canonical(_fuzz_unmanaged(after_doc, _FUZZ_KEYS))}"
+                            f" vs {_canonical(_fuzz_unmanaged(live_doc, _FUZZ_KEYS))})"
                         )
             except FileNotFoundError:
                 if step != "begin" or pre_live is not None:
