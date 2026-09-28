@@ -97,6 +97,18 @@ chosen up front:
   1.18.0 added; the default (false) is what refuses a fresh install.
 
 ### Added
+- `backup_config.py` now snapshots the live `serverconfig*.xml` in the install
+  root alongside the mod config, and proves both parse before reporting success.
+  Those files hold the ports, password, whitelist and world settings; they are
+  written into the install tree by `run_server.sh` (including the
+  `<name>.pre-optimized` copy it keeps) and have never existed anywhere else,
+  so until now a lost disk took them with no copy at all. A run against a real
+  dedicated install that finds no `serverconfig*.xml` fails rather than quietly
+  publishing narrower coverage; a mod-only staging tree warns and continues.
+  `--restore` takes `--item NAME` to restore one file or `all` to write the
+  whole set into a directory. `--verify` takes `--max-age-hours N`, so a backup
+  job that stopped running fails instead of reporting on a directory of last
+  week's healthy snapshots.
 - `ES_CONFIG_PATH` overrides where the config file is read from, so tuning can
   live outside the game install (config management, a read-only install, one
   file driving several installs). It outranks the two beside-assembly

@@ -44,7 +44,7 @@ write APIs under `Source/EfficientServer/`; the only file read is
 | E6 | CI and release workflows | `.github/workflows/ci.yml`, `.github/workflows/release.yml` | `ci.yml` runs `make test` on pushes to main and on PRs. `release.yml` runs on a `v*` tag, is `permissions: contents: read`, and only compares the tag to `Source/EfficientServer/ModInfo.xml` and runs `scripts/check_version.py`; it deliberately does not build the archive |
 | E7 | Repo Python tooling | `scripts/check_config_doc.py`, `scripts/check_version.py`, `scripts/coverage_badge.py`, `scripts/repo_root.py`, `scripts/cli_common.py`, `scripts/selftest_support.py` | Stdlib-only, run by `make test` and CI over repo content and `config/efficientserver.json` (`Makefile:212-218`). They read the working tree and exit nonzero; none writes outside the repo. Every one ships a `--selftest` that drives its own logic |
 | E8 | Offline measurement and validation scripts (not in `make test`) | `scripts/validate_anim_path_admission.py`, `scripts/validate_bloodmoon_path.py`, `scripts/measure_es_onoff.py` | Need a live dedicated server, so the harnesses themselves are syntax-gated by `compileall` (`Makefile:211`); the parsers they read server output with are fuzzed in `make test` (E12). They connect to a server the operator names, so the target host is operator-supplied input, not a network listener this repo opens. Two of them import E10 to swap config keys for the duration of a run, and all three read server output through E12, which is in `make test` |
-| E9 | Off-host config backup, verify, restore | `scripts/backup_config.py` (`snapshot:154`, `verify:254`, `restore:288`), `Makefile:254` (`make backup-config`) | Reads the live installed config and writes timestamped snapshots plus a sha256 manifest to a destination the operator names. Refuses a destination inside the server install tree (`_resolve_outside_install`, `backup_config.py:135`); prunes to `DEFAULT_KEEP` snapshots; `verify` re-reads every snapshot the way a restore would and exits nonzero on the first that would not load. `restore` copies a verified snapshot to `--to` and refuses to clobber an existing file without `--force` (`backup_config.py:304`). Self-test is wired into `make test` (`Makefile:219`) |
+| E9 | Off-host config backup, verify, restore | `scripts/backup_config.py` (`snapshot:290`, `verify:453`, `restore:542`), `Makefile:259` (`make backup-config`) | Reads the live installed mod config AND the live `serverconfig*.xml` in the install root, and writes timestamped snapshots plus a per-file sha256 manifest to a destination the operator names. Refuses a destination inside the server install tree (`_resolve_outside_install`, `backup_config.py:271`); prunes to `DEFAULT_KEEP` snapshots; `verify` re-reads every snapshot the way a restore would (JSON parse, XML parse, per-file sha256, serverconfig recorded-but-absent) and exits nonzero on the first that would not load. `restore` copies a verified snapshot to `--to` and refuses to clobber an existing file without `--force` (`backup_config.py:593`). A real dedicated install with no `serverconfig*.xml` fails the run rather than publishing narrower coverage. Self-test is wired into `make test` (`Makefile:220`) |
 | E10 | Live-config backup/restore guard (library + CLI) | `scripts/es_cfg_guard.py` (`ConfigSwap:180`, `_sweep_abandoned_temps:233`, `write_atomic:167`, `TEMP_ATTEMPTS:64`) | Rewrites managed keys of `Mods/EfficientServer/Config/efficientserver.json` in place, keeps a `.swap-bak` snapshot and a `.stale` quarantine, decodes as `utf-8-sig` (`CFG_ENCODING`, `es_cfg_guard.py:54`), and writes through temp-file + rename. The temp name is fully predictable, so it is created `O_CREAT|O_EXCL` (`es_cfg_guard.py:104-114`, mode 0600 with the live file's own mode carried over at `es_cfg_guard.py:122-125`) and a name already on disk is skipped rather than followed: a pre-planted symlink at the temp path cannot redirect the write, and a squatter holding every name in the attempt range makes the write fail loudly rather than pick a name someone else owns. Recovers an interrupted swap only when the live file diverges solely in the managed keys, so a restore cannot revert unrelated operator edits. Imported by the E8 harnesses. Self-test, including a fuzz of the restore protocol over hostile config bytes, is wired into `make test` (`Makefile:217`) |
 | E11 | Scratch staging-directory lifecycle | `scripts/stage_tmp.sh` (`stage_sweep:29`, `stage_new:40`), sourced by `scripts/package.sh:60` and `scripts/verify_reproducible.sh:59` | `mktemp -d` under `$TMPDIR` with the creating pid in the name; the sweep `rm -rf`s only same-prefix directories under `$TMPDIR` whose owning pid is not running. A recycled pid makes a dead stage survive a sweep. Not executed, only sourced |
 | E12 | Server log and console text parsed by the bench harnesses | `scripts/bench_parse.py` (`read_apm:208`, `parse_animstate:352`), used by `scripts/measure_es_onoff.py` and `scripts/validate_anim_path_admission.py` | The Unity server log and the `es animstate` console dump are written by the game and the APM bridge, not by this repo, and the log is append-only and unbounded, so both are hostile input: any byte, any line length, any numeric spelling can reach the parsers. A field this repo misreads becomes an A/B verdict (`ON_faster` from print rounding, a `dp=0` crawl call), and a field it cannot read must not raise, or the comparison is lost. Every numeric field is width-bounded in the pattern (a bare `[0-9.]+` accepts `.` and `1.2.3`, which `float()` rejects, and unbounded `\\d+` accepts counts past the Python 3.11 `int()` conversion limit), reads are capped per poll and the partial-line carry is capped, so a huge or newline-free log cannot grow the harness without bound. Fuzzed in `make test` (`Makefile:218`) |
@@ -279,17 +279,17 @@ write APIs under `Source/EfficientServer/`; the only file read is
   privilege.
 - Tampering (restore): `backup_config.py --restore` copies a verified snapshot
   over a target path and refuses to clobber an existing file without `--force`
-  (`backup_config.py:289-312`, refusal at `backup_config.py:306`); the snapshot is re-verified in the same call, so
+  (`backup_config.py:542-600`, refusal at `backup_config.py:593`); the snapshot is re-verified in the same call, so
   a restore never copies a snapshot that would not load.
 - Information disclosure: the destination is operator-named and may be a synced
   folder or another host. The config holds tuning, not secrets, so a leaked copy
   is a gameplay-integrity event rather than a credential event; the tool refuses
   a destination inside the install tree so the copy is not lost with the disk it
-  protects (`backup_config.py:136-153`).
+  protects (`backup_config.py:271-289`).
 - Unbounded growth: snapshots are pruned to `DEFAULT_KEEP = 14`
-  (`backup_config.py:51`), and `make backup-config` requires
+  (`backup_config.py:75`), and `make backup-config` requires
   `ES_CONFIG_BACKUP_DEST` to be set rather than defaulting to a path inside the
-  install (`Makefile:254-259`).
+  install (`Makefile:259-266`).
 
 ## Abuse cases (scenarios, not demonstrations)
 
@@ -332,7 +332,7 @@ write APIs under `Source/EfficientServer/`; the only file read is
 6. Snapshot tampered with before restore: the backup destination is a plain
    directory, so an actor who can write it can replace a snapshot or its
    manifest. `verify` re-reads every snapshot and re-checks the recorded sha256
-   before `restore` copies one (`backup_config.py:255`, `289-301`), so a
+   before `restore` copies one (`backup_config.py:453`, `542-593`), so a
    tampered snapshot fails verification and is not restored. What verification
    does not provide is authenticity: a tampered pair that is internally
    consistent (recomputed manifest) is indistinguishable from a real one, and
@@ -368,9 +368,9 @@ write APIs under `Source/EfficientServer/`; the only file read is
 | Failed install preserves the operator's config via EXIT trap | B4 silent config loss (A7) | `scripts/install.sh:98-117` |
 | Install dir that trims to empty or `/` rejected before the wipe | B4 `rm -rf` on a filesystem-root target | `scripts/install.sh:66-71` (same guard in `uninstall.sh`) |
 | Uninstall preserves `Config/` and warns when the copy lands inside the install tree | A7 loss, B4 | `scripts/uninstall.sh:111-121` |
-| Config backup tool refuses a destination inside the install tree; `make backup-config` requires an explicit dest | A7, B8 | `scripts/backup_config.py:136-153`, `Makefile:254-259` |
-| Backup `verify` re-reads every snapshot the way a restore would; `restore` re-verifies its own snapshot and refuses to clobber without `--force` | A7 corruption, B8 destructive restore | `scripts/backup_config.py:255,289-313` |
-| Snapshot retention bound | B8 unbounded growth | `scripts/backup_config.py:51,246` |
+| Config backup tool refuses a destination inside the install tree; `make backup-config` requires an explicit dest | A7, B8 | `scripts/backup_config.py:271-289`, `Makefile:259-266` |
+| Backup `verify` re-reads every snapshot the way a restore would; `restore` re-verifies its own snapshot and refuses to clobber without `--force` | A7 corruption, B8 destructive restore | `scripts/backup_config.py:453,542-600` |
+| Snapshot retention bound | B8 unbounded growth | `scripts/backup_config.py:75,444` |
 | Live-config swap protocol: temp-file + rename writes, managed-keys-only restore, stale-backup quarantine, divergent-file rule | B8 destructive write, B1 partial revert | `scripts/es_cfg_guard.py:1-30,139` |
 | Stranded-temp sweep scoped to this tooling's own names, live pids and recycled pids left alone | B8 destructive delete | `scripts/es_cfg_guard.py:233,240-245`, `scripts/stage_tmp.sh:33` |
 | Atomic config write creates its temp `O_CREAT\|O_EXCL` and gives up rather than reuse a taken name; live file's mode carried onto the temp | B8 pre-planted symlink or squatter redirecting the live-config write | `scripts/es_cfg_guard.py:104-114,122-125` |

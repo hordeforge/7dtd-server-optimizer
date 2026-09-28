@@ -43,7 +43,10 @@ The operator tooling does not follow the override: `scripts/backup_config.py`
 and the bench config guard (`scripts/es_cfg_guard.py`) snapshot, restore and
 swap the INSTALLED `Config/efficientserver.json`, because that is the file an
 install owns and its atomic-rename guard writes a `.swap-bak` beside. With an
-env override in force, keep a copy of the file it names yourself.
+env override in force, keep a copy of the file it names yourself. The
+`serverconfig*.xml` this repo's own launcher writes into the install root have
+no such override: `backup_config.py` covers whatever is in the install root,
+which is the file the game actually reads at boot.
 
 A file that is present but unreadable (malformed JSON, wrong type for a knob, a
 document that is JSON `null`) is REJECTED: one ERROR line (`Config load failed

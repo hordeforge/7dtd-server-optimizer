@@ -171,11 +171,12 @@ state that is NOT regenerable is what an operator edits on the server host:
 | State | Where | Regenerable |
 |---|---|---|
 | Live config (tuning) | `<DS>/Mods/EfficientServer/Config/efficientserver.json`, or the file `$ES_CONFIG_PATH` names | No. The repo copy is the shipped default; the host copy holds the tuned values |
+| Server settings | `<DS>/serverconfig*.xml` (ports, password, whitelist, world and generation options), plus the `<name>.pre-optimized` copy `run_server.sh` keeps | No. The tracked `serverconfig.optimized.xml` is a shipped default; the live set has never existed anywhere else. Backed up by `scripts/backup_config.py` (7.1) |
 | Guard backup | `.../Config/efficientserver.json.swap-bak` | No. Only exists mid-bench-run; crash recovery for a killed swap |
 | Installed DLL | `<DS>/Mods/EfficientServer/` | Yes: `make build && make install` |
 | Server logs | `server/logs/server_<UTC>.log` (default) | No, but expendable: restart writes a new one |
 | APM telemetry | `Mods/7dtd-server-apm-bridge/telemetry/` | Yes, within 30 s of the bridge running |
-| Server world / player data | `<DS>/GeneratedWorlds`, `serverconfig*.xml` | Not this mod's. The game's own saves, backed up by the host operator |
+| Server world / player data | `<DS>/GeneratedWorlds` | Not this mod's. The game's own saves, backed up by the host operator |
 
 ### RPO and RTO
 
@@ -185,30 +186,39 @@ state that is NOT regenerable is what an operator edits on the server host:
   install fails); `uninstall.sh` copies the whole `Config/` directory to a
   timestamped backup and prints the restore command.
 - **RPO against host loss, disk loss, or a deleted instance: whatever your
-  snapshot cadence is, plus one interval, and only if you take one.** Those
-  copies live inside the install tree, so the disaster that takes the server
-  takes them too. `scripts/backup_config.py` moves the live config off the host
-  and proves the copy loads; run it on a schedule (section 7.1). With no
-  snapshot the RPO is unbounded: the tuning is worth a re-derivation from
-  `docs/CONFIG.md` plus the measured defaults, or the copy, and one of the two
-  is a decision only you can make.
+  snapshot cadence is, plus one interval, and only if you take one.** Every copy
+  this repo makes lives inside the install tree, so the disaster that takes the
+  server takes them too. `scripts/backup_config.py` moves the live config AND
+  the live `serverconfig*.xml` off the host and proves both parse; run it on a
+  schedule (section 7.1). With no snapshot the RPO is unbounded: the tuning is
+  worth a re-derivation from `docs/CONFIG.md` plus the measured defaults, or the
+  copy, and the server settings (a changed port, a rotated admin password, a
+  tuned world seed) are worth considerably less than a re-derivation.
 - **RTO for a config restore: under a minute** (one `cp` plus `es reload`; no
   restart). **RTO for a full mod reinstall: one `make install`.** Neither path
-  needs a rebuild once `dist/` is present.
+  needs a rebuild once `dist/` is present. A `serverconfig.xml` restore is a
+  `cp` and a server restart: the game reads it at boot, and the XML carries the
+  admin password, so a stale one locks you out of telnet.
 - **World data RPO/RTO is the host operator's**, not this mod's. Nothing here
   touches it.
 
-### 7.1 Snapshot the live config off-host
+### 7.1 Snapshot the host-only config off-host
 
 ```bash
 make backup-config ES_CONFIG_BACKUP_DEST=/mnt/backup/es-config
 # or: python3 scripts/backup_config.py --dest /mnt/backup/es-config
 ```
 
-Each run writes a UTC-stamped copy of `Config/efficientserver.json` plus a
-manifest recording its sha256, keeps the newest `--keep` (default 14), and
-re-reads the copy back before reporting success: a snapshot that would not load
-is a failed run, not a backup. A retry inside the same second adds a
+Each run writes a UTC-stamped copy of `Config/efficientserver.json` plus every
+live `serverconfig*.xml` and `<name>.pre-optimized` sibling in the install root,
+alongside a manifest recording each file's sha256, keeps the newest `--keep`
+(default 14), and re-reads every copy back before reporting success: a snapshot
+whose JSON does not parse, whose XML does not parse, or whose keys have drifted
+from the shipped template is a failed run, not a backup. A run against a real
+dedicated install that finds no `serverconfig*.xml` fails for the same reason
+(one that would quietly cover the mod config and nothing else); a mod-only
+staging tree, which `install.sh` supports, warns instead.
+A retry inside the same second adds a
 suffix-numbered snapshot rather than replacing the earlier one, and retention
 counts by creation order, so a rerun never deletes the snapshot it just took.
 A run that does not finish leaves the destination as it found it: the copy is
@@ -223,8 +233,15 @@ Verify on a schedule; this is the sample-restore drill, and it exits 1 on a
 truncated, corrupted, key-drifted, or missing snapshot:
 
 ```bash
-python3 scripts/backup_config.py --dest /mnt/backup/es-config --verify
+python3 scripts/backup_config.py --dest /mnt/backup/es-config --verify \
+    --max-age-hours 48
 ```
+
+`--max-age-hours` is the part that catches the failure the read-back cannot: a
+backup job that stopped running leaves a directory of snapshots that all verify
+and look perfectly healthy. Add it to the same schedule as the snapshot itself,
+set to comfortably more than your snapshot interval, and a missed or failing
+job becomes a nonzero exit instead of a silent gap in the history.
 
 Restore one without touching the live config, then put it in place yourself.
 Stage the recovered file somewhere private, never in `/tmp`: it is tmpfs on most
@@ -238,6 +255,16 @@ python3 scripts/backup_config.py --dest /mnt/backup/es-config \
 cp -a "$HOME/es-recovered.json" "$DS/Mods/EfficientServer/Config/efficientserver.json"
 es reload
 rm -f "$HOME/es-recovered.json"
+```
+
+The server settings are the same call with `--item`, naming one file in the
+snapshot or `all` to write the whole set into a directory:
+
+```bash
+python3 scripts/backup_config.py --dest /mnt/backup/es-config \
+    --restore 20260928_101500 --item serverconfig.xml --to "$HOME/es-recovered.xml"
+cp -a "$HOME/es-recovered.xml" "$DS/serverconfig.xml"   # then restart the server
+rm -f "$HOME/es-recovered.xml"
 ```
 
 ### Restore the live config
@@ -266,9 +293,10 @@ before deciding.
 ### Backups that do not exist here
 
 There is no scheduled backup of the install tree, no off-host copy of the DLL,
-and no restore drill for the mod install itself. The config is the only
-non-regenerable state, and `backup_config.py` covers it as far as a script
-can: it cannot run on a schedule, so scheduling it is yours, and a snapshot
-nobody verifies is still a hypothesis. Do not treat a green `make install` as
-proof the config survives: nothing in this repo verifies that copy, it only
-makes it.
+and no restore drill for the mod install itself. `backup_config.py` covers the
+mod config and the server settings as far as a script can: it cannot run on a
+schedule, so scheduling it is yours, and a snapshot nobody verifies is still a
+hypothesis. Do not treat a green `make install` as proof the config survives:
+nothing in this repo verifies that copy, it only makes it. World saves
+(`GeneratedWorlds`, player data) are the game's, not this mod's, and no script
+here touches them.

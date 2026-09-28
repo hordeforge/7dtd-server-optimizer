@@ -1,26 +1,38 @@
 #!/usr/bin/env python3
-"""Off-host snapshot, verification and restore of the live EfficientServer config.
+"""Off-host snapshot, verification and restore of the host-only server config.
 
-The installed `Mods/EfficientServer/Config/efficientserver.json` is the only copy
-of an operator's tuning: it is edited on the server host, never in this repo, and
-nothing else regenerates it. `install.sh` and `uninstall.sh` preserve it, but both
-copies live inside the install tree, so a lost disk or a lost instance takes the
-backup with the data. A copy the same disk can lose is not a backup.
+Two sets of files in the install tree hold operator state nothing regenerates,
+because both are edited on the server host and never in this repo:
 
-This tool moves the live config to a destination the operator names (another
-disk, a synced folder, a host off this one) and, in the same pass, proves the copy
-is loadable: the snapshot is parsed, its keys are checked against the shipped
-template, and its sha256 is recorded in a manifest that `verify` re-checks later.
-A backup nobody has read back is a hypothesis.
+- `Mods/EfficientServer/Config/efficientserver.json`, the mod's tuning.
+- `serverconfig*.xml` in the install root, the game's own settings (ports,
+  password, whitelist, world and generation options). `run_server.sh` copies the
+  tuned XML in beside the binary and keeps a one-off `<name>.pre-optimized`, so
+  the live set is normally `serverconfig.xml` plus those siblings.
+
+`install.sh` and `uninstall.sh` preserve the mod config, and `run_server.sh`
+keeps the pre-optimized copy, but every one of those copies lives inside the
+install tree, so a lost disk or a lost instance takes the backup with the data.
+A copy the same disk can lose is not a backup.
+
+This tool moves both sets to a destination the operator names (another disk, a
+synced folder, a host off this one) and, in the same pass, proves the copy is
+loadable: the JSON is parsed and its keys are checked against the shipped
+template, the XML is parsed, and every file's sha256 is recorded in a manifest
+that `verify` re-checks later. A backup nobody has read back is a hypothesis.
 
     python3 scripts/backup_config.py --dest /mnt/backup/es-config
     python3 scripts/backup_config.py --dest /mnt/backup/es-config --verify
     python3 scripts/backup_config.py --dest /mnt/backup/es-config \
         --restore 20260928_101500 --to ./recovered.json
+    python3 scripts/backup_config.py --dest /mnt/backup/es-config \
+        --restore 20260928_101500 --item serverconfig.xml --to ./recovered.xml
 
 `--verify` is the restore drill's cheap half: it reads every snapshot back the way
 a restore would and exits nonzero on the first one that would not load. Run it on
-a schedule; a backup whose failure is silent is not a backup.
+a schedule; a backup whose failure is silent is not a backup. Pass
+`--max-age-hours` to that schedule so a job that stopped running is a failure
+too, not a directory of last week's healthy snapshots.
 
     python3 scripts/backup_config.py --selftest    (wired into `make test`)
 """
@@ -35,6 +47,7 @@ import re
 import shutil
 import sys
 import tempfile
+import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import TypedDict
@@ -49,8 +62,17 @@ TEMPLATE_JSON = ROOT / "config" / "efficientserver.json"
 CONFIG_REL = Path("Mods/EfficientServer/Config/efficientserver.json")
 MANIFEST_NAME = "manifest.json"
 CONFIG_NAME = "efficientserver.json"
-# Snapshots are small (one JSON file plus a manifest); a fortnight of daily
-# copies costs nothing and bounds how far back a restore can reach.
+# The game's server settings live in serverconfig*.xml directly in the install
+# root. A glob rather than a fixed name, because this repo's own launcher
+# writes siblings there: run_server.sh copies the tuned XML in beside the
+# binary and keeps the operator's original once as `<name>.pre-optimized`,
+# which does not end in `.xml` and so needs its own pattern. Both hold operator
+# edits and both are unrecoverable, since the tracked
+# serverconfig.optimized.xml is a shipped default and the install tree is the
+# only place either file has ever existed.
+SERVERCONFIG_GLOBS = ("serverconfig*.xml", "serverconfig*.pre-optimized")
+# Snapshots are small (a JSON file, a few XMLs and a manifest); a fortnight of
+# daily copies costs nothing and bounds how far back a restore can reach.
 DEFAULT_KEEP = 14
 STAMP_FORMAT = "%Y%m%d_%H%M%S"
 # A snapshot dir is the stamp, plus "_N" for the Nth copy taken inside that
@@ -59,21 +81,31 @@ _SNAPSHOT_NAME = re.compile(r"(\d{8}_\d{6})(?:_(\d+))?")
 # Width of the same-second collision suffix, so directory names sort in
 # creation order (see snapshot's suffix loop and snapshot_dirs).
 STAMP_SUFFIX_DIGITS = 3
+# `--item all` restore: the one selector that writes more than one file, so it
+# needs a destination directory rather than a file path.
+ALL_ITEMS = "all"
 
 USAGE = """\
-Snapshot, verify and restore the live config
-(Mods/EfficientServer/Config/efficientserver.json), the one piece of state an
-operator edits on the server host that nothing else regenerates. The install
-root comes from DS/SEVENDTD_DS_DIR.
+Snapshot, verify and restore the host-only server config: the installed
+Mods/EfficientServer/Config/efficientserver.json and the serverconfig*.xml in
+the install root (the game's ports, password, whitelist and world settings).
+Both exist only on the server host. The install root comes from
+DS/SEVENDTD_DS_DIR.
 
   python3 scripts/backup_config.py --dest /mnt/backup/es-config
   python3 scripts/backup_config.py --dest /mnt/backup/es-config --verify
   python3 scripts/backup_config.py --dest /mnt/backup/es-config \\
       --restore 20260928_101500 --to ./recovered.json
+  python3 scripts/backup_config.py --dest /mnt/backup/es-config \\
+      --restore 20260928_101500 --item serverconfig.xml --to ./recovered.xml
+  python3 scripts/backup_config.py --dest /mnt/backup/es-config \\
+      --restore 20260928_101500 --item all --to ./recovered/
 
 --verify is the restore drill's cheap half: it reads every snapshot back the
-way a restore would and exits nonzero on the first one that would not load. Run
-it on a schedule; a backup whose failure is silent is not a backup.
+way a restore would and exits nonzero on the first one that would not load. Add
+--max-age-hours N to fail a snapshot set whose newest copy is older than N,
+which is what a backup job that stopped running looks like. Run it on a
+schedule; a backup whose failure is silent is not a backup.
 """
 
 
@@ -85,6 +117,12 @@ class Manifest(TypedDict):
     stamp: str
     source: str
     sha256: str
+    # serverconfig file name -> sha256, exactly as snapshotted. Empty on a
+    # tree with no server config in it, and absent from a manifest written
+    # before this tool covered the XML, which is why every read goes through
+    # `.get`: a snapshot an operator took last month must still verify, or
+    # adding a file to the backup silently invalidated their history.
+    serverconfig: dict[str, str]
 
 
 def utc_stamp(now: datetime | None = None) -> str:
@@ -111,6 +149,48 @@ def read_config(path: Path) -> dict[str, object]:
         msg = f"config {path} is a {type(doc).__name__}, not a JSON object"
         raise BackupError(msg)
     return doc
+
+
+def read_serverconfig(path: Path) -> None:
+    """Parse a serverconfig XML, raising BackupError on anything unloadable.
+
+    The same proof the JSON side gets, for the same reason: a snapshot that
+    does not parse is not a backup. ElementTree raises on a truncated or
+    malformed document, which is the corruption a text copy actually hits.
+    """
+    try:
+        ET.parse(path)
+    except (OSError, ET.ParseError) as exc:
+        msg = f"unreadable server config {path}: {exc}"
+        raise BackupError(msg) from exc
+
+
+def is_dedicated_install(server_root: Path) -> bool:
+    """True when the tree looks like a real dedicated install, not a mod staging dir.
+
+    Decides whether a missing `serverconfig*.xml` is a hard failure or just a
+    narrower snapshot. A real install always has one; a tree holding only
+    `Mods/EfficientServer/` is a mod being staged for another host, which
+    install.sh supports and which has no game config to lose.
+    """
+    return (server_root / "7DaysToDieServer_Data").is_dir() or (
+        server_root / "7DaysToDieServer.x86_64"
+    ).exists()
+
+
+def serverconfig_files(server_root: Path) -> list[Path]:
+    """Live server settings in the install root, by name.
+
+    The pre-optimized copy is a sibling the launcher's own glob cannot see, so
+    the two patterns are unioned by name rather than left to whichever matches
+    first.
+    """
+    seen: dict[str, Path] = {}
+    for pattern in SERVERCONFIG_GLOBS:
+        for path in server_root.glob(pattern):
+            if path.is_file():
+                seen[path.name] = path
+    return [seen[name] for name in sorted(seen)]
 
 
 def template_keys(template: Path = TEMPLATE_JSON) -> frozenset[str]:
@@ -220,11 +300,14 @@ def snapshot(
     now: datetime | None = None,
     keep: int = DEFAULT_KEEP,
 ) -> tuple[Path, list[str]]:
-    """Copy the live config into a stamped snapshot dir; return it and any problems.
+    """Copy the live host config into a stamped snapshot dir; return it and problems.
 
     The snapshot is written and then read back, so a successful return means the
     copy loads, not merely that `cp` exited 0. A live config that is missing or
     unloadable is an error: an empty snapshot dir would look like a healthy backup.
+    So is a real dedicated install with no `serverconfig*.xml`, since the run
+    would then publish a snapshot whose coverage silently excludes the operator's
+    server settings, which is the whole class of loss this tool exists for.
 
     Rerun safety: a snapshot this call could not finish leaves NOTHING behind.
     It is built in a staging dir and renamed into place, so a kill between the
@@ -255,6 +338,26 @@ def snapshot(
             " ignores unknown keys.",
             file=sys.stderr,
         )
+    # The game's server settings, read and proven loadable BEFORE the stamp is
+    # taken: a truncated serverconfig.xml must fail the run, not get copied and
+    # recorded as good.
+    serverconfigs = serverconfig_files(server_root)
+    if not serverconfigs:
+        msg = f"no {SERVERCONFIG_GLOBS[0]} under {server_root}"
+        if is_dedicated_install(server_root):
+            msg += (
+                "; a dedicated install always has one, so this snapshot would"
+                " cover the mod config only and leave the operator's server"
+                " settings (ports, password, whitelist) unbacked"
+            )
+            raise BackupError(msg)
+        print(
+            f"WARNING: {msg}. This looks like a mod-only tree, so there is no"
+            " game config to lose; the snapshot covers the mod config only.",
+            file=sys.stderr,
+        )
+    for sc in serverconfigs:
+        read_serverconfig(sc)
 
     stamp = utc_stamp(now)
     target = dest / stamp
@@ -270,6 +373,7 @@ def snapshot(
         "stamp": target.name,
         "source": str(live),
         "sha256": sha256_of(live),
+        "serverconfig": {sc.name: sha256_of(sc) for sc in serverconfigs},
     }
     # Build under a name no reader matches, then publish with one rename. The
     # stamp in the manifest is the FINAL name, so the manifest is built here,
@@ -281,6 +385,8 @@ def snapshot(
     staging = _new_staging(dest)
     try:
         (staging / CONFIG_NAME).write_bytes(live.read_bytes())
+        for sc in serverconfigs:
+            (staging / sc.name).write_bytes(sc.read_bytes())
         (staging / MANIFEST_NAME).write_text(
             json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
         )
@@ -352,8 +458,9 @@ def verify(dest: Path) -> list[str]:
     """Read every snapshot the way a restore would; return one string per failure.
 
     Checks the bytes against the manifest sha256, then parses the file and bounds
-    its keys against the shipped template. An empty or missing dest is reported
-    as a failure: "no backup exists" must never read as "backups are healthy".
+    its keys against the shipped template; each recorded serverconfig XML is
+    checked the same way. An empty or missing dest is reported as a failure:
+    "no backup exists" must never read as "backups are healthy".
     """
     dirs = snapshot_dirs(dest)
     if not dirs:
@@ -379,15 +486,80 @@ def verify(dest: Path) -> list[str]:
         stray = unknown_keys(doc)
         if stray:
             problems.append(f"{d.name}: keys not in the shipped template: {sorted(stray)}")
+        problems.extend(_verify_serverconfigs(d, manifest))
     return problems
 
 
-def restore(dest: Path, stamp: str, to: Path, *, force: bool = False) -> Path:
-    """Copy a verified snapshot to `to`. Refuses to clobber the live config silently.
+def _verify_serverconfigs(d: Path, manifest: object) -> list[str]:
+    """Check every serverconfig the manifest records, the way a restore would.
+
+    A name in the manifest with no file beside it is the failure a bare sha256
+    comparison cannot see: the record exists, the bytes it stands for are gone,
+    and a restore of that snapshot would fail at the copy instead of here.
+    """
+    if not isinstance(manifest, dict):
+        return []
+    recorded = manifest.get("serverconfig")
+    if not isinstance(recorded, dict):
+        # A manifest written before this tool covered the XML. Its snapshot is
+        # what the operator actually has, so it still verifies.
+        return []
+    problems: list[str] = []
+    for name in sorted(recorded):
+        path = d / name
+        if not path.is_file():
+            problems.append(f"{d.name}: serverconfig {name} is in the manifest but missing")
+            continue
+        expected = recorded[name]
+        actual = sha256_of(path)
+        if actual != expected:
+            problems.append(f"{d.name}: {name} sha256 {actual} != manifest {expected}")
+            continue
+        try:
+            read_serverconfig(path)
+        except BackupError as exc:
+            problems.append(str(exc))
+    return problems
+
+
+def newest_age_hours(dest: Path, now: datetime | None = None) -> float | None:
+    """Age of the newest snapshot in hours, or None when it cannot be dated.
+
+    A backup job that stopped running leaves a directory full of snapshots that
+    all verify, which is exactly the failure `--verify` on its own cannot see.
+    """
+    dirs = snapshot_dirs(dest)
+    if not dirs:
+        return None
+    match = _SNAPSHOT_NAME.fullmatch(dirs[-1].name)
+    if match is None:
+        return None
+    try:
+        taken = datetime.strptime(match.group(1), STAMP_FORMAT).replace(
+            tzinfo=timezone.utc
+        )
+    except ValueError:
+        return None
+    return ((now or datetime.now(timezone.utc)) - taken).total_seconds() / 3600.0
+
+
+def restore(
+    dest: Path,
+    stamp: str,
+    to: Path,
+    *,
+    item: str = CONFIG_NAME,
+    force: bool = False,
+) -> Path:
+    """Copy verified snapshot file(s) to `to`. Refuses to clobber them silently.
 
     Restoring over the live config is allowed, but only when the caller says so
     explicitly: the live file is the state being recovered, and an unexpected
     overwrite of it is the one mistake a restore tool can make unrecoverable.
+
+    `item` names one file in the snapshot, or `all` to write the whole set into
+    `to` as a directory. It defaults to the mod config, so the original
+    invocation restores exactly what it always did.
     """
     # The stamp names one directory directly under dest, so resolve it as a
     # name and require the result to still be a child of dest. Joining an
@@ -416,11 +588,59 @@ def restore(dest: Path, stamp: str, to: Path, *, force: bool = False) -> Path:
     if any(p.startswith(f"{src.name}:") for p in problems):
         msg = f"snapshot {src.name} does not verify: " + "; ".join(problems)
         raise BackupError(msg)
+    if item == ALL_ITEMS:
+        return _restore_all(src, to, force=force)
+    if not (src / item).is_file():
+        available = ", ".join(_snapshot_files(src)) or "none"
+        msg = f"snapshot '{stamp}' has no file '{item}' (have: {available})"
+        raise BackupError(msg)
     if to.exists() and not force:
         msg = f"{to} exists; pass --force to overwrite it"
         raise BackupError(msg)
     to.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(src / CONFIG_NAME, to)
+    shutil.copy2(src / item, to)
+    return to
+
+
+def _snapshot_files(src: Path) -> list[str]:
+    """Every file a snapshot carries, manifest excluded, for error messages."""
+    return sorted(p.name for p in src.iterdir() if p.is_file() and p.name != MANIFEST_NAME)
+
+
+def _live_hint(name: str) -> str:
+    """Where a restored file goes, so the printed `cp` is the right one.
+
+    The mod config lives under `Mods/EfficientServer/Config/`; the game's own
+    settings sit in the install root next to the binary, which is where
+    run_server.sh put them.
+    """
+    if name == CONFIG_NAME:
+        return f"<DS>/Mods/EfficientServer/Config/{CONFIG_NAME}"
+    return f"<DS>/{name}"
+
+
+def _restore_all(src: Path, to: Path, *, force: bool) -> Path:
+    """Write every file of one snapshot into the directory `to`.
+
+    All or nothing: a half-restored set is the state an operator cannot tell
+    from a good one, so every existing target is checked before any is written
+    and the copy is a directory move that cannot interleave a failure across
+    files the way a per-file loop could.
+    """
+    if to.exists() and not to.is_dir():
+        msg = f"{to} exists and is not a directory; --item all needs one"
+        raise BackupError(msg)
+    names = _snapshot_files(src)
+    if not names:
+        msg = f"snapshot '{src.name}' holds no files to restore"
+        raise BackupError(msg)
+    for name in names:
+        if (to / name).exists() and not force:
+            msg = f"{to / name} exists; pass --force to overwrite it"
+            raise BackupError(msg)
+    to.mkdir(parents=True, exist_ok=True)
+    for name in names:
+        shutil.copy2(src / name, to / name)
     return to
 
 
@@ -430,9 +650,9 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
         # Spelled out instead of derived: --selftest is the one invocation that
         # needs no --dest, and the derived line would show it as optional for
         # every other one.
-        usage="backup_config.py [-h] --dest DIR [--verify]\n"
-        "                 [--restore STAMP --to PATH] [--force] [--keep N]\n"
-        "                 [--selftest]",
+        usage="backup_config.py [-h] --dest DIR [--verify [--max-age-hours N]]\n"
+        "                 [--restore STAMP [--item NAME] --to PATH] [--force]\n"
+        "                 [--keep N] [--selftest]",
         description=USAGE,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -449,10 +669,26 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
         help="read every snapshot back and check it, exit 1 on any failure",
     )
     p.add_argument(
+        "--max-age-hours",
+        type=float,
+        default=None,
+        metavar="N",
+        help="with --verify, also fail when the newest snapshot is older than N "
+        "hours; off by default, since the right cadence is the operator's",
+    )
+    p.add_argument(
         "--restore",
         default=None,
         metavar="STAMP",
         help="restore one snapshot by its stamp; needs --to PATH",
+    )
+    p.add_argument(
+        "--item",
+        default=CONFIG_NAME,
+        metavar="NAME",
+        help=f"file to restore: {CONFIG_NAME} (default), a serverconfig*.xml "
+        f"from the snapshot, or '{ALL_ITEMS}' to write the whole set into a "
+        "directory",
     )
     p.add_argument(
         "--to",
@@ -490,6 +726,15 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
         p.error("--verify and --restore are separate operations")
     if args.force and not args.restore:
         p.error("--force only applies to --restore")
+    if args.max_age_hours is not None and not args.verify:
+        p.error("--max-age-hours only applies to --verify")
+    if args.max_age_hours is not None and args.max_age_hours <= 0:
+        p.error(f"--max-age-hours must be positive, got {args.max_age_hours}")
+    if args.restore and args.item == ALL_ITEMS and args.to is not None and args.to.suffix:
+        p.error(
+            f"--item {ALL_ITEMS} writes every file into a directory, so --to must be"
+            f" a directory path without a file extension (got '{args.to}')"
+        )
     # prune() deletes every snapshot outside the retained window, so a --keep
     # below 1 turns a typo into a wiped backup history.
     if args.keep < 1:
@@ -519,6 +764,8 @@ def _dispatch(args: argparse.Namespace) -> int:
         raise SystemExit(2)
     if args.verify:
         problems = verify(dest)
+        if args.max_age_hours is not None:
+            problems.extend(_staleness(dest, args.max_age_hours))
         for problem in problems:
             print(f"FAIL: {problem}", file=sys.stderr)
         if problems:
@@ -526,10 +773,21 @@ def _dispatch(args: argparse.Namespace) -> int:
         print(f"OK: {len(snapshot_dirs(dest))} snapshot(s) verify under {dest}")
         return 0
     if args.restore:
-        out = restore(dest, args.restore, args.to, force=args.force)
+        out = restore(dest, args.restore, args.to, item=args.item, force=args.force)
         print(f"Restored {args.restore} -> {out}")
-        print(f"  cp -a '{out}' '<DS>/Mods/EfficientServer/Config/{CONFIG_NAME}'")
-        print("  es reload            # or restart the server")
+        if args.item == ALL_ITEMS:
+            for name in _snapshot_files(out):
+                print(f"  cp -a '{out / name}' '{_live_hint(name)}'")
+        else:
+            print(f"  cp -a '{out}' '{_live_hint(args.item)}'")
+        # The reload is for the mod config only. The game reads serverconfig.xml
+        # once at boot, so telling an operator to `es reload` after putting one
+        # back is advice that changes nothing, and telling them to only reload
+        # after restoring the whole set leaves the server on the old settings.
+        if args.item in (CONFIG_NAME, ALL_ITEMS):
+            print("  es reload            # or restart the server")
+        if args.item != CONFIG_NAME:
+            print("  restart the server   # the game reads serverconfig.xml at boot")
         return 0
     server_root = default_server_root()
     if not str(server_root):
@@ -537,8 +795,35 @@ def _dispatch(args: argparse.Namespace) -> int:
         raise BackupError(msg)
     target, _ = snapshot(server_root, dest, keep=args.keep)
     print(f"Snapshot -> {target}")
+    covered = _snapshot_files(target)
+    print(f"  covered: {', '.join(covered) if covered else 'nothing'}")
     print(f"  verify: python3 {Path(sys.argv[0]).name} --dest {dest} --verify")
     return 0
+
+
+def _staleness(
+    dest: Path, max_age_hours: float, *, now: datetime | None = None
+) -> list[str]:
+    """The freshness complaint `--max-age-hours` exists to make.
+
+    Every snapshot in a dead backup set still verifies, so a job that stopped
+    running a month ago reads exactly like a healthy one. Nothing else in this
+    tool can see that, which is why the check is available at all.
+
+    `now` is injectable so the selftest can assert both sides of the limit
+    against a fixed clock instead of whatever day it happens to run.
+    """
+    age = newest_age_hours(dest, now)
+    if age is None:
+        return [f"no snapshot under {dest} carries a readable stamp to age"]
+    if age > max_age_hours:
+        return [
+            (
+                f"newest snapshot under {dest} is {age:.1f}h old, past the"
+                f" {max_age_hours:g}h limit; the backup job is not running"
+            )
+        ]
+    return []
 
 
 def _selftest() -> int:
@@ -780,6 +1065,185 @@ def _selftest() -> int:
         unknown_keys({"NoSuchKnob": 1}) == {"NoSuchKnob"},
     )
     t.check("shipped template keys are known", unknown_keys(read_config(TEMPLATE_JSON)) == set())
+
+    # The game's server settings, which the install tree holds and nothing
+    # regenerates. Every check above ran against a mod-only tree, where a
+    # snapshot legitimately covers one file; these run against a real dedicated
+    # install, where the ports, password, whitelist and world settings are the
+    # other half of what a lost disk takes.
+    with tempfile.TemporaryDirectory(prefix="es-backup-serverconfig.") as raw:
+        td = Path(raw)
+        srv, live = make_tree(td)
+        (srv / "7DaysToDieServer_Data").mkdir()
+        sc = srv / "serverconfig.xml"
+        sc.write_text(
+            '<?xml version="1.0" encoding="UTF-8"?>\n'
+            '<ServerSettings><ServerName>Holdout</ServerName>'
+            "<ServerPassword>hunter2</ServerPassword></ServerSettings>\n",
+            encoding="utf-8",
+        )
+        # The sibling run_server.sh keeps of the operator's original.
+        pre = srv / "serverconfig.optimized.xml.pre-optimized"
+        pre.write_text("<ServerSettings><ServerName>Before</ServerName></ServerSettings>\n",
+                       encoding="utf-8")
+        dest = td / "offhost"
+        # Not inside the install tree, like every other dest here.
+        target, _ = snapshot(srv, dest, now=t0)
+
+        t.check(
+            "a snapshot carries every live serverconfig, not just the first",
+            (target / "serverconfig.xml").is_file()
+            and (target / "serverconfig.optimized.xml.pre-optimized").is_file(),
+        )
+        t.check(
+            "the snapshot reproduces the live serverconfig bytes",
+            (target / "serverconfig.xml").read_bytes() == sc.read_bytes(),
+        )
+        t.check("a snapshot with serverconfigs verifies", verify(dest) == [])
+
+        # Corruption in the XML is the disaster this catches, and a sha256
+        # check alone is what catches it.
+        (target / "serverconfig.xml").write_text("<ServerSettings><Server", encoding="utf-8")
+        t.check(
+            "a corrupted serverconfig is reported",
+            any("serverconfig.xml" in p for p in verify(dest)),
+        )
+        (target / "serverconfig.xml").write_bytes(sc.read_bytes())
+        t.check("a repaired serverconfig verifies again", verify(dest) == [])
+
+        # A record with no file beside it: the manifest promises a file the
+        # snapshot no longer has, which a plain hash comparison cannot see.
+        (target / "serverconfig.optimized.xml.pre-optimized").unlink()
+        t.check(
+            "a serverconfig in the manifest but missing from the snapshot is reported",
+            any("missing" in p for p in verify(dest)),
+        )
+        try:
+            restore(dest, target.name, td / "x.json", item=ALL_ITEMS)
+            t.check("restore refuses a snapshot whose serverconfig is gone", False)
+        except BackupError:
+            t.check("restore refuses a snapshot whose serverconfig is gone", True)
+        # A manifest written before this tool covered the XML must still
+        # verify, or adding a file to the backup silently retired an
+        # operator's existing snapshot history.
+        legacy = target / MANIFEST_NAME
+        legacy.write_text(
+            json.dumps(
+                {
+                    "stamp": target.name,
+                    "source": str(live),
+                    "sha256": sha256_of(target / CONFIG_NAME),
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        t.check("a manifest without a serverconfig key still verifies", verify(dest) == [])
+
+        # A truncated live XML must fail the run, not be copied and recorded.
+        snapshot(srv, dest, now=t1)
+        sc.write_text("<ServerSettings", encoding="utf-8")
+        before = {p.name for p in dest.iterdir()}
+        try:
+            snapshot(srv, dest, now=t1)
+            t.check("an unreadable live serverconfig raises", False)
+        except BackupError:
+            t.check("an unreadable live serverconfig raises", True)
+        t.check(
+            "the failed run published nothing",
+            {p.name for p in dest.iterdir()} == before,
+        )
+        t.check(
+            "the failed run left no staging dir behind",
+            not [p for p in dest.iterdir() if p.name.startswith(STAGING_PREFIX)],
+        )
+        sc.write_text(
+            '<?xml version="1.0" encoding="UTF-8"?>\n'
+            "<ServerSettings><ServerName>Holdout</ServerName></ServerSettings>\n",
+            encoding="utf-8",
+        )
+
+        # A real install with no serverconfig at all would silently narrow the
+        # backup, so the run fails instead. A mod-only staging tree is a
+        # supported install.sh target and only warns.
+        fresh = td / "fresh"
+        cfg = fresh / CONFIG_REL
+        cfg.parent.mkdir(parents=True, exist_ok=True)
+        cfg.write_text(json.dumps({"DedicatedOnly": True}), encoding="utf-8")
+        (fresh / "7DaysToDieServer_Data").mkdir()
+        try:
+            snapshot(fresh, td / "no-sc", now=t0)
+            t.check("a dedicated install with no serverconfig raises", False)
+        except BackupError:
+            t.check("a dedicated install with no serverconfig raises", True)
+        only_mod = td / "modonly"
+        cfg2 = only_mod / CONFIG_REL
+        cfg2.parent.mkdir(parents=True, exist_ok=True)
+        cfg2.write_text(json.dumps({"DedicatedOnly": True}), encoding="utf-8")
+        staged, _ = snapshot(only_mod, td / "mod-sc", now=t0)
+        t.check(
+            "a mod-only staging tree snapshots with a warning, not a failure",
+            _snapshot_files(staged) == [CONFIG_NAME],
+        )
+
+        # Restore the whole set, and restore one member of it.
+        latest = snapshot_dirs(td / "offhost")[-1]
+        out = td / "recovered" / "set"
+        restore(td / "offhost", latest.name, out, item=ALL_ITEMS)
+        t.check(
+            "an --item all restore writes the mod config and the serverconfigs",
+            (out / CONFIG_NAME).read_bytes() == (latest / CONFIG_NAME).read_bytes()
+            and (out / "serverconfig.xml").read_bytes()
+            == (latest / "serverconfig.xml").read_bytes(),
+        )
+        try:
+            restore(td / "offhost", latest.name, out, item=ALL_ITEMS)
+            t.check("--item all refuses to clobber an existing file", False)
+        except BackupError:
+            t.check("--item all refuses to clobber an existing file", True)
+        restore(td / "offhost", latest.name, out, item=ALL_ITEMS, force=True)
+        t.check("--item all --force overwrites", (out / CONFIG_NAME).is_file())
+
+        one = td / "recovered" / "serverconfig.xml"
+        restore(td / "offhost", latest.name, one, item="serverconfig.xml")
+        t.check(
+            "a single serverconfig restores byte-exact",
+            one.read_bytes() == (latest / "serverconfig.xml").read_bytes(),
+        )
+        try:
+            restore(td / "offhost", latest.name, one, item="serverconfig.optimized.xml")
+            t.check("restoring a file the snapshot lacks raises", False)
+        except BackupError:
+            t.check("restoring a file the snapshot lacks raises", True)
+
+    # A backup job that stopped running leaves snapshots that all verify, which
+    # is the one failure the read-back cannot see. --max-age-hours is the only
+    # thing here that notices.
+    with tempfile.TemporaryDirectory(prefix="es-backup-age.") as raw:
+        td = Path(raw)
+        srv, _ = make_tree(td)
+        dest = td / "offhost"
+        old = datetime(2026, 9, 1, 12, 0, 0, tzinfo=timezone.utc)
+        snapshot(srv, dest, now=old)
+        t.check("a week-old snapshot set still verifies", verify(dest) == [])
+        t.check(
+            "the newest snapshot's age is reported",
+            newest_age_hours(dest, now=old + timedelta(hours=30)) == 30.0,
+        )
+        t.check(
+            "a stale snapshot set fails the age limit",
+            _staleness(dest, 24.0, now=old + timedelta(hours=30)) != [],
+        )
+        t.check(
+            "a fresh snapshot set passes the age limit",
+            _staleness(dest, 48.0, now=old + timedelta(hours=30)) == [],
+        )
+        t.check("an empty dest has no age to report", newest_age_hours(td / "nothing") is None)
+        t.check(
+            "an empty dest fails the age limit",
+            _staleness(td / "nothing", 24.0, now=old + timedelta(hours=30)) != [],
+        )
 
     return t.finish()
 
