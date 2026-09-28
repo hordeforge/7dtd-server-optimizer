@@ -4,6 +4,10 @@ The optimizer owns only reviewed, configurable runtime optimizations. Generated
 load belongs to `7dtd-loadgen`; profiling and telemetry belong to the standalone
 bridge in `7dtd-server-apm`.
 
+**Status:** active. Phases 0 and 3 complete; two Phase 1 validation items and
+one Phase 2 budget item stay open (see the checkboxes and the residual table).
+**Last updated:** 2026-08-11 (newest dated entry below).
+
 ## Phase 0: remove obsolete ownership
 
 - [x] Remove the old in-mod load generator and load tick Harmony patch.

@@ -28,7 +28,11 @@ restore leaves `deltaPosition = 0` forever. Governor tier 2 stays default-off.
 - Human cycle still required before `Governor.AnimatorEmergency` default true.
 
 ### Config
-No new knobs. `Governor.AnimatorEmergency` stays default **false**.
+No new knobs for the emergency itself. `Governor.AnimatorEmergency` stays
+default **false**. Since the unreleased `Diagnostics.AllowFidelityProbes` opt-in,
+`es animoff` refuses to arm until that knob is true (restore commands stay
+ungated), so a re-run of the §D gate must write the Diagnostics section first
+(`scripts/harness_common.py` `write_diag_config` does).
 
 ## B. Path admission (A2)
 
