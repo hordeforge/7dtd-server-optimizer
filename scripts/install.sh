@@ -69,6 +69,28 @@ if [[ -z "$SRV" || "$SRV" == "/" ]]; then
   echo "ERROR: install dir is empty or the filesystem root: pass DS=\"/path/to/7 Days to Die Dedicated Server\"." >&2
   exit 1
 fi
+# Refuse to wipe a tree that is not a dedicated install. The rm -rf below is
+# unconditional once SRV is non-empty, so a mistyped DS=/home/user (or any
+# unrelated directory that happens to hold a Mods/EfficientServer) would have
+# that folder deleted with nothing else in the output to explain it.
+# uninstall.sh applies a stricter form of this check; install.sh cannot,
+# because staging an install for another host is a supported use. So this
+# accepts the two cases that are not a mistake - a real dedicated install
+# (7DaysToDieServer_Data/ or the server binary is present) and a fresh or
+# already-staged destination (the mod dir exists, or SRV is empty or absent,
+# which is what staging to a new host looks like) - and refuses everything
+# else: a populated directory that is neither.
+if [[ ! -d "$SRV/7DaysToDieServer_Data" && ! -x "$SRV/7DaysToDieServer.x86_64" \
+      && ! -d "$SRV/Mods/EfficientServer" ]]; then
+  if [[ -d "$SRV" ]] && [[ -n "$(ls -A "$SRV" 2>/dev/null)" ]]; then
+    echo "ERROR: '$SRV' is not a 7 Days to Die dedicated install and is not empty." >&2
+    echo "  (no 7DaysToDieServer_Data/, no 7DaysToDieServer.x86_64, no existing" >&2
+    echo "  Mods/EfficientServer/, and the directory has other content.) Installing" >&2
+    echo "  here would delete that Mods/EfficientServer folder." >&2
+    echo "  Pass DS=\"/path/to/7 Days to Die Dedicated Server\"." >&2
+    exit 1
+  fi
+fi
 
 # Back up on disk, never the stock /tmp: it is tmpfs on most Linux hosts, and
 # after a failed install that copy is the only place the operator's tuning

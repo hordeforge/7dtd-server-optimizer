@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import sys
 import xml.etree.ElementTree as ET
-from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
+from decimal import ROUND_HALF_UP, Decimal, DecimalException
 from pathlib import Path
 
 from selftest_support import Checks
@@ -104,13 +104,18 @@ def main(argv: list[str]) -> int:
         return 1
     try:
         pct = percent(root.get("line-rate", "0"))
-    except InvalidOperation:
-        # A non-numeric line-rate ("" or an empty element attribute) must not
-        # render as a 0% red shield: that is a silent, wrong badge, the exact
-        # failure this script exists to prevent.
+    except (DecimalException, ValueError) as ex:
+        # A line-rate that is not a usable percentage must not render as a 0%
+        # red shield: that is a silent, wrong badge, the exact failure this
+        # script exists to prevent. The whole DecimalException family is caught,
+        # not just InvalidOperation: "Infinity" raises InvalidOperation and an
+        # out-of-range exponent ("1e999999999") raises Overflow. ValueError
+        # covers "NaN", which quantizes fine and then fails in the int()
+        # conversion. Each used to escape as a traceback instead of the named
+        # FAIL line.
         print(
-            f"FAIL: {argv[0]} has a non-numeric line-rate "
-            f"({root.get('line-rate', '0')!r})",
+            f"FAIL: {argv[0]} has an unusable line-rate "
+            f"({root.get('line-rate', '0')!r}: {ex})",
             file=sys.stderr,
         )
         return 1
@@ -233,6 +238,20 @@ def _selftest() -> int:
             "non-numeric line-rate leaves the old badge untouched",
             out.read_text(encoding="utf-8") == before,
         )
+        # The same FAIL line has to cover every unusable line-rate, not just
+        # the one InvalidOperation happens to name. "NaN" raises ValueError out
+        # of the int() conversion and an out-of-range exponent raises decimal
+        # Overflow, so both used to escape as a traceback; the exit code and the
+        # untouched badge are the contract either way.
+        for label, rate in (("NaN", "NaN"), ("overflowing", "1e999999999")):
+            odd = Path(td) / f"odd-{label}.cobertura.xml"
+            odd.write_text(f'<coverage line-rate="{rate}"></coverage>', encoding="utf-8")
+            rc_odd = main([str(odd), str(out)])
+            t.check(f"{label} line-rate exits 1", rc_odd == 1)
+            t.check(
+                f"{label} line-rate leaves the old badge untouched",
+                out.read_text(encoding="utf-8") == before,
+            )
 
     return t.finish()
 

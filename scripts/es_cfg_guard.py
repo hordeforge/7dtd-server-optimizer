@@ -37,6 +37,7 @@ import copy
 import json
 import os
 import random
+import re
 import stat
 import sys
 from collections.abc import Callable, Sequence
@@ -65,11 +66,31 @@ TEMP_INFIX = ".tmp"
 TEMP_ATTEMPTS = 8
 
 
-def _temp_owner(name: str, base_name: str) -> str:
-    """The pid that wrote temp ``name`` of ``base_name``, or "" when unparseable."""
+# A pid as it appears in a temp name: plain ASCII digits, and few enough of them
+# that the value always fits the C int os.kill takes. str.isdigit() is not that
+# test: it accepts superscript and non-ASCII digits, so "²" passes it and then
+# raises ValueError in int(), and an unbounded digit run parses fine and then
+# raises OverflowError in os.kill. The name being parsed is whatever sits in the
+# LIVE install directory, not a name this process minted, so the parse has to
+# reject those instead of raising out of the sweep.
+_TEMP_OWNER_RE = re.compile(r"\A[0-9]{1,9}\Z")
+# The sweep only uses the value for a signal-0 liveness probe, so a pid the
+# kernel could never have assigned is unparseable for the same reason a
+# non-numeric one is. This is the Linux pid_max ceiling (2^22); it is a bound
+# on the PARSE, not a policy about the host.
+_MAX_TEMP_OWNER_PID = 4_194_304
+
+
+def _temp_owner(name: str, base_name: str) -> int | None:
+    """The pid that wrote temp ``name`` of ``base_name``, or None when unparseable."""
+    if not name.startswith(base_name + TEMP_INFIX):
+        return None
     tail = name[len(base_name) + len(TEMP_INFIX) :]
     owner = tail.split("_", 1)[0]
-    return owner if owner.isdigit() else ""
+    if _TEMP_OWNER_RE.match(owner) is None:
+        return None
+    pid = int(owner)
+    return pid if pid <= _MAX_TEMP_OWNER_PID else None
 
 USAGE = """\
 usage: scripts/es_cfg_guard.py [--selftest] [-h | --help]
@@ -254,10 +275,10 @@ class ConfigSwap:
         for base in (self.cfg, self.bak):
             for tmp in base.parent.glob(f"{base.name}{TEMP_INFIX}*"):
                 owner = _temp_owner(tmp.name, base.name)
-                if not owner:
+                if owner is None:
                     continue
                 try:
-                    os.kill(int(owner), 0)
+                    os.kill(owner, 0)
                 except ProcessLookupError:
                     tmp.unlink(missing_ok=True)
                 except OSError:
@@ -1070,6 +1091,43 @@ def _selftest() -> int:
         t.check("counter-suffixed temp of a live pid is kept", live_numbered.is_file())
         s10b.restore()
         live_numbered.unlink()
+
+        # 14d. The pid comes off a NAME in the live install directory, not off
+        # one this process minted, so the sweep has to reject a name it cannot
+        # turn into a pid instead of raising out of begin(). str.isdigit()
+        # accepts "²" (int() then raises ValueError) and accepts an unbounded
+        # digit run (os.kill then raises OverflowError); neither exception is an
+        # OSError, so either one propagated and killed the run mid-protocol,
+        # with the config already snapshotted and not yet restored. 20 nines is
+        # the OverflowError case: past the C int os.kill takes, and short enough
+        # to stay inside NAME_MAX so the fixture is a real file on disk. Each
+        # hostile name here is also one the sweep must leave in place: it is not
+        # a temp this protocol can attribute to any process.
+        s10d = mk()
+        hostile = [
+            root / f"{cfg.name}{TEMP_INFIX}\N{SUPERSCRIPT TWO}_0",
+            root / f"{cfg.name}{TEMP_INFIX}{'9' * 20}_0",
+            root / f"{cfg.name}{TEMP_INFIX}{_MAX_TEMP_OWNER_PID + 1}_0",
+            root / f"{cfg.name}{TEMP_INFIX}-1_0",
+        ]
+        for stray in hostile:
+            stray.write_text("{}", encoding="utf-8")
+        cfg.write_text(json.dumps(original, indent=2) + "\n", encoding="utf-8")
+        swept = True
+        try:
+            s10d.begin()
+        except Exception as ex:
+            # The failure this pins: any exception at all here, whatever its
+            # type, must not escape the sweep.
+            swept = False
+            print(f"  sweep raised on a hostile temp name: {ex!r}", file=sys.stderr)
+        t.check("a temp name that is not a pid does not abort the sweep", swept)
+        t.check("a sweep that raised still snapshotted the config", s10d.bak.is_file())
+        s10d.restore()
+        t.check("every unparseable temp name is left on disk",
+                all(stray.is_file() for stray in hostile))
+        for stray in hostile:
+            stray.unlink()
 
         # 14c. The temp name is predictable, so anything else on the host can
         # squat it first. A pre-planted symlink must not redirect the write

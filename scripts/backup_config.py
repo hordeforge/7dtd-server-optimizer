@@ -289,7 +289,25 @@ def restore(dest: Path, stamp: str, to: Path, *, force: bool = False) -> Path:
     explicitly: the live file is the state being recovered, and an unexpected
     overwrite of it is the one mistake a restore tool can make unrecoverable.
     """
+    # The stamp names one directory directly under dest, so resolve it as a
+    # name and require the result to still be a child of dest. Joining an
+    # unvalidated argument lets `--restore ../../..` read a config-shaped file
+    # from anywhere the operator can reach, and the verification below keys on
+    # src.name, which a traversing stamp does not match: the copy would be
+    # taken from a file no snapshot check ever looked at. A snapshot name is
+    # this tool's own stamp plus an optional same-second counter, so anything
+    # else is a mistake worth naming rather than resolving.
+    if not _SNAPSHOT_NAME.fullmatch(stamp):
+        msg = (
+            f"'{stamp}' is not a snapshot name; --restore takes a directory name"
+            f" under {dest}, as stamped by this tool (YYYYMMDD_HHMMSS, plus _N"
+            " for a same-second copy). List them with --verify."
+        )
+        raise BackupError(msg)
     src = dest / stamp
+    if src.parent.resolve() != dest.resolve():
+        msg = f"no snapshot '{stamp}' under {dest}"
+        raise BackupError(msg)
     if not (src / CONFIG_NAME).is_file():
         available = ", ".join(p.name for p in snapshot_dirs(dest)) or "none"
         msg = f"no snapshot '{stamp}' under {dest} (have: {available})"
@@ -540,6 +558,41 @@ def _selftest() -> int:
             t.check("restore rejects an unknown stamp", False)
         except BackupError:
             t.check("restore rejects an unknown stamp", True)
+
+        # The stamp is a directory NAME under dest, not a path. Without the
+        # name check a traversing stamp resolved to a config-shaped file
+        # anywhere the operator can read, and the per-snapshot verification
+        # keyed on src.name never matched it, so the copy was taken from a file
+        # no check had looked at. Assert both halves: the traversal is refused,
+        # and the planted file outside dest is untouched.
+        outside = td / "outside"
+        outside.mkdir()
+        (outside / CONFIG_NAME).write_text(
+            json.dumps({"DedicatedOnly": True, "Source": "planted"}),
+            encoding="utf-8",
+        )
+        planted_bytes = (outside / CONFIG_NAME).read_bytes()
+        def refused(stamp: str) -> bool:
+            try:
+                restore(dest, stamp, out / "stolen.json", force=True)
+            except BackupError:
+                return True
+            return False
+
+        t.check(
+            "restore refuses every stamp that is not a directory name",
+            all(
+                refused(stamp)
+                for stamp in (
+                    "../outside",
+                    f"..{os.sep}outside",
+                    str(outside),
+                )
+            ),
+        )
+        t.check("the file outside the snapshot root is untouched",
+                (outside / CONFIG_NAME).read_bytes() == planted_bytes)
+        t.check("a refused traversal writes nothing", not (out / "stolen.json").exists())
 
     t.check(
         "a typo'd key is reported as unknown",

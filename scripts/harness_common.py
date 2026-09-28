@@ -68,8 +68,21 @@ __all__ = [
 # Canonical here is SEVENDTD_DS_DIR (same var as build/install/run and the
 # Makefile's DS=); SEVENDTD_SERVER_DIR is also accepted because that is the
 # 7dtd-loadgen sibling's spelling (start_dedicated_prefab.sh), so one export
-# drives both trees. An empty value falls through to the next candidate
-# instead of selecting the current directory.
+# drives both trees. An unset value falls through to the next candidate, and
+# the stock path last.
+#
+# An EXPORTED-BUT-EMPTY value is refused, not treated as unset. The shell
+# scripts already reject it for the same reason (install.sh:52, uninstall.sh,
+# run_server.sh:84): these harnesses REWRITE the live installed config in
+# place, so a mistyped `SEVENDTD_DS_DIR=` that silently fell through to the
+# stock path would swap knobs in an install the operator did not name, and
+# restore them from a backup of the wrong tree. Failing here is the only point
+# before the first write.
+for _empty in ("SEVENDTD_DS_DIR", "SEVENDTD_SERVER_DIR", "VALIDATE_OUT"):
+    if _empty in os.environ and not os.environ[_empty].strip():
+        sys.exit(
+            f"harness_common: {_empty} is set but empty; pass a real path or unset it."
+        )
 DS = Path(
     os.environ.get("SEVENDTD_DS_DIR")
     or os.environ.get("SEVENDTD_SERVER_DIR")

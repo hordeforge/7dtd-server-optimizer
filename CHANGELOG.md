@@ -133,6 +133,37 @@ chosen up front:
   file and no clue why. The first failure now names the exception and states
   that later lines reach the console only; the per-line stdout fallback is
   unchanged.
+- `make install` now refuses an install dir that is neither a 7 Days to Die
+  dedicated install (no `7DaysToDieServer_Data/`, no server binary), nor an
+  already-staged destination, nor empty or absent. A mistyped `DS=` pointing at
+  an unrelated populated directory reached an `rm -rf` of
+  `Mods/EfficientServer` with nothing in the output to explain it.
+  `uninstall.sh` already applied a stricter form of this check. Staging an
+  install for another host, and reinstalling over an existing mod folder, are
+  unaffected.
+- `scripts/backup_config.py --restore` takes a directory NAME and refuses
+  anything else. A traversing stamp (`../outside`, an absolute path) resolved
+  outside the snapshot root, and the per-snapshot verification keyed on the
+  directory's own name never matched it, so the copy came from a file no
+  verification step had looked at.
+- The config guard's abandoned-temp sweep could be crashed from outside the
+  protocol: it parsed a pid out of a filename sitting in the LIVE install
+  directory, and `str.isdigit()` accepts names `int()` then rejects (`²`) as
+  well as digit runs too large for `os.kill` (OverflowError). Neither is an
+  `OSError`, so either one aborted the run with the config already snapshotted
+  and not yet restored. A name that is not a plain ASCII pid within the
+  kernel's range is now left untouched.
+- The bench harnesses (`measure_es_onoff.py`, `validate_anim_path_admission.py`,
+  `validate_bloodmoon_path.py`) now refuse an exported-but-empty
+  `SEVENDTD_DS_DIR`, `SEVENDTD_SERVER_DIR` or `VALIDATE_OUT` instead of
+  falling through to the stock install. The shell scripts have rejected this
+  for the same reason: the harnesses rewrite the live installed config in
+  place, so a mistyped empty value swapped knobs in an install the operator did
+  not name.
+- A coverage report whose `line-rate` is `NaN` or an out-of-range exponent
+  (`1e999999999`) exited `coverage_badge.py` with a traceback; only
+  `InvalidOperation` was handled. Both now report the named FAIL line and exit
+  1, leaving any existing badge untouched.
 - The config structure fuzz treated the static `ServerPerfConfig.LastLoadFailed`
   load outcome as a knob, so it mutated a leaf the serializer never writes and
   the suite failed on `leaf 'LastLoadFailed' present in serialized defaults`.
