@@ -74,6 +74,8 @@ write-barrier tax.
 | 1.15.0 | Animator LOD (20 ms prize, exemption-limited to dispersed populations) |
 | 1.16.0/1 | Governor tier 2: animator emergency (~40% of the 64p frame); JobWorkerCount (measured null) |
 | 1.17.0 | Path admission (default off); crowd-collision LOD (null A/B, default off); animator emergency rewritten to `CullCompletely` (root-motion-safe exit) |
+| 1.18.0 | `ClientListSnapshot` (stock join-churn race, default on); apply-once knobs undo on reload; `es benchgod on` behind `Diagnostics.AllowBenchGod`; LICENSE.txt in the artifact |
+| 1.19.0 | Logging collapsed to one `EsLog.Emit`; stride gate folded into `TickClock`; runtime unknown-key scan dropped (typos caught pre-packaging instead); SBOM and `.buildinfo.txt` dropped from the release zip |
 
 ---
 
@@ -907,7 +909,8 @@ Network.{FastSingleTargetSend,
 WorldTransfer.{ChunkPackagesPerObserverPerTick (3=vanilla; EXPERIMENTAL, see §3e)}
 Governor.{Enabled (true since v1.13.0), OverBudgetMs (57), HealthyMs (52, floored >51: the loop
     idles at 50ms), WindowTicks (100), CooldownTicks (400)}   # closed-loop, see §3i
-Diagnostics.{GcMegapauseTest, WarmupSeconds, GrowSeconds}   # never enable on a live server
+Diagnostics.{GcMegapauseTest, WarmupSeconds, GrowSeconds}   # removed after v1.19.0: a
+    # config still carrying them parses, nothing reads them
 ```
 Init log tags each matched patch `(matched but config-disabled)` when its toggle is
 off; numeric fields are clamped + logged by `Normalize()`.
@@ -915,8 +918,8 @@ off; numeric fields are clamped + logged by `Normalize()`.
 This block is the v1.13-era snapshot kept for its section links; it does not list
 knobs added since (`AiLod.MidTickStride`, `SkipOnDedicated.AmbientLightSpectrumUpdates`,
 `Pathfinding.MaxPathEnqueuesPerTick`/`DropPathWhenFarDistSq`, `Server.*`,
-`AnimatorLod.*`, `CrowdCollisionLod.*`, `TickGuard.*`, tier-2 governor fields).
-[`CONFIG.md`](CONFIG.md) is the canonical per-option reference.
+`AnimatorLod.*`, `CrowdCollisionLod.*`, `TickGuard.*`, tier-2 governor fields) or
+removed ones. [`CONFIG.md`](CONFIG.md) is the canonical per-option reference.
 
 ---
 

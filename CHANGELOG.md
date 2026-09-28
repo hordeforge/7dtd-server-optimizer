@@ -8,7 +8,7 @@ defaults, measured gains).
 
 ## Version numbering
 
-Two independent version numbers apply to every release, by design:
+A release carries one version number, named twice:
 
 - The **GitHub release tag** (`vX.Y.Z`) versions this repository's releases.
   Downloadable zips are named after it minus the leading `v`
@@ -16,12 +16,15 @@ Two independent version numbers apply to every release, by design:
   and a modified tree keeps an explicit `-dirty` suffix instead).
 - The **mod version** (`ModInfo.xml` / assembly version, currently `1.19.0`)
   tracks the feature history of the mod itself and is what the server log
-  reports at startup (`versions: mod=...`). It is independent of the release
-  tag; `scripts/check_version.py` (run by `make test`/CI) keeps it identical
-  across source, dist copy, and AssemblyInfo, and rejects doc claims of
-  versions that never shipped.
+  reports at startup (`versions: mod=...`). `scripts/check_version.py` (run by
+  `make test`/CI) keeps it identical across source, dist copy, and
+  AssemblyInfo, rejects doc claims of versions that never shipped, and requires
+  the newest dated section above to be it. `.github/workflows/release.yml`
+  fails a pushed tag that does not equal the mod version, so the two cannot
+  drift.
 
-So `EfficientServer-0.1.0.zip` logging `mod=1.17.0` is correct, not drift.
+The `v0.1.0`, `v1.17.0` and `v1.17.1` tags predate that rule and all carry mod
+version 1.17.0; every release after them takes its number from the tag.
 
 ## [Unreleased]
 
@@ -53,6 +56,15 @@ So `EfficientServer-0.1.0.zip` logging `mod=1.17.0` is correct, not drift.
   `probeAllow=`.
 
 ### Fixed
+- `scripts/install.sh` ignored the `DS=` spelling it documents: only
+  `SEVENDTD_DS_DIR` resolved the target, so `DS=/path scripts/install.sh` fell
+  through to the stock Steam path and installed (and `rm -rf`'d the mod folder
+  of) a *different* server than the operator named. The Makefile exports
+  `SEVENDTD_DS_DIR` from `DS=`, so `make install DS=...` was unaffected and the
+  script's own `--help`, plus the restore hint `make uninstall` prints, both
+  advertise the spelling. `SEVENDTD_DS_DIR` wins, then `DS`, then the stock
+  path, and either variable set-but-empty now fails instead of falling through
+  to the default.
 - `make install` destroyed everything in the installed `Config/` except
   `efficientserver.json`: the bench guard's `efficientserver.json.swap-bak` and
   its quarantined `.stale` files are the only crash-recovery snapshot of a
@@ -283,6 +295,20 @@ Artifact: `EfficientServer-1.18.0.zip`, containing mod version 1.18.0.
 - Dropped `*.lock` from `.gitignore`: nothing in this repo produces such a
   file, and the pattern would have silently excluded a future lockfile from
   version control.
+
+## [1.17.1] - 2026-08-23
+
+Artifact: `EfficientServer-1.17.1.zip`, containing mod version 1.17.0, the same
+DLL as v1.17.0. The tag moved without a mod bump, which is the drift the
+release tag gate now rejects. (The `v1.17.0` tag, the same day, packaged the
+same mod version and is described by `[0.1.0]` below.)
+
+### Changed
+- Mod metadata: author `7dtd` to `HordeForge`, and the empty `Website` value to
+  the repository URL. Both are what the game's mod list shows.
+- Repository and doc paths retargeted to the hordeforge layout, and
+  `scripts/run_server.sh` gained a `--ds` flag and a documented environment
+  block in place of the inline defaults.
 
 ## [0.1.0] - 2026-08-22
 

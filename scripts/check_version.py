@@ -16,6 +16,9 @@ Checks that:
    one is the shipped mod version (a bump with no notes, a two-digit year, a
    date that does not exist, or notes for a version the manifest does not
    carry, is caught).
+6. The shipped version has a row in the docs/RESULTS.md version-history
+   table, so a release cannot ship with a version history that stops at the
+   release before it.
 
 Run: python3 scripts/check_version.py
      python3 scripts/check_version.py --selftest     (both wired into `make test`)
@@ -165,6 +168,33 @@ def _changelog_fails(text: str, shipped: str) -> list[str]:
     return fails
 
 
+def _results_history_fails(text: str, shipped: str) -> list[str]:
+    """The shipped version must appear in the docs version-history table.
+
+    `docs/RESULTS.md` keeps a `## 0. Version history` table of every mod
+    version and what it changed. The gate above only catches docs claiming a
+    version *newer* than shipped, so a table that stops short of the newest
+    release (it sat at 1.17.0 through 1.19.0) stayed green: a reader dating a
+    regression from that table gets no row for the release they are running.
+    """
+    version = norm(shipped)
+    m = re.search(
+        r"^## 0\. Version history\s*$(?P<body>.*?)(?=^## |\Z)",
+        text,
+        re.MULTILINE | re.DOTALL,
+    )
+    if m is None:
+        return ["RESULTS.md has no `## 0. Version history` section"]
+    if f"{version[0]}.{version[1]}" not in m.group("body"):
+        return [
+            (
+                f"RESULTS.md version history has no row for {version[0]}.{version[1]}"
+                f" (shipped mod version is {shipped})"
+            )
+        ]
+    return []
+
+
 def _selftest() -> int:
     """Pin the extraction/normalization primitives the consistency checks use.
 
@@ -293,6 +323,36 @@ def _selftest() -> int:
         _changelog_fails("## [1.19.0] - 2028-02-29\n\nx\n", "1.19.0") == [],
     )
 
+    # The docs version-history gate, on a synthetic RESULTS.md. The real file
+    # is written in one table flavor (`1.18.0`, `1.16.0/1`, `1.14.0-3`), so a
+    # match on the major.minor prefix has to survive all three.
+    history = (
+        "## 0. Version history\n\n| Ver | Change |\n|---|---|\n"
+        "| 1.18.0/1 | x |\n| 1.16.0/1 | x |\n\n## 1. Shipped\n"
+    )
+    t.check(
+        "_results_history_fails accepts a listed release",
+        _results_history_fails(history, "1.18.0") == [],
+    )
+    t.check(
+        "_results_history_fails accepts a collapsed row",
+        _results_history_fails(history, "1.16.2") == [],
+    )
+    t.check(
+        "_results_history_fails catches a table that stops short",
+        any("no row" in f for f in _results_history_fails(history, "1.19.0")),
+    )
+    t.check(
+        "_results_history_fails catches a missing section",
+        _results_history_fails("## 1. Shipped\n", "1.19.0") != [],
+    )
+    # The version string must come from the table, not the rest of the file.
+    outside = "## 0. Version history\n\n| Ver | Change |\n\n## 1. Shipped\n1.19.0\n"
+    t.check(
+        "_results_history_fails ignores text outside the table",
+        _results_history_fails(outside, "1.19.0") != [],
+    )
+
     return checks.finish()
 
 
@@ -347,6 +407,10 @@ def main() -> int:
         fails.append(f"CHANGELOG.md missing or has no entry for shipped mod version {mi}")
     if mi and changelog_src is not None:
         fails.extend(_changelog_fails(changelog_src, mi))
+
+    results = ROOT / "docs" / "RESULTS.md"
+    if mi and results.exists():
+        fails.extend(_results_history_fails(results.read_text(encoding="utf-8"), mi))
 
     if fails:
         print("FAIL:", file=sys.stderr)

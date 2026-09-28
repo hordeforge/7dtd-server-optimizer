@@ -51,3 +51,13 @@ jobs:
             exit 1
           fi
           echo "ok: tag $TAG matches $MANIFEST ($SHIPPED)"
+      - name: Check the release notes cover the tagged version
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The tag check above compares two files in the tree; the notes are a
+          # third. check_version.py is the same gate `make test` runs, and it
+          # fails when the newest CHANGELOG section is not the version the mod
+          # ships, so a tag cannot go out with no notes, an undated section, or
+          # one that documents a different release.
+          python3 scripts/check_version.py

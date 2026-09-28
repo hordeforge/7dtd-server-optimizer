@@ -124,15 +124,18 @@ Rebuild after **every** Steam update. Re-check Harmony targets against `Assembly
 
 The GitHub release tag numbers the repo release (first cut: `v0.1.0`). The
 mod's own version (`ModInfo.xml`, pinned by `check_version.py` in `make test`)
-tracks the target game baseline and is independent of the release tag. The
-mapping and per-release changes are recorded in
+is what the server log reports, and a `vX.Y.Z` tag must equal it
+(`.github/workflows/release.yml` fails the tag otherwise; the pre-1.18 tags are
+the exceptions). The mapping and per-release changes are recorded in
 [`CHANGELOG.md`](../CHANGELOG.md). Releasing is one commit that does all of:
 rename `## [Unreleased]` to `## [<new mod version>] - <today>`, open a fresh
-`## [Unreleased]` above it, and bump `ModInfo.xml` plus `AssemblyInfo.cs` to
-the same version. `check_version.py` (in `make test`) fails when the newest
-release section is not the version the mod reports, when sections are not
-newest-first, and when a section is undated or repeated, so notes and manifest
-cannot be tagged out of sync.
+`## [Unreleased]` above it, bump `ModInfo.xml` plus `AssemblyInfo.cs` to the
+same version, and add that version's row to the `docs/RESULTS.md` version
+history. `check_version.py` (in `make test`) fails when the newest release
+section is not the version the mod reports, when sections are not newest-first,
+when a section is undated or repeated, and when the `docs/RESULTS.md`
+version-history table has no row for the shipped version, so notes, history and
+manifest cannot be tagged out of sync.
 
 Write entries for the operator, not the maintainer: what changed for a running
 server, and, under `### Breaking`, what a configured key or console command now
@@ -141,11 +144,28 @@ migration step, not only under `### Removed`: config load fails soft, so a
 deleted key still parses and the lever is simply gone with no error to notice
 it by.
 
+`## [Unreleased]` is staging: an operator runs nothing described there yet, so a
+config-facing change is announced only once its notes sit under a dated
+section carrying the version the server log then reports (`versions: mod=...`).
+
 ```bash
 make test        # CI gate; also runs on every PR / main push via .github/workflows/ci.yml
 make package     # builds dist/EfficientServer and zips it (needs a game install)
 gh release create v0.1.0 dist/EfficientServer-0.1.0.zip --title "EfficientServer 0.1.0" --notes "..."
 ```
+
+Attach the zip's `sha256sum` to the release body. The zip is reproducible
+(`make verify-reproducible`), so a consumer can rebuild it and compare; without
+a published digest there is nothing to compare against.
+
+A published version is immutable: never re-upload a zip over an existing tag
+or move that tag. Ship the fix forward instead, as a new mod version with its
+own dated changelog section, and say in the new section which release it
+replaces. Rolling back on a server means installing the older zip (or the
+older mod version) and restoring the config the failed install preserved. A
+mod version older than the installed config still starts: an unrecognized key
+is reported once at load (`config unknown key '...' ignored ...`) and the rest
+of the file still applies.
 
 NuGet dependencies are hash-pinned by the committed
 `Source/EfficientServer.Tests/packages.lock.json`; `make test` restores in
@@ -176,8 +196,8 @@ Offline gates run by `make test` and CI. Live-server harnesses need a running de
 | `repo_root.py` | Shared repository-root lookup (marker walk, not `parent.parent`) used by the gates below; selftest pins the walk |
 | `cli_common.py` | Shared argument dispatch (`-h`/`--help`, `--selftest`, unknown-argument exit 2) for the gates below and every other script in this directory. Not an entry point |
 | `check_config_doc.py` | Regression gate (in `make test`): every `ServerPerfConfig` field must be documented in CONFIG.md; selftest pins its parsing/comparison logic |
-| `check_version.py` | Regression gate (in `make test`): ModInfo (source, plus dist when it has been packaged) == AssemblyVersion, no doc claims a future minor; selftest pins version extraction/normalization |
-| `es_cfg_guard.py` | Config swap/restore primitive: snapshot the installed `efficientserver.json` before a harness mutates it, and restore it on every exit path (a SIGKILLed run is finished or quarantined by the NEXT run); selftest pins the guard protocol |
+| `check_version.py` | Regression gate (in `make test`): ModInfo (source+dist) == AssemblyVersion, no doc claims a future minor, the CHANGELOG release list is dated/newest-first and matches the shipped mod version, and RESULTS.md's version-history table has a row for it; selftest pins version extraction/normalization |
+| `es_cfg_guard.py` | Config swap/restore primitive: snapshot the installed `efficientserver.json` before a harness mutates it, and restore it on every exit path (a SIGKILLed run's interrupted restore is finished, or its backup quarantined, by the NEXT run); selftest pins the guard protocol |
 | `coverage_badge.py` | Renders the Cobertura report from `make coverage` into a badge SVG (CI pastes it into the README); selftest pins the percentage and colour bands |
 | `selftest_support.py` | PASS/FAIL collector the selftests above share, so the result line and exit code are one spelling. Not an entry point |
 | `harness_common.py` | Shared plumbing for the three live harnesses below: loadgen import path, env-driven paths, readiness probe, report writer. Not an entry point |
