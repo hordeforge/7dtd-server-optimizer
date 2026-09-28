@@ -3,6 +3,12 @@ set -euo pipefail
 # Pin locale/timezone so compiler diagnostics and file ordering do not vary
 # with the build host's environment.
 export LC_ALL=C TZ=UTC
+# Keep the SDK from touching $HOME and from printing its first-run banner: a
+# first run writes sentinels under ~/.dotnet and emits a banner, so the output
+# a contributor sees depends on whether the SDK ran here before. Neither
+# touches the artifact, but the build must not depend on host state it did not
+# create, and the banner is noise a log-parsing reader has to skip.
+export DOTNET_NOLOGO=1 DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 usage() {

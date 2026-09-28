@@ -5,8 +5,9 @@
 # Three legs, each catches a different nondeterminism class:
 #   1. baseline package                          -> reference hash
 #   2. second package in the same tree           -> leftover-state / cache drift
-#   3. full recompile from a copied tree at another path -> build-path leakage
-#                                                           into IL
+#   3. full recompile and repackage from a copied tree at another path
+#                                        -> build-path leakage into IL, and
+#                                           into the archive that ships
 #
 # The epoch is held constant across legs (it is an input by design); everything
 # else that must not matter is varied where possible. Needs a game install,
@@ -24,8 +25,9 @@ usage() {
   cat <<'EOF'
 usage: scripts/verify_reproducible.sh [-h | --help]
 
-Packages twice in the same tree, then recompiles from a copy of the tree at
-another path and compares hashes (proves the reproducibility claim in README.md).
+Packages twice in the same tree, then rebuilds and repackages from a copy of the
+tree at another path and compares hashes, for the DLL and for the shipped zip
+(proves the reproducibility claim in README.md).
 Takes no arguments; needs a game install, like make package.
   -h, --help  show this help and exit
 
@@ -144,6 +146,29 @@ HD="$(sha256sum "$DLL_REF")"
   $HO
   $HD"
 echo "  DLL identical across paths"
+
+# The zip, not just the DLL. The DLL is the only path-dependent input to the
+# archive, so a mismatch above already localizes the failure, but the artifact
+# that actually ships is the zip, and package.sh has its own path handling
+# (the staging prefix, the entry list, the mtime epoch) that the DLL hash says
+# nothing about. Packaging the copy compares the deliverable end to end, so the
+# README claim is about the file an operator uploads.
+#
+# Both runs read the same SOURCE_DATE_EPOCH (exported above) and the same .git
+# history (copied), so the version name and the entry mtimes match; only the
+# tree's location differs. The archive does not record its own name, so the two
+# zips are comparable by hash despite living under different dist/ directories.
+"$STAGE/scripts/package.sh" >/dev/null || fail "out-of-tree package failed"
+shopt -s nullglob
+OUT_OF_TREE=("$STAGE"/dist/EfficientServer-*.zip)
+shopt -u nullglob
+[[ ${#OUT_OF_TREE[@]} -eq 1 ]] \
+  || fail "expected exactly one zip under $STAGE/dist, found ${#OUT_OF_TREE[@]}"
+HZ="$(sha256sum "${OUT_OF_TREE[0]}")"
+[[ "${HZ%% *}" == "${H1%% *}" ]] || fail "out-of-tree zip differs:
+  $HZ
+  $H1"
+echo "  zip identical across paths"
 
 # Repackage once more so dist holds a fresh zip alongside this check's verdict.
 "$ROOT/scripts/package.sh" >/dev/null

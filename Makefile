@@ -4,6 +4,18 @@ ROOT := $(CURDIR)
 # Python's tempfile and .NET's Path.GetTempPath all honor TMPDIR, so this one
 # export covers the shell, Python and C# sides. .scratch/ is gitignored.
 export TMPDIR := $(ROOT)/.scratch/tmp
+# Same locale/timezone and SDK hygiene scripts/build.sh pins, for the gates here:
+# the SDK localizes its own output, so a gate run on a de_DE host prints
+# different text than CI, and a first-run SDK writes sentinels under ~/.dotnet
+# and prints a banner only on a machine that has never run it. The harness
+# itself is culture-independent (its log line and JSON tests pin
+# InvariantCulture formatting), so this changes the wrapper's output, not what
+# is asserted.
+export LC_ALL := C
+export TZ := UTC
+export DOTNET_NOLOGO := 1
+export DOTNET_CLI_TELEMETRY_OPTOUT := 1
+export DOTNET_SKIP_FIRST_TIME_EXPERIENCE := 1
 # Create it while the makefile is read, not in a recipe: make resolves the
 # exported TMPDIR before any target runs, so on a fresh clone it printed
 # "TMPDIR value ...: No such file or directory / using default temporary
