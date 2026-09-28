@@ -197,7 +197,7 @@ Offline gates run by `make test` and CI. Live-server harnesses need a running de
 | Script | Role |
 |---|---|
 | `repo_root.py` | Shared repository-root lookup (marker walk, not `parent.parent`) used by the gates below; selftest pins the walk |
-| `cli_common.py` | Shared argument dispatch (`-h`/`--help`, `--selftest`, unknown-argument exit 2) for the gates below and every other script in this directory. Not an entry point |
+| `cli_common.py` | Shared argument dispatch (`-h`/`--help`, `--selftest`, unknown-argument exit 2) for the gates below and every other script in this directory, plus `preflight_usage` for the three live harnesses, which answer `--help` before importing the loadgen sibling. Not an entry point |
 | `check_config_doc.py` | Regression gate (in `make test`): every `ServerPerfConfig` field must be documented in CONFIG.md; selftest pins its parsing/comparison logic |
 | `check_version.py` | Regression gate (in `make test`): ModInfo (source, plus dist when it has been packaged) == AssemblyVersion, no doc claims a future minor, the CHANGELOG release list is dated/newest-first and matches the shipped mod version, and RESULTS.md's version-history table has a row for it; selftest pins version extraction/normalization |
 | `es_cfg_guard.py` | Config swap/restore primitive: snapshot the installed `efficientserver.json` before a harness mutates it, and restore it on every exit path (a SIGKILLed run's interrupted restore is finished, or its backup quarantined, by the NEXT run); selftest pins the guard protocol, fixture by fixture and then over seeded-random hostile configs (operator-edited bytes, leftover backups, random step order) against the protocol invariants |

@@ -37,8 +37,41 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import TypedDict
 
-from cli_common import run_cli
+from cli_common import preflight_usage, run_cli
 from es_cfg_guard import CFG_ENCODING, ConfigSwap, write_atomic
+
+NAME = "scripts/measure_es_onoff.py"
+USAGE = """\
+usage: scripts/measure_es_onoff.py [-h | --help]
+
+Live whole-mod comparison, configured entirely through environment variables.
+Takes no options besides -h/--help. Exits 0 on a completed comparison; the
+report's verdict field records whether ES ON was faster, slower or within noise
+on gmUpdateAvg under the same load.
+
+Environment:
+  SEVENDTD_DS_DIR         dedicated install root (SEVENDTD_SERVER_DIR is also
+                          accepted; default: the stock Steam path)
+  BM_PLAYERS              bots to join (default 32)
+  BM_ZOMBIES              endgame zombies spawned (default 250)
+  BM_GAMESTAGE            game stage (default 250)
+  BM_HOLD_SAMPLE_S        seconds per sample window (default 35)
+  SKIP_SERVER_START       1 to measure a server that is already running
+  ES_ARM                  on|off for matched-arm mode: boot fresh with that
+                          arm's Enabled value, sample once, toggle nothing.
+                          Run once per arm for a fresh-server-per-arm pair
+  SEVENDTD_TELNET_PASSWORD  telnet password (default retest)
+  RE_DEDICATED_USERDATA   loadgen userdata dir holding the Unity server log
+                          (default ~/.cache/7dtd-loadgen)
+  VALIDATE_OUT            report output dir (default server/logs)\
+"""
+
+if __name__ == "__main__":
+    # Ahead of the harness_common import below, which puts the sibling
+    # 7dtd-loadgen tree on sys.path: reading this usage must not depend on
+    # that tree being cloned next to the repo.
+    preflight_usage(NAME, USAGE)
+
 from harness_common import (
     DS,
     ES_CFG,
@@ -49,14 +82,6 @@ from harness_common import (
     teardown_bots,
     write_report,
 )
-
-USAGE = """\
-usage: measure_es_onoff.py [-h | --help]
-
-Live whole-mod comparison, configured entirely through environment variables
-(BM_PLAYERS, BM_ZOMBIES, BM_GAMESTAGE, BM_HOLD_SAMPLE_S, SKIP_SERVER_START,
-ES_ARM; see the module docstring above). Takes no options besides -h/--help.\
-"""
 
 PLAYERS = int(os.environ.get("BM_PLAYERS", "32"))
 ZOMBIES = int(os.environ.get("BM_ZOMBIES", "250"))
@@ -428,4 +453,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    run_cli("measure_es_onoff.py", USAGE, main)
+    run_cli(NAME, USAGE, main)

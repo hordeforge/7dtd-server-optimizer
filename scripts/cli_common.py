@@ -18,7 +18,30 @@ import sys
 from collections.abc import Callable
 from typing import NoReturn
 
-__all__ = ["run_cli"]
+__all__ = ["preflight_usage", "run_cli"]
+
+
+def preflight_usage(name: str, usage: str, selftest: bool = False) -> None:
+    """Answer `-h`/`--help` and reject unknown arguments, then return.
+
+    For a script whose module-level imports can fail before its own dispatch
+    runs: the live-server harnesses import the 7dtd-loadgen sibling at import
+    time, so with that tree absent even `--help` died on a traceback. Call
+    this right after USAGE is defined and before those imports; the full
+    dispatch still goes through run_cli, which only ever sees an empty argv
+    here. Pass `selftest=True` for a module that ships one, so `--selftest`
+    survives this pass instead of reading as an unknown argument.
+    """
+    argv = sys.argv[1:]
+    if argv in (["-h"], ["--help"]):
+        print(usage)
+        raise SystemExit(0)
+    if selftest and argv == ["--selftest"]:
+        return
+    if argv:
+        print(f"{name}: unrecognized arguments: {' '.join(argv)}", file=sys.stderr)
+        print(usage, file=sys.stderr)
+        raise SystemExit(2)
 
 
 def run_cli(
@@ -33,14 +56,7 @@ def run_cli(
     invocation already runs its selftest passes it as `run` too, which is how
     both spellings land on the same work.
     """
-    argv = sys.argv[1:]
-    if argv in (["-h"], ["--help"]):
-        print(usage)
-        raise SystemExit(0)
-    if selftest is not None and argv == ["--selftest"]:
+    preflight_usage(name, usage, selftest=selftest is not None)
+    if selftest is not None and sys.argv[1:] == ["--selftest"]:
         raise SystemExit(selftest())
-    if argv:
-        print(f"{name}: unrecognized arguments: {' '.join(argv)}", file=sys.stderr)
-        print(usage, file=sys.stderr)
-        raise SystemExit(2)
     raise SystemExit(run())

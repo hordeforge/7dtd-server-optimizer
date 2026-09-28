@@ -118,6 +118,23 @@ version 1.17.0; every release after them takes its number from the tag.
   preserved. It keeps every file under `Mods/EfficientServer/Config/`, so with
   only the guard's `.swap-bak` present the old hint named an
   `efficientserver.json` that was never copied.
+- `scripts/uninstall.sh` took no arguments and never checked argv, so a
+  mistyped flag (`uninstall.sh --purge`) was silently ignored and the mod
+  folder was deleted anyway. It now takes the same `-h`/`--help` and
+  unknown-argument exit 2 the other scripts here do, both before any path
+  guard runs.
+- `scripts/coverage_badge.py` died on a traceback when the Cobertura report was
+  missing, malformed, or carried a non-numeric `line-rate`, or when the badge
+  could not be written. Each is a bad argument from CI's side: it now prints
+  one stderr line naming the path and exits 2, the same code the argument-count
+  error already used.
+- `--help` on `measure_es_onoff.py`, `validate_bloodmoon_path.py` and
+  `validate_anim_path_admission.py` died on an import traceback unless the
+  `7dtd-loadgen` sibling tree happened to be cloned next to the repo. Each now
+  answers `--help` and rejects unknown arguments before that import, and a run
+  without the sibling names the directory it looked in instead of raising.
+- `check_config_doc.py` reported an unreadable gate input as a Python
+  traceback; it now prints the FAIL line every other gate uses.
 
 ### Changed
 - The governor throttle-ceiling constants (`EntityStrideMax`, `GraphUpdateMax`)

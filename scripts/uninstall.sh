@@ -7,15 +7,6 @@
 # already preserves it across a reinstall; this does the same on removal and
 # prints the command that puts it back.
 #
-# Environment:
-#   SEVENDTD_DS_DIR / DS        Dedicated install root (default: ~/.local/share/
-#                               Steam/steamapps/common/7 Days to Die Dedicated Server)
-#   SEVENDTD_UNINSTALL_BACKUP_DIR
-#                               Where the preserved config lands (default:
-#                               <DS>/EfficientServer-uninstall-backup). Outside
-#                               Mods/ so the game's mod scan never sees it.
-#   SEVENDTD_UNINSTALL_PURGE    Set to 1 for a deliberate full wipe: skip the
-#                               copy and delete the config too.
 set -euo pipefail
 export LC_ALL=C TZ=UTC
 
@@ -23,18 +14,22 @@ usage() {
   cat <<'EOF'
 usage: scripts/uninstall.sh [-h | --help]
 
-Removes the installed EfficientServer mod from the dedicated install, copying
-the live Config/ out to a backup dir first. Takes no arguments: the install
-root is read from the environment.
+Copies <DS>/Mods/EfficientServer/Config to a timestamped backup, then removes
+the installed mod folder and prints the commands that restore it. Takes no
+arguments; everything is read from the environment.
   -h, --help  show this help and exit
 
 Environment:
-  SEVENDTD_DS_DIR / DS        Dedicated install root (default: ~/.local/share/
-                              Steam/steamapps/common/7 Days to Die Dedicated Server)
+  SEVENDTD_DS_DIR / DS   dedicated install root (SEVENDTD_DS_DIR wins, then DS,
+                         then the stock Steam path); the mod is removed from
+                         $SEVENDTD_DS_DIR/Mods/EfficientServer
   SEVENDTD_UNINSTALL_BACKUP_DIR
-                              Where the preserved config lands (default:
-                              <DS>/EfficientServer-uninstall-backup)
-  SEVENDTD_UNINSTALL_PURGE   Set to 1 to delete the config too, no copy kept
+                         where the preserved config lands (default:
+                         <DS>/EfficientServer-uninstall-backup). Outside Mods/
+                         so the game's mod scan never sees it
+  SEVENDTD_UNINSTALL_PURGE
+                         set to 1 for a deliberate full wipe: skip the copy
+                         and delete the config too
 EOF
 }
 

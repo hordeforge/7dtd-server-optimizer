@@ -19,7 +19,7 @@ from selftest_support import Checks
 MARKERS = ("Makefile", "Source/EfficientServer/EfficientServer.csproj")
 
 USAGE = """\
-usage: repo_root.py [--selftest] [-h | --help]
+usage: scripts/repo_root.py [--selftest] [-h | --help]
 
 Repository-root lookup used by the scripts in this directory.
   --selftest  run the marker-walk self-test (default with no arguments)
@@ -79,4 +79,4 @@ def _selftest() -> int:
 
 
 if __name__ == "__main__":
-    run_cli("repo_root.py", USAGE, _selftest, _selftest)
+    run_cli("scripts/repo_root.py", USAGE, _selftest, _selftest)

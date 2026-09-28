@@ -43,7 +43,7 @@ CHANGELOG = ROOT / "CHANGELOG.md"
 DOCS = ROOT / "docs"
 
 USAGE = """\
-usage: check_version.py [--selftest] [-h | --help]
+usage: scripts/check_version.py [--selftest] [-h | --help]
 
 Gate: ModInfo.xml, AssemblyInfo.cs and the dist ModInfo must carry consistent
 versions, docs must not claim a version newer than shipped, and CHANGELOG.md
@@ -450,4 +450,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    run_cli("check_version.py", USAGE, main, _selftest)
+    run_cli("scripts/check_version.py", USAGE, main, _selftest)

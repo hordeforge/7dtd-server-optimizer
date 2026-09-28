@@ -58,7 +58,7 @@ STALE_SUFFIX = ".stale"
 TEMP_INFIX = ".tmp"
 
 USAGE = """\
-usage: es_cfg_guard.py [--selftest] [-h | --help]
+usage: scripts/es_cfg_guard.py [--selftest] [-h | --help]
 
 Backup/restore guard library for the installed EfficientServer config
 (imported by the bench harnesses), plus a self-test of that protocol.
@@ -1100,4 +1100,4 @@ def _selftest() -> int:
 
 
 if __name__ == "__main__":
-    run_cli("es_cfg_guard.py", USAGE, _selftest, _selftest)
+    run_cli("scripts/es_cfg_guard.py", USAGE, _selftest, _selftest)

@@ -13,8 +13,13 @@ from pathlib import Path
 
 from selftest_support import Checks
 
+# Spelled the way every script in this directory is invoked (`python3
+# scripts/coverage_badge.py`), so the usage line and every error line name the
+# same command the caller typed.
+NAME = "scripts/coverage_badge.py"
+
 USAGE = """\
-usage: coverage_badge.py COBERTURA_XML OUTPUT.svg [--selftest] [-h | --help]
+usage: scripts/coverage_badge.py COBERTURA_XML OUTPUT.svg [--selftest] [-h | --help]
 
 Render the README coverage badge from a Cobertura report (the one `make
 coverage` writes); CI commits the resulting SVG. --selftest is wired into
@@ -79,7 +84,7 @@ def percent(line_rate: str) -> int:
 def main(argv: list[str]) -> int:
     if len(argv) != 3:
         print(
-            f"coverage_badge.py: expected COBERTURA_XML and OUTPUT.svg,"
+            f"{NAME}: expected COBERTURA_XML and OUTPUT.svg,"
             f" got {len(argv) - 1}: {' '.join(argv[1:])}",
             file=sys.stderr,
         )
@@ -110,7 +115,11 @@ def main(argv: list[str]) -> int:
         return 1
     # Pinned codec like every other text write in scripts/: the badge lands
     # on GitHub via CI, and a non-UTF-8 preferred locale must not change bytes.
-    Path(argv[2]).write_text(badge(pct, colour(pct)), encoding="utf-8")
+    try:
+        Path(argv[2]).write_text(badge(pct, colour(pct)), encoding="utf-8")
+    except OSError as ex:
+        print(f"{NAME}: cannot write OUTPUT.svg {argv[2]}: {ex}", file=sys.stderr)
+        return 2
     return 0
 
 
@@ -128,10 +137,6 @@ def _selftest() -> int:
     checks = Checks("coverage_badge")
 
     t = checks
-
-    if sys.argv[1:] != ["--selftest"]:
-        print(f"usage: {Path(sys.argv[0]).name} --selftest", file=sys.stderr)
-        return 2
 
     # Exact endpoints on BOTH sides of every threshold: a bound that quietly
     # tightens or loosens by one must fail here, not on the README badge.
@@ -199,6 +204,12 @@ def _selftest() -> int:
         t.check(
             "missing line-rate renders 0% red",
             'coverage: 0%' in text_bare and '#e05d44' in text_bare,
+        )
+        # An unwritable OUTPUT.svg is the caller's bad argument (exit 2), one
+        # line on stderr, no traceback.
+        t.check(
+            "main exits 2 when the badge cannot be written",
+            main([sys.argv[0], str(report), str(Path(td) / "no-such-dir/b.svg")]) == 2,
         )
 
         # A MISSING or MALFORMED report is an operator error, not a crash: exit

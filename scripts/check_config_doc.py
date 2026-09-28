@@ -42,7 +42,7 @@ CLASS_BLOCK = re.compile(
 PROP_DECL = re.compile(r"public (\w+) (\w+) \{ get; set; \}(?: = ([^;]+);)?")
 
 USAGE = """\
-usage: check_config_doc.py [--selftest] [-h | --help]
+usage: scripts/check_config_doc.py [--selftest] [-h | --help]
 
 Gate: every ServerPerfConfig field must be documented in docs/CONFIG.md, every
 key in config/efficientserver.json must exist in Config.cs, and every shipped
@@ -307,8 +307,14 @@ def _selftest() -> int:
 
 
 def main() -> int:
-    src = CONFIG_CS.read_text(encoding="utf-8")
-    doc = CONFIG_MD.read_text(encoding="utf-8")
+    # A gate must report a missing input as a FAIL line, not die on a traceback
+    # hiding which of its checks could not run. Same rule as check_version.py.
+    try:
+        src = CONFIG_CS.read_text(encoding="utf-8")
+        doc = CONFIG_MD.read_text(encoding="utf-8")
+    except OSError as ex:
+        print(f"FAIL: unreadable gate input ({ex})", file=sys.stderr)
+        return 1
     schema = parse_cs_schema(src)
 
     # PROP_DECL anchors on `{ get; set; }`, so methods can never leak in here.
@@ -360,4 +366,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    run_cli("check_config_doc.py", USAGE, main, _selftest)
+    run_cli("scripts/check_config_doc.py", USAGE, main, _selftest)

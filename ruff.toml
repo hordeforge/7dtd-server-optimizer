@@ -110,4 +110,10 @@ ignore = [
 # es_cfg_guard in the same block. Those imports cannot be hoisted above the
 # statement that makes the sibling module resolvable.
 "scripts/harness_common.py" = ["E402"]
+# The three live-server harnesses print their usage (and reject unknown
+# arguments) before that import, so `--help` works on a checkout with no
+# 7dtd-loadgen sibling. The import cannot move above the dispatch.
+"scripts/measure_es_onoff.py" = ["E402"]
+"scripts/validate_anim_path_admission.py" = ["E402"]
+"scripts/validate_bloodmoon_path.py" = ["E402"]
 

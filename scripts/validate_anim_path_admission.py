@@ -36,8 +36,36 @@ import re
 import time
 from typing import TypedDict
 
-from cli_common import run_cli
+from cli_common import preflight_usage, run_cli
 from es_cfg_guard import write_atomic
+
+NAME = "scripts/validate_anim_path_admission.py"
+USAGE = """\
+usage: scripts/validate_anim_path_admission.py [-h | --help]
+
+Live animator + path-admission A/B, configured entirely through environment
+variables. Takes no options besides -h/--help.
+
+Environment:
+  SEVENDTD_DS_DIR         dedicated install root (SEVENDTD_SERVER_DIR is also
+                          accepted; default: the stock Steam path)
+  BM_PLAYERS              bots to join (default 16)
+  BM_ZOMBIES              zombies spawned (default 200)
+  BM_GAMESTAGE            game stage (default 250)
+  BM_HOLD_SAMPLE_S        seconds per sample window (default 12)
+  PATH_CAP                MaxPathEnqueuesPerTick under test (default 64)
+  PATH_DROP_FAR_SQ        path-drop distance squared (default 2500)
+  SKIP_SERVER_START       1 to drive a server that is already running
+  VALIDATE_KILL_SERVER    1 to kill the server this script started on exit
+  SEVENDTD_TELNET_PASSWORD  telnet password (default retest)\
+"""
+
+if __name__ == "__main__":
+    # Ahead of the harness_common import below, which puts the sibling
+    # 7dtd-loadgen tree on sys.path: reading this usage must not depend on
+    # that tree being cloned next to the repo.
+    preflight_usage(NAME, USAGE)
+
 from harness_common import (
     CFG_SWAP,
     DEDICATED_CMDLINE_MARKER,
@@ -51,16 +79,6 @@ from harness_common import (
     write_path_config,
     write_report,
 )
-
-USAGE = """\
-usage: validate_anim_path_admission.py [-h | --help]
-
-Live animator + path-admission A/B, configured entirely through environment
-variables (BM_PLAYERS, BM_ZOMBIES, BM_GAMESTAGE, BM_HOLD_SAMPLE_S, PATH_CAP,
-PATH_DROP_FAR_SQ, SKIP_SERVER_START, VALIDATE_KILL_SERVER,
-SEVENDTD_TELNET_PASSWORD; see the module docstring above). Takes no options
-besides -h/--help.\
-"""
 
 PLAYERS = int(os.environ.get("BM_PLAYERS", "16"))
 ZOMBIES = int(os.environ.get("BM_ZOMBIES", "200"))
@@ -426,4 +444,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    run_cli("validate_anim_path_admission.py", USAGE, main)
+    run_cli(NAME, USAGE, main)
