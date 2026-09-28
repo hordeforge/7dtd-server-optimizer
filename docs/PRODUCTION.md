@@ -133,16 +133,49 @@ state that is NOT regenerable is what an operator edits on the server host:
   holds the installed `Config/efficientserver.json` in a temp file across the
   `rm -rf` and restores it on success (kept, with its path printed, if the
   install fails); `uninstall.sh` copies the whole `Config/` directory to a
-  timestamped backup and prints the restore command. Against host loss, disk
-  loss, or a deleted instance the RPO is unbounded: nothing in this repo copies
-  that file off the host. Copy it into version control (or anywhere off-host)
-  yourself if the tuning is worth more than a re-derivation from
-  `docs/CONFIG.md` plus the measured defaults.
+  timestamped backup and prints the restore command.
+- **RPO against host loss, disk loss, or a deleted instance: whatever your
+  snapshot cadence is, plus one interval, and only if you take one.** Those
+  copies live inside the install tree, so the disaster that takes the server
+  takes them too. `scripts/backup_config.py` moves the live config off the host
+  and proves the copy loads; run it on a schedule (section 7.1). With no
+  snapshot the RPO is unbounded: the tuning is worth a re-derivation from
+  `docs/CONFIG.md` plus the measured defaults, or the copy, and one of the two
+  is a decision only you can make.
 - **RTO for a config restore: under a minute** (one `cp` plus `es reload`; no
   restart). **RTO for a full mod reinstall: one `make install`.** Neither path
   needs a rebuild once `dist/` is present.
 - **World data RPO/RTO is the host operator's**, not this mod's. Nothing here
   touches it.
+
+### 7.1 Snapshot the live config off-host
+
+```bash
+make backup-config ES_CONFIG_BACKUP_DEST=/mnt/backup/es-config
+# or: python3 scripts/backup_config.py --dest /mnt/backup/es-config
+```
+
+Each run writes a UTC-stamped copy of `Config/efficientserver.json` plus a
+manifest recording its sha256, keeps the newest `--keep` (default 14), and
+re-reads the copy back before reporting success: a snapshot that would not load
+is a failed run, not a backup. The destination must be off this install tree
+(the tool refuses it), so a lost disk cannot take the copy with the config.
+
+Verify on a schedule; this is the sample-restore drill, and it exits 1 on a
+truncated, corrupted, key-drifted, or missing snapshot:
+
+```bash
+python3 scripts/backup_config.py --dest /mnt/backup/es-config --verify
+```
+
+Restore one without touching the live config, then put it in place yourself:
+
+```bash
+python3 scripts/backup_config.py --dest /mnt/backup/es-config \
+    --restore 20260928_101500 --to /tmp/recovered.json
+cp -a /tmp/recovered.json "$DS/Mods/EfficientServer/Config/efficientserver.json"
+es reload
+```
 
 ### Restore the live config
 
@@ -155,8 +188,10 @@ es reload
 ```
 
 `SEVENDTD_UNINSTALL_BACKUP_DIR` moves the copies elsewhere (another disk, a
-synced directory); `SEVENDTD_UNINSTALL_PURGE=1` skips the copy and deletes the
-config with the mod, which is a deliberate act with no recovery path.
+synced directory); the default sits inside the install tree, which uninstall.sh
+now says out loud when it happens. `SEVENDTD_UNINSTALL_PURGE=1` skips the copy
+and deletes the config with the mod, which is a deliberate act with no recovery
+path.
 
 Mid-bench-run crash (`efficientserver.json.swap-bak` present, live config holds
 the harness's toggled values): the next harness run finishes the interrupted
@@ -167,7 +202,10 @@ before deciding.
 
 ### Backups that do not exist here
 
-There is no scheduled backup of the install tree, no off-host copy, and no
-restore drill for the mod install itself. The only automated recovery is the
-one just described. Do not treat a green `make install` as proof the config
-survives: nothing in this repo verifies the copy, it only makes it.
+There is no scheduled backup of the install tree, no off-host copy of the DLL,
+and no restore drill for the mod install itself. The config is the only
+non-regenerable state, and `backup_config.py` covers it as far as a script
+can: it cannot run on a schedule, so scheduling it is yours, and a snapshot
+nobody verifies is still a hypothesis. Do not treat a green `make install` as
+proof the config survives: nothing in this repo verifies that copy, it only
+makes it.

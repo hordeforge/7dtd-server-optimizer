@@ -72,6 +72,18 @@ else
     n=$((n + 1))
   done
   mkdir -p "$TARGET"
+  # The preserved copy is the only recovery path for the live tuning, and a copy
+  # kept inside the install tree is lost by exactly the disaster it protects
+  # against (lost disk, lost instance, a rebuild of that server). Say so at the
+  # moment the copy is taken, while the operator is still reading the output;
+  # scripts/backup_config.py is the tool that moves it off the host.
+  case "$(readlink -f "$BACKUP_DIR")/" in
+    "$(readlink -f "$SRV")"/*)
+      echo "WARNING: backup dir is inside the install tree $SRV; a lost disk takes" >&2
+      echo "WARNING: this copy with the config. Copy it off-host, or set" >&2
+      echo "WARNING: SEVENDTD_UNINSTALL_BACKUP_DIR to another disk or a synced dir." >&2
+      ;;
+  esac
   shopt -s nullglob
   for f in "$DEST"/Config/*; do
     cp -a "$f" "$TARGET/"

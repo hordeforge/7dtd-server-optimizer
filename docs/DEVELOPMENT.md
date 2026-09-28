@@ -99,7 +99,8 @@ All optional; scripts fall back to defaults. The Makefile routes its documented
 | Variable | Read by | Default | Meaning |
 |---|---|---|---|
 | `SEVENDTD_DS_DIR` / make `DS=` | build.sh, install.sh, uninstall.sh, run_server.sh, make `uninstall`, harness scripts (`measure_es_onoff.py`, `validate_*`) | `~/.local/share/Steam/steamapps/common/7 Days to Die Dedicated Server` | Dedicated install: game DLL refs, mod install target, launch dir. Harnesses also accept `SEVENDTD_SERVER_DIR` (the 7dtd-loadgen sibling's spelling) |
-| `SEVENDTD_UNINSTALL_BACKUP_DIR` | uninstall.sh | `<DS>/EfficientServer-uninstall-backup` | Where `make uninstall` copies the live `Config/` before deleting the mod. Outside `Mods/` so the game's mod scan never sees it; point it at another disk for host-loss cover |
+| `SEVENDTD_UNINSTALL_BACKUP_DIR` | uninstall.sh | `<DS>/EfficientServer-uninstall-backup` | Where `make uninstall` copies the live `Config/` before deleting the mod. Outside `Mods/` so the game's mod scan never sees it; point it at another disk for host-loss cover (the default sits on the same disk, which uninstall.sh warns about) |
+| `ES_CONFIG_BACKUP_DEST` | make `backup-config`, `backup_config.py --dest` | none (required) | Off-host snapshot destination for the live `Config/`; `backup_config.py` rejects any path inside the server install tree |
 | `SEVENDTD_UNINSTALL_PURGE` | uninstall.sh | unset (config is preserved) | `1` deletes the installed config with the mod, no copy kept |
 | `SEVENDTD_GAME_DIR` | build.sh | client install path | Client fallback for game DLL refs |
 | `SEVENDTD_BUILD_BACKEND` | build.sh (`make build-mcs`) | auto (dotnet if SDK present) | `mcs` forces the Mono fallback compiler; `dotnet` forces the SDK path and fails hard without one |
@@ -198,6 +199,7 @@ Offline gates run by `make test` and CI. Live-server harnesses need a running de
 | `check_config_doc.py` | Regression gate (in `make test`): every `ServerPerfConfig` field must be documented in CONFIG.md; selftest pins its parsing/comparison logic |
 | `check_version.py` | Regression gate (in `make test`): ModInfo (source+dist) == AssemblyVersion, no doc claims a future minor, the CHANGELOG release list is dated/newest-first and matches the shipped mod version, and RESULTS.md's version-history table has a row for it; selftest pins version extraction/normalization |
 | `es_cfg_guard.py` | Config swap/restore primitive: snapshot the installed `efficientserver.json` before a harness mutates it, and restore it on every exit path (a SIGKILLed run's interrupted restore is finished, or its backup quarantined, by the NEXT run); selftest pins the guard protocol |
+| `backup_config.py` | Operator backup of the live `Config/` (production host, not `make test`): stamped off-host snapshot, `--verify` sample-restore drill, `--restore`; refuses a destination inside the install tree; selftest pins the snapshot/verify/restore protocol |
 | `coverage_badge.py` | Renders the Cobertura report from `make coverage` into a badge SVG (CI pastes it into the README); selftest pins the percentage and colour bands |
 | `selftest_support.py` | PASS/FAIL collector the selftests above share, so the result line and exit code are one spelling. Not an entry point |
 | `harness_common.py` | Shared plumbing for the three live harnesses below: loadgen import path, env-driven paths, readiness probe, report writer. Not an entry point |

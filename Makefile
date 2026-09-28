@@ -47,7 +47,8 @@ RUFF_VERSION := 0.16.4
 MYPY_VERSION := 2.1.0
 
 .PHONY: help build build-mcs test lint unit check-scripts preflight-lint preflight-unit \
-	preflight-scripts scratch coverage install uninstall run clean package verify-reproducible
+	preflight-scripts scratch coverage install uninstall run clean package verify-reproducible \
+	backup-config
 # Every gate that can reach Python's tempfile, .NET's Path.GetTempPath or
 # mktemp depends on this. A nonexistent TMPDIR is silently ignored by each of
 # them, and Python's tempfile.gettempdir() then falls back to the stock /tmp,
@@ -81,6 +82,9 @@ help:
 	@echo "  make install           Build and copy into \$$DS/Mods/EfficientServer"
 	@echo "  make uninstall         Remove \$$DS/Mods/EfficientServer, keeping the"
 	@echo "                         live config under \$$DS/EfficientServer-uninstall-backup"
+	@echo "  make backup-config ES_CONFIG_BACKUP_DEST=/mnt/backup/es-config"
+	@echo "                         Copy the live config off the install tree and"
+	@echo "                         verify the copy (--verify re-checks it later)"
 	@echo "  make run               Launch the dedicated server with tuned env"
 	@echo "  make package           Build and zip dist/EfficientServer-<version>.zip"
 	@echo "  make verify-reproducible   Package twice, compare hashes (repro proof)"
@@ -170,6 +174,7 @@ check-scripts: preflight-scripts scratch
 	python3 $(ROOT)/scripts/check_version.py --selftest
 	python3 $(ROOT)/scripts/es_cfg_guard.py --selftest
 	python3 $(ROOT)/scripts/coverage_badge.py --selftest
+	python3 $(ROOT)/scripts/backup_config.py --selftest
 
 test:
 # Order matters and is the CI order: shell lints, then the .NET harness, then
@@ -199,6 +204,17 @@ install:
 # place. SEVENDTD_UNINSTALL_PURGE=1 opts into deleting the config as well.
 uninstall:
 	$(ROOT)/scripts/uninstall.sh
+# Off-host snapshot of the live config, the one piece of state on the host that
+# nothing regenerates. The destination must be OFF the install tree: a copy on
+# the same disk is lost by the same disaster as the config it protects, and
+# backup_config.py refuses it. Verify on a schedule with
+#   scripts/backup_config.py --dest "$(ES_CONFIG_BACKUP_DEST)" --verify
+backup-config:
+	@test -n "$(ES_CONFIG_BACKUP_DEST)" || { \
+	  echo "ERROR: set ES_CONFIG_BACKUP_DEST to a directory OFF the server install" >&2; \
+	  echo "  e.g. ES_CONFIG_BACKUP_DEST=/mnt/backup/es-config DS=/srv/7dtd make backup-config" >&2; \
+	  exit 2; }
+	$(ROOT)/scripts/backup_config.py --dest "$(ES_CONFIG_BACKUP_DEST)"
 run:
 	$(ROOT)/scripts/run_server.sh
 clean:
