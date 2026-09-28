@@ -664,6 +664,113 @@ namespace EfficientServer.Tests
             ConfigPublication.Current = new ServerPerfConfig();
         }
 
+        // The dedicated-host gate: the one answer every patch prefix reads, on
+        // the main thread AND on the LiteNetLib receive thread (the client-list
+        // snapshot's duplicate-IP scan calls the shared gate on every connection
+        // request). The invariant is first-writer-wins, and it matters most when
+        // two threads disagree, which is the boot window before the game has
+        // published the host type: the loser of the race used to overwrite the
+        // winner's answer for the life of the process, deactivating the whole mod
+        // with nothing in the log.
+        static void CheckDedicatedHostGate()
+        {
+            // Unresolved until a probe publishes an answer, and unresolved is a
+            // legal steady state, not a cached "no".
+            var gate = new DedicatedHostGate();
+            Check(gate.State == DedicatedHostGate.Unresolved && !gate.IsDedicated,
+                "host gate: unresolved until a probe publishes an answer");
+
+            // A throwing probe is the early-boot case. It must not publish
+            // anything (the caller fails closed and retries) and must not poison
+            // the gate for later callers.
+            bool threw = false;
+            try { gate.Resolve(() => throw new InvalidOperationException("game not up")); }
+            catch (InvalidOperationException) { threw = true; }
+            Check(threw && gate.State == DedicatedHostGate.Unresolved,
+                "host gate: a probe that throws leaves the answer unresolved");
+
+            int probes = 0;
+            Check(gate.Resolve(() => { probes++; return true; })
+                && gate.State == DedicatedHostGate.Dedicated && gate.IsDedicated,
+                "host gate: the first successful probe publishes a dedicated server");
+            Check(gate.Resolve(() => { probes++; return false; }) == false && probes == 1,
+                "host gate: a later probe neither runs nor overwrites the published answer");
+            Check(gate.State == DedicatedHostGate.Dedicated,
+                "host gate: an opposite later answer cannot flip a resolved gate");
+
+            var notDedicated = new DedicatedHostGate();
+            Check(notDedicated.Resolve(() => false)
+                && notDedicated.State == DedicatedHostGate.NotDedicated
+                && !notDedicated.IsDedicated,
+                "host gate: a client host resolves to its own state, not to dedicated");
+
+            // The race itself. Every thread's probe claims a DIFFERENT answer, so
+            // the run passes only if exactly one of them gets to publish and every
+            // other thread ends up reading that same answer. A last-writer-wins
+            // gate passes the "exactly one publisher" count only by luck of
+            // scheduling, so the sampling loop below is the load-bearing part:
+            // once the winner published, no later probe (these threads keep
+            // re-resolving in a second wave) may change what a reader sees.
+            const int Racers = 8;
+            const int Waves = 200;
+            var raced = new DedicatedHostGate();
+            int[] claims = new int[Racers];
+            var publishers = new int[Racers];
+            Exception? raceError = null;
+            var observed = new int[Racers];
+            observed.AsSpan().Fill(DedicatedHostGate.Unresolved);
+            var start = new ManualResetEventSlim(false);
+            var racerThreads = new Thread[Racers];
+            for (int r = 0; r < Racers; r++)
+            {
+                int id = r;
+                racerThreads[r] = new Thread(() =>
+                {
+                    try
+                    {
+                        // Parked before the first probe: without the barrier the
+                        // first thread to be scheduled can publish every wave
+                        // before the others start, and the run would assert
+                        // nothing about a race at all.
+                        start.Wait();
+                        for (int wave = 0; wave < Waves; wave++)
+                        {
+                            // Even racers claim dedicated, odd ones claim a
+                            // client host, so both published values are
+                            // represented.
+                            bool claim = (id & 1) == 0;
+                            claims[id] = claim ? DedicatedHostGate.Dedicated
+                                : DedicatedHostGate.NotDedicated;
+                            if (raced.Resolve(() => claim)) publishers[id]++;
+                        }
+                        observed[id] = raced.State;
+                    }
+                    catch (Exception ex) { raceError = ex; }
+                });
+                racerThreads[r].Start();
+            }
+            start.Set();
+            for (int r = 0; r < Racers; r++) racerThreads[r].Join();
+            Check(raceError == null, "host gate: concurrent resolvers do not throw ("
+                + (raceError?.GetType().Name ?? "none") + ")");
+
+            int published = 0;
+            for (int r = 0; r < Racers; r++) published += publishers[r];
+            Check(published == 1,
+                $"host gate: exactly one of {Racers} racing resolvers publishes (got {published})");
+            Check(Enumerable.Range(0, Racers).All(r => observed[r] == raced.State),
+                "host gate: every racing thread ends up on the one published answer");
+
+            int winner = -1;
+            for (int r = 0; r < Racers; r++)
+                if (publishers[r] == 1) { winner = r; break; }
+            Check(winner >= 0 && raced.State == claims[winner],
+                "host gate: the published answer is the publisher's own claim, not a mixture");
+            Check(raced.State == DedicatedHostGate.Dedicated
+                || raced.State == DedicatedHostGate.NotDedicated,
+                "host gate: a resolved gate never reads back as unresolved");
+        }
+
         // Governor tier machine (the pure half of GovernorPatch): hysteresis,
         // windows, cooldown, lever math, and the reload stand-down. Driven with
         // explicit tick intervals, so no host scheduler jitter decides a tier.
@@ -1691,6 +1798,7 @@ namespace EfficientServer.Tests
             CheckDefaultPathDiscovery();
             CheckUnreadableFileFailSoft();
             CheckCrossThreadConfigPublication();
+            CheckDedicatedHostGate();
             CheckDegradeRegistry();
             CheckLogLineFormat();
 

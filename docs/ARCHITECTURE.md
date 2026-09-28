@@ -33,9 +33,9 @@ That is years of work for a team. Client lag on a dedicated host is almost alway
 
 ## Concurrency model (audit-pinned V3.1.0)
 
-Every EfficientServer patch surface runs on the Unity main thread; the mod takes
-no locks anywhere. The confinement rules below are the invariant new patches
-must preserve:
+Every EfficientServer patch surface runs on the Unity main thread except the
+one receive-thread surface named below. The confinement rules are the
+invariant new patches must preserve:
 
 - **Main-thread confined:** `GameManager.UpdateTick` postfixes (Governor,
   TickGuard, TargetFps) and the `TickClock` prefix on the same method, the
@@ -66,6 +66,20 @@ must preserve:
   it: the throttled lever values are computed per read from the configured ones
   plus the current tier, so `OnConfigReloaded()` only has to settle the TIER
   (release a standing emergency the new config no longer authorizes).
+- **The host-type answer is resolved once, from any thread:** `ShouldRun` gates
+  every patch prefix on "is this a dedicated server", so the answer is resolved
+  on first use and cached for the process in `DedicatedHostGate`. It is a single
+  volatile int (unresolved / not dedicated / dedicated), so no reader sees a
+  torn pair, and a lock around the publish makes the resolution
+  first-writer-wins. That last part is the requirement, not a nicety: the
+  LiteNetLib receive thread reaches the same gate, and the window where the
+  answer is still unresolved is the boot window, where a thread that read the
+  engine flag before the game published it could otherwise publish "client
+  host" over the main thread's "dedicated" and silently deactivate the whole
+  mod. The probe (a read of `GameManager.IsDedicatedServer`) runs outside the
+  lock and a probe that throws leaves the answer unresolved, so the gate fails
+  closed and retries instead of caching a wrong answer. The lock is reachable
+  only while the answer is unresolved, so no hot path ever enters it.
 - **Rule for new patches:** static mutable fields are only safe if the patched
   method is proven main-thread (trace callers in the game IL first); anything
   reached from A* workers, DynamicMesh threads, LiteNet reader/writer threads,
@@ -382,6 +396,7 @@ See [`../../7dtd-engine-research/docs/loop/loop.md`](../../7dtd-engine-research/
 
 ## Changelog
 
+- **2026-09-28:** Host-type resolution documented and moved into `DedicatedHostGate`: one volatile int for the three states, published under a lock so the main thread and the receive thread cannot each resolve their own answer and leave the loser standing.
 - **2026-08-24:** Concurrency-rule example updated: the cadence levers now read slot ownership from the shared `TickClock` counter (advanced once per UpdateTick invocation), replacing the patch-local stride gate.
 - **2026-08-23:** Concurrency model section added (main-thread confinement audit: patch surfaces, console drain, the one background thread, reload re-basing rule).
 - **2026-08-23:** Stale in-repo `tools/` dump-helper references repointed to `../7dtd-engine-research/tools/`.

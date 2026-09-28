@@ -177,6 +177,19 @@ chosen up front:
   zips already there are parked before the first leg and restored on every exit
   path; one whose name the run rebuilds is kept aside at a printed path rather
   than deleted.
+- The dedicated-server host type could be resolved twice with different answers
+  and the loser could win. Every patch prefix gates on `ShouldRun`, and the
+  LiteNetLib receive thread reaches that gate (the client-list snapshot's
+  duplicate-IP scan runs there) as does the main thread, but the cached answer
+  was a resolved-flag/value pair any thread finding the flag clear would fill
+  in. In the boot window, where the flag is still clear, a thread that read
+  `GameManager.IsDedicatedServer` before the game published it could publish
+  "client host" over the main thread's "dedicated", and the mod would then stay
+  inactive for the life of the process with nothing in the log. The answer now
+  lives in `DedicatedHostGate`: one volatile int for the three states, published
+  under a lock so the first answer stands, with the host-type read taken outside
+  the lock and a read that throws still leaving the answer unresolved (fail
+  closed, retried on a later call). No shipped lever or default changed.
 - The config structure fuzz treated the static `ServerPerfConfig.LastLoadFailed`
   load outcome as a knob, so it mutated a leaf the serializer never writes and
   the suite failed on `leaf 'LastLoadFailed' present in serialized defaults`.

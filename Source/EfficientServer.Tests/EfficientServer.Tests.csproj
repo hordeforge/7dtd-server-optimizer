@@ -57,6 +57,11 @@
          removes. Distance alone is not a total order, so the id tie-break (and
          with it replay-stable batches) is pinned here. -->
     <Compile Include="../EfficientServer/Patches/ShedOrder.cs" />
+    <!-- Game-type-free host-type gate: the once-per-process dedicated-server
+         answer every patch prefix reads, on the main thread and on the
+         LiteNetLib receive thread. Game-type-free, so the resolve-once
+         publication and its concurrent resolvers are pinned here. -->
+    <Compile Include="../EfficientServer/Patches/DedicatedHostGate.cs" />
   </ItemGroup>
 
   <ItemGroup>

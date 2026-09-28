@@ -318,18 +318,61 @@ namespace EfficientServer
         // and the gate must stay fail-closed until a real answer exists. That is
         // also why the failure is announce-once through Degrade: a host whose
         // singleton read keeps throwing would otherwise re-raise per patch call
-        // (far more expensive than the report itself) with nothing logged.
+        // (far more expensive than the report itself) with nothing logged, and
+        // `es status` would show it only as modActive=false, which reads the same
+        // as a disabled config; the degraded count is how long the server has run
+        // unpatched.
         internal const string DedicatedGateDegradeKey = "dedicatedGate";
-        // volatile publication: ShouldRun is the one gate every patch prefix
-        // calls, including surfaces whose caller set could grow off-main (the
-        // ARCHITECTURE concurrency rule reserves plain statics for proven
-        // main-thread paths). Volatile keeps the resolved flag from publishing
-        // before the value it guards, so no thread can ever observe
-        // "_dedicatedResolved == true" with a stale _isDedicated.
-        static volatile bool _dedicatedResolved;
-        static volatile bool _isDedicated;
+        // The answer itself lives in DedicatedHostGate, which owns the
+        // cross-thread half: one volatile word for the three states, and a lock
+        // that makes the resolution first-writer-wins. Two plain volatile fields
+        // here (a resolved flag beside the value) let every thread that found the
+        // flag clear run the probe and store its own answer, so a main thread and
+        // the LiteNetLib receive thread (the client-list snapshot's duplicate-IP
+        // scan calls this gate on every connection request) could interleave and
+        // leave a stale "not dedicated" pinned for the life of the process, which
+        // deactivates every patch prefix with nothing in the log. The probe is
+        // cached in a static field so the slow path allocates nothing.
+        static readonly Patches.DedicatedHostGate HostType = new Patches.DedicatedHostGate();
+        static readonly Func<bool> ReadHostType = () => GameManager.IsDedicatedServer;
 
         public static bool ShouldRun() => ShouldRun(ConfigPublication.Current);
+
+        /// <summary>
+        /// The host type as every thread sees it, resolving it on first use.
+        /// Returns null while it is still unknown, which is not a cached answer:
+        /// a read that throws (the game has not published the host type this
+        /// early in boot) leaves the gate unresolved, fails closed, and is
+        /// retried by the next caller.
+        /// </summary>
+        static bool? DedicatedHost()
+        {
+            if (HostType.State == Patches.DedicatedHostGate.Unresolved)
+            {
+                try
+                {
+                    HostType.Resolve(ReadHostType);
+                }
+                catch (Exception ex)
+                {
+                    // Fail closed: unknown host must not activate server-only patches.
+                    // Reported rather than swallowed: this is the one gate every
+                    // patch prefix calls, so a persistent failure here leaves the
+                    // WHOLE mod inert, and `es status` would show it only as
+                    // modActive=false, which reads the same as a disabled config.
+                    // A read that keeps throwing is retried on the next call (the
+                    // gate is left unresolved, so nothing is cached from a failed
+                    // read), so the count on the degraded line is how long the
+                    // server has been silently unpatched.
+                    if (Degrade.Report(DedicatedGateDegradeKey, "dedicated-host read failed ["
+                            + ex.GetType().Name + "]: " + ex.Message
+                            + " - the host type is unknown, so EVERY lever is INACTIVE until restart"))
+                        EsLog.Emit(LogLevel.Warn, Degrade.FirstReport(DedicatedGateDegradeKey));
+                    return null;
+                }
+            }
+            return HostType.IsDedicated;
+        }
 
         /// <summary>
         /// The gate against a config generation the caller has ALREADY read.
@@ -348,32 +391,7 @@ namespace EfficientServer
             bool? isDedicated;
             if (cfg != null && cfg.Enabled && cfg.DedicatedOnly)
             {
-                if (!_dedicatedResolved)
-                {
-                    try
-                    {
-                        _isDedicated = GameManager.IsDedicatedServer;
-                        _dedicatedResolved = true;
-                    }
-                    catch (Exception ex)
-                    {
-                        // Fail closed: unknown host must not activate server-only patches.
-                        // Reported rather than swallowed: this is the one gate every
-                        // patch prefix calls, so a persistent failure here leaves the
-                        // WHOLE mod inert, and `es status` would show it only as
-                        // modActive=false, which reads the same as a disabled config.
-                        // A read that keeps throwing is retried on the next call (the
-                        // answer is not cached from a failed read), so the count on
-                        // the degraded line is how long the server has been silently
-                        // unpatched.
-                        if (Degrade.Report(DedicatedGateDegradeKey, "dedicated-host read failed ["
-                                + ex.GetType().Name + "]: " + ex.Message
-                                + " - the host type is unknown, so EVERY lever is INACTIVE until restart"))
-                            EsLog.Emit(LogLevel.Warn, Degrade.FirstReport(DedicatedGateDegradeKey));
-                        return false;
-                    }
-                }
-                isDedicated = _isDedicated;
+                isDedicated = DedicatedHost();
             }
             else
             {
