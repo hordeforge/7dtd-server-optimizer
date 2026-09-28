@@ -411,15 +411,22 @@ namespace EfficientServer.Tests
         // IO-failure branch of Load: a file that EXISTS but cannot be read must
         // take the same fail-soft path as a parse error (defaults + one WARNING
         // naming the failure), never escape as an exception out of dedicated
-        // start. Self-skipping: on hosts that do not enforce the mode bits
-        // (Windows) or accounts above them (root) the fixture stays readable,
-        // and the arrangement simply cannot be built there. A skip still prints,
-        // so a run that asserted nothing here does not read as a covered branch.
+        // start. Self-skipping: where the mode bits are not available (Windows,
+        // where GetUnixFileMode/SetUnixFileMode throw) or not enforced (root),
+        // the fixture stays readable and the arrangement cannot be built. A skip
+        // still prints, so a run that asserted nothing here does not read as a
+        // covered branch.
         static void CheckUnreadableFileFailSoft()
         {
-            if (!OperatingSystem.IsLinux() && !OperatingSystem.IsMacOS())
+            // Probe the capability, not the OS name: every POSIX host supports
+            // the mode API, so an IsLinux/IsMacOS allowlist silently dropped this
+            // branch on any other Unix (FreeBSD, the BSDs, Solaris). Windows is
+            // the one platform where the call itself throws, and whether the bits
+            // are then ENFORCED is decided by the readability probe below, which
+            // is what skips a root account.
+            if (OperatingSystem.IsWindows())
             {
-                Console.WriteLine("SKIP: unreadable-config-file branch (no POSIX mode bits on this OS)");
+                Console.WriteLine("SKIP: unreadable-config-file branch (no POSIX mode bits on Windows)");
                 return;
             }
             string p = WriteTemp("{\"Enabled\":false}");
