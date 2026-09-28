@@ -996,11 +996,17 @@ waves of ferals/radiated, `es animoff`/`es animon` cycles):
 
 Consequence: `Governor.AnimatorEmergency` stays **default-false** and `es
 animoff` is a bench-only probe with a known-degraded exit (restart the server
-to fully recover). Designed next lever (unbuilt): flip `cullingMode` to
+to fully recover). Designed next lever (built since, see §3t): flip
+`cullingMode` to
 `CullCompletely` instead of touching `enabled` - a headless server culls every
 renderer, so evaluation should stop for the same win while the root-motion
 binding survives; needs a perf re-validation (does it reproduce 147->85 ms?)
 plus one more human cycle. Tracked in TODO.
+
+Superseded: `CullCompletely` shipped in mod 1.17.0. §3t below records the live
+gate for it, and TODO.md 'Open: animator revival wedge' carries the 2026-08-03
+stress run and the 2026-08-09 harness re-runs; the human combat soak is still
+open, so `Governor.AnimatorEmergency` remains default-false.
 
 ## 3t. CullCompletely animator emergency + path admission live gate (2026-08-02)
 
@@ -1026,6 +1032,16 @@ Session report: `server/logs/validate_anim_path_20260802_141640.json`.
    some walkers remains - not a full green light for default-on `AnimatorEmergency`.
 3. Path admission knobs reload live and do not collapse the horde at this load.
 4. Stress A/B (64p + 200+z over budget) still needed for a frame-ms prize claim.
+
+**Follow-up (2026-08-03 and 2026-08-09), closing takeaway 4 and part of 2:** the
+stress arm ran at 24 bots + ~273 endgame with the frame already over budget:
+85 -> 76 ms, 209/271 movers with `dp>0` after restore (`TODO.md` 'Open: animator
+revival wedge'). Three harness re-runs at 8p/144z, 32p/250z and 64p/300-450z
+all reported overall PASS, with the first measured tick-bound animator frame win
+at 64p (117.61 -> 99.53 ms, -15.4%, reversible with root motion intact); path
+admission showed no win at any load. Human combat soak is the one item still
+open, so `Governor.AnimatorEmergency` stays default-false. Source of record:
+`docs/plans/animator-cull-and-path-admission.md` §D.
 
 ## Gameplay-correctness smoke (V3.1.0 b14, ES 1.17.0, 2026-08-09)
 

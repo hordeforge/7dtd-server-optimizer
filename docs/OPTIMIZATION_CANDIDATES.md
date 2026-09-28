@@ -54,7 +54,7 @@ IL counts are **method size**, not runtime rank. Runtime rank needs APM.
 | A1 | `EntityAlive.updateTasks` + `aiActiveScale` | Already ES; delay only throttles EAI, not nav | Keep LOD; optional stronger far skip | Fidelity combat/sleeper |
 | A2 | `EntityAlive.FindPath` → `PathFinderThread.FindPath` | **DONE (ES v1.17.0):** `PathAdmissionPatch` prefix (`Pathfinding.MaxPathEnqueuesPerTick` / `DropPathWhenFarDistSq`, priority admits bypass); live A/Bs found no reliable frame win, so both knobs ship default 0 = vanilla (RESULTS 'Blood-moon path-admission profile') | Always enqueues (Y-clamp if xz dist² &gt; 1225 ≈ 35 m); per-id dict coalesce; worker drains **≤8**/slice then yields; compute = `AstarPath.StartPath`; admission bounds enqueue spikes without touching the A* library | Path stuck / dumb AI |
 | A3 | `EntityMoveHelper.UpdateMoveHelper` | **1236 IL**; dig/jump/stuck/attack; every `updateTasks` | Far skip of whole updateTasks; research cheaper mid-tier move | Movement fidelity |
-| A4 | `World.EntityActivityUpdate` + `GetClosestPlayer` | O(players) linear scan; builds `aiClosest` | Cache closest player / TTL; spatial hash (Mid) | Stale LOD |
+| A4 | `World.EntityActivityUpdate` + `GetClosestPlayer` | O(players) linear scan; builds `aiClosest`. The update itself is already postfixed by `AiLodPatch` (§7); the unbuilt part is the closest-player cache | Cache closest player / TTL; spatial hash (Mid) | Stale LOD |
 | A5 | `World.AddFallingBlock` / `LetBlocksFall` / `GroupFallingBlocks` (292) | Queue + entity factory; mesh observer | Optional fall→air (ServerTools/IceCoffee) | Collapse gameplay |
 | A6 | `SpawnManagerBiomes.SpawnUpdate` (**441 IL**) | Every ~20 ticks × area-master chunks | Scope to player-near chunks only | Spawn density change |
 | A7 | Dedicated `GC.Collect` in `gmUpdate` | **DONE (ES 2026-07-18):** transpiler reroutes the single `GC.Collect()` (fired every ~120 s via `gcCountdownTimer`) through `GcGuardPatch.MaybeCollect` | Skip the forced full STW; heap-ceiling safety collect (`Gc.SafetyCollectAboveMB`) | Memory growth (bounded by the safety collect) |
@@ -520,13 +520,17 @@ Forensic ~500-player capture: `session_20260717_0301*`.
 
 `[built]` marks a target with a shipped patch class under
 `Source/EfficientServer/Patches/`; `[not built]` marks a target that still has
-no patch and stays a research item.
+no patch and stays a research item. The `[built]` rows are the shipped
+`ModApi.RequiredGroups` set (plus `DedicatedSkipPatch`, installed
+imperatively at `GameStartDone`); the authority is the `[HarmonyPatch]`
+attribute or `TargetMethod` in the patch source, so a new group has to be added
+here in the same change that adds it there.
 
 ```text
 EntityAlive.FindPath(Vector3, float, bool, EAIBase)  [built: PathAdmissionPatch, default-off]
 PathFinderThread.FindPath (virt; Instance is ASPPathFinderThread)  [not built]
 World.AddFallingBlock(Vector3i, bool)  [not built]
-World.EntityActivityUpdate  [not built]
+World.EntityActivityUpdate  [built: AiLodPatch, postfix re-bands aiActiveScale]
 SpawnManagerBiomes.SpawnUpdate  [not built]
 DecoManager.UpdateTick  [not built]
 WaterSplashCubes.Update  [built: DedicatedSkipPatch]
@@ -535,6 +539,30 @@ DroneManager.Update  [not built]
 GameManager.gmUpdate // GC.Collect site only, not full replace  [built: GcGuardPatch]
 NetEntityDistributionEntry.updatePlayerList // research only  [not built]
 EntityMoveHelper.UpdateMoveHelper // research; huge  [not built]
+```
+
+Shipped targets outside the experiment set, so the list above reads as a subset
+rather than the whole surface:
+
+```text
+EntityAlive.updateTasks  [built: UpdateTasksLodPatch]
+AstarManager.UpdateGraphs(float)  [built: AstarGraphThrottlePatch]
+AstarManager.UpdateGraphPos(AstarVoxelGrid, Vector2)  [built: AstarMoveThresholdPatch]
+LayerGridGraph.ScanInternal move-next  [built: InitScanPoolPatch, UNSAFE opt-in]
+ConnectionManager.SendPackage  [built: FastSendPatch]
+LiteNetLibAuthWrapperServer.ConnectionRequestCheck  [built: ClientListSnapshotPatch]
+NetEntityDistribution.OnUpdateEntities  [built: EntityDistributionStridePatch]
+ChunkManager.SendChunksToClients  [built: ChunkSendThrottlePatch]
+GameManager.ExplosionClient  [built: ExplosionParticlesPatch]
+Entity.ccEntityCollision  [built: CrowdCollisionLodPatch]
+EntityPlayer.DamageEntity  [built: BenchGodPatch, diagnostic opt-in]
+AvatarZombieController.Update  [built: AnimatorLodPatch.UpdatePatch]
+AvatarZombieController.LateUpdate  [built: AnimatorLodPatch.LateUpdatePatch]
+GameManager.UpdateTick  [built: TickClockPatch, GovernorPatch, TickGuardPatch, TargetFpsPatch]
+DynamicMusic.Conductor.Update  [built: DedicatedSkipPatch]
+EnvironmentAudioManager.Update / FixedUpdate / LateUpdate  [built: DedicatedSkipPatch]
+WorldEnvironment.AmbientSpectrumFrameUpdate  [built: DedicatedSkipPatch]
+(no Harmony target)  [DynamicMeshBudgetPatch: writes four stock DynamicMeshSettings statics]
 ```
 
 Each: feature flag, dedicated-only, soft-fail log, FEATURES fidelity notes.

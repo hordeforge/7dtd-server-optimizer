@@ -97,11 +97,13 @@ namespace EfficientServer
                 LogVersions();
                 // Only CLASS-ANNOTATED ([HarmonyPatch]) groups go through the class
                 // processor; each is REQUIRED to match a game method, so a zero-match
-                // means the target moved on a new build - fail visibly. The
-                // imperative patches (DedicatedSkipPatch, DynamicMeshBudgetPatch)
-                // apply their own Harmony patches at GameStartDone and log their own
-                // status ("skip-patch ...", "mesh budgets ..."), so they are not
-                // listed here (the class processor would find nothing on them).
+                // means the target moved on a new build - fail visibly.
+                // DedicatedSkipPatch applies its own Harmony prefixes at
+                // GameStartDone and logs its own status ("skip-patch ..."), so it is
+                // not listed here (the class processor would find nothing on it).
+                // DynamicMeshBudgetPatch runs in the same start-time chain but
+                // patches no code: it writes stock DynamicMeshSettings statics and
+                // logs "mesh budgets ...", so it has no target to match here.
                 int methods = 0, missing = 0;
                 foreach (KeyValuePair<Type, string> row in RequiredGroups)
                 {
