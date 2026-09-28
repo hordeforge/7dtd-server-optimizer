@@ -68,7 +68,8 @@ What ships and how it is protected:
   is resolved from the dedicated server's own `Managed/` directory with
   `Private=false`; the zip contains only `EfficientServer.dll`,
   `ModInfo.xml`, the default config, and the MIT license text.
-- Two NuGet packages are fetched. The test harness's `Newtonsoft.Json` is
+- Two package graphs are fetched, three packages in total. The test harness's
+  `Newtonsoft.Json` is
   exact-pinned in its csproj, hash-pinned in a committed
   `Source/EfficientServer.Tests/packages.lock.json`, and restored with
   `dotnet restore --locked-mode` by `make test`, so a changed dependency fails
@@ -76,10 +77,14 @@ What ships and how it is protected:
   `Microsoft.NETFramework.ReferenceAssemblies.net48`, exact-pinned as `[1.0.3]`
   in `Source/EfficientServer/EfficientServer.csproj`; that package is
   reference metadata only (`PrivateAssets="all"`), so it cannot change the
-  emitted IL, but its content is checked by version alone: no
-  `Source/EfficientServer/packages.lock.json` is committed and `make build`
-  restores without `--locked-mode`, so a substituted package at the same
-  version would not be detected. Restore sources are pinned in-repo by
+  emitted IL. Its graph is hash-pinned too: a committed
+  `Source/EfficientServer/packages.lock.json` records the content hash of the
+  explicit reference and of the parent package the SDK pulls in implicitly.
+  The hash is not enforced, because `make build` restores without
+  `--locked-mode` and CI never restores the mod project at all, so a lock file
+  that drifts is rewritten in place rather than failing a gate. A substituted
+  package at the same version is caught by a human reading the lock-file diff,
+  not by the build. Restore sources are pinned in-repo by
   `NuGet.config` (nuget.org only, with inherited machine- and user-level feeds
   cleared), so a feed added outside this repo cannot satisfy either package.
 - The `dotnet-coverage` local tool is a third fetch that is not hash-locked:
