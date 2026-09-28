@@ -174,7 +174,7 @@ Offline gates run by `make test` and CI. Live-server harnesses need a running de
 | Script | Role |
 |---|---|
 | `repo_root.py` | Shared repository-root lookup (marker walk, not `parent.parent`) used by the gates below; selftest pins the walk |
-| `cli_common.py` | Shared argument dispatch (`-h`/`--help`, `--selftest`, unknown-argument exit 2) and the selftest check collector every script in this directory uses |
+| `cli_common.py` | Shared argument dispatch (`-h`/`--help`, `--selftest`, unknown-argument exit 2) every script in this directory uses. Not an entry point |
 | `check_config_doc.py` | Regression gate (in `make test`): every `ServerPerfConfig` field must be documented in CONFIG.md; selftest pins its parsing/comparison logic |
 | `check_version.py` | Regression gate (in `make test`): ModInfo (source+dist) == AssemblyVersion, no doc claims a future minor; selftest pins version extraction/normalization |
 | `es_cfg_guard.py` | Config swap/restore primitive: snapshot the installed `efficientserver.json` before a harness mutates it, and restore it on every exit path including a SIGKILLed run; selftest pins the guard protocol |
@@ -185,7 +185,7 @@ Offline gates run by `make test` and CI. Live-server harnesses need a running de
 | `validate_bloodmoon_path.py` | Live blood-moon path-admission A/B: real director-spawned horde, baseline vs path knobs on; writes a JSON report |
 | `measure_es_onoff.py` | Live whole-mod ES on/off APM compare; `ES_ARM=on|off` = matched-arm mode (fresh server per arm) |
 | `verify_reproducible.sh` (`make verify-reproducible`) | Rebuild-and-compare proof of the packaging reproducibility claim: same-tree repackage, full recompile, out-of-tree path variation; needs a game install |
-| `build.sh` / `install.sh` / `package.sh` / `run_server.sh` | `make build` / `install` / `package` / `run`; the only scripts that need a game install |
+| `build.sh` / `install.sh` / `uninstall.sh` / `package.sh` / `run_server.sh` | `make build` / `install` / `uninstall` / `package` / `run`; the only scripts that need a game install |
 
 Known infra note: >12 loadgen bots can trigger a stock LiteNetLib join flake
 (`Collection was modified` in `CreateEvent`) that drops clients; use small

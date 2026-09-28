@@ -11,7 +11,8 @@
 // states the property directly. Anything that cannot be built on this host
 // (POSIX mode bits, BOM-less encodings) prints SKIP instead of passing
 // silently, so an unexercised branch never reads as a covered one.
-// Companions: Fuzz.cs drives the same loader from hostile input.
+// Companions: Fuzz.cs drives the same loader from hostile input, EsLogStub.cs
+// stands in for the game's logger.
 
 using System;
 using System.Collections.Generic;
@@ -23,36 +24,34 @@ using System.Text;
 using System.Threading;
 using EfficientServer.Patches;
 
-// Stub the only external symbols Config.cs touches (game-type-free), so the real
-// Config source compiles and runs under the plain .NET SDK. Warnings are recorded
-// so tests can pin which channel each config problem is reported on.
-//
-// This is a hand-maintained mirror of Source/EfficientServer/EsLog.cs, kept
-// separate because the real one calls the game's global::Log (LogLibrary.dll),
-// which this project deliberately does not reference. Nothing checks the two
-// agree, so a signature change to Emit or a new LogLevel member must be copied
-// here by hand, or this project keeps compiling against a shape the net48
-// build no longer has.
-namespace EfficientServer
-{
-    internal enum LogLevel { Info, Warn, Error }
-
-    internal static class EsLog
-    {
-        public static readonly List<string> Warnings = new List<string>();
-
-        public static void Emit(LogLevel severity, string msg)
-        {
-            if (severity == LogLevel.Warn) Warnings.Add(msg);
-        }
-    }
-}
-
 namespace EfficientServer.Tests
 {
     internal static class Program
     {
         static int _failures;
+
+        // The whole harness in one call: RunChecks is the ordered list of
+        // fixtures, the catch turns a throwing fixture into a red run rather
+        // than a stack trace that skips every check after it. Kept at the top
+        // so a first read of this file starts where execution does.
+        static int Main()
+        {
+            try
+            {
+                return RunChecks();
+            }
+            catch (Exception ex)
+            {
+                // A fixture that throws is a failure, not a crash: the run still
+                // exits non-zero, but it reports the same FAIL/count shape as any
+                // other red run instead of dumping a stack trace and skipping
+                // every check that never got reached.
+                Console.WriteLine("FAIL: harness aborted before the remaining checks: "
+                    + ex.GetType().Name + ": " + ex.Message);
+                Console.WriteLine("FAILED: " + (_failures + 1) + " check(s)");
+                return 1;
+            }
+        }
 
         static void Check(bool cond, string what)
         {
@@ -496,25 +495,6 @@ namespace EfficientServer.Tests
                 "the previous world's over-budget window does not re-escalate the new one");
             Check(w.Advance(em2, Over) && w.Level == 1,
                 "the new world escalates on its own over-budget ticks");
-        }
-
-        static int Main()
-        {
-            try
-            {
-                return RunChecks();
-            }
-            catch (Exception ex)
-            {
-                // A fixture that throws is a failure, not a crash: the run still
-                // exits non-zero, but it reports the same FAIL/count shape as any
-                // other red run instead of dumping a stack trace and skipping
-                // every check that never got reached.
-                Console.WriteLine("FAIL: harness aborted before the remaining checks: "
-                    + ex.GetType().Name + ": " + ex.Message);
-                Console.WriteLine("FAILED: " + (_failures + 1) + " check(s)");
-                return 1;
-            }
         }
 
         static int RunChecks()
