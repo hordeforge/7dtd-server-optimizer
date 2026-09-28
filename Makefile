@@ -40,13 +40,21 @@ RUFF_VERSION := 0.16.4
 # diverges between versions, so the type gate must be identical on both sides.
 MYPY_VERSION := 2.1.0
 
-.PHONY: help build build-mcs test coverage install uninstall run clean package verify-reproducible
+.PHONY: help build build-mcs test lint unit check-scripts preflight-lint preflight-unit \
+	preflight-scripts coverage install uninstall run clean package verify-reproducible
 help:
 	@echo "EfficientServer: Harmony optimization mod for 7 Days to Die dedicated servers"
 	@echo
 	@echo "Contributor loop (works without a game install):"
-	@echo "  make test              Every CI gate: shellcheck + ruff + mypy +"
-	@echo "                         script syntax + config harness + doc/version"
+	@echo "  make test              Every CI gate, same as CI (what a PR must pass)"
+	@echo
+	@echo "  Subset targets for the edit-test loop; each needs only its own tools,"
+	@echo "  and 'make test' is exactly these three in sequence:"
+	@echo "  make lint              shellcheck + ruff + mypy on scripts/"
+	@echo "  make unit              Config.Load/Normalize harness (Source/EfficientServer.Tests)"
+	@echo "  make check-scripts     Python gates: config doc/version, repo_root,"
+	@echo "                         cfg guard and coverage badge (needs python3 only)"
+	@echo
 	@echo "  make clean             Remove dist/ and bin/obj build outputs"
 	@echo "  make coverage          Run the unit suite under dotnet-coverage into"
 	@echo "                         TestResults/coverage.cobertura.xml"
@@ -71,55 +79,75 @@ verify-reproducible:
 	$(ROOT)/scripts/verify_reproducible.sh
 build-mcs:
 	SEVENDTD_BUILD_BACKEND=mcs $(ROOT)/scripts/build.sh
-# Preflight so a clean machine gets a named error plus the fix instead of a
-# bare "No such file or directory" (Error 127) from whichever gate runs first.
-# Runs after PATH setup above, so a real SDK under ~/.cache/dotnet-sdk or
-# ~/.dotnet counts as found. The second dotnet gate catches runtime-only
-# hosts (distro 'dotnet' with zero SDKs) that would otherwise sail past
-# `command -v` and die mid-gate inside `dotnet restore` with resolver noise.
-test:
-	@mkdir -p "$(TMPDIR)"
+# The gate is split three ways so an edit only pays for the tools its file
+# family needs, and so a contributor touching one area is not told to install
+# all four. `make test` is exactly these three targets, in this order, and is
+# what .github/workflows/ci.yml runs: keep the two lists identical.
+#
+# Preflights are per target rather than one block in `test`, so `make unit` on
+# a machine with no shellcheck says nothing about shellcheck, and a missing
+# tool is named by the target that actually needs it. Each preflight runs
+# after the PATH setup above, so a real SDK under ~/.cache/dotnet-sdk or
+# ~/.dotnet counts as found.
+
+# Named errors on a clean machine, instead of a bare "No such file or
+# directory" (Error 127) or mid-gate resolver noise from whichever gate
+# happens to run first.
+preflight-lint:
 	@if ! command -v shellcheck >/dev/null 2>&1; then \
-	  echo "ERROR: make test needs shellcheck (lint gate for scripts/*.sh)." >&2; \
-	  echo "  Install it (e.g. apt-get install shellcheck) and rerun make test." >&2; exit 127; fi
-	@if ! command -v python3 >/dev/null 2>&1; then \
-	  echo "ERROR: make test needs python3 (config-doc, version and cfg-guard gates)." >&2; \
-	  echo "  Install python3 and rerun make test." >&2; exit 127; fi
+	  echo "ERROR: make lint needs shellcheck (lint gate for scripts/*.sh)." >&2; \
+	  echo "  Install it (e.g. apt-get install shellcheck) and rerun make lint." >&2; exit 127; fi
 	@if ! command -v ruff >/dev/null 2>&1; then \
-	  echo "ERROR: make test needs ruff $(RUFF_VERSION) (lint gate for scripts/*.py, config in ruff.toml)." >&2; \
-	  echo "  Install the pinned version: uv tool install ruff==$(RUFF_VERSION) and rerun make test." >&2; exit 127; fi
+	  echo "ERROR: make lint needs ruff $(RUFF_VERSION) (lint gate for scripts/*.py, config in ruff.toml)." >&2; \
+	  echo "  Install the pinned version: uv tool install ruff==$(RUFF_VERSION) and rerun make lint." >&2; exit 127; fi
 	@if [ "$$(ruff --version 2>/dev/null | awk '{print $$2}')" != "$(RUFF_VERSION)" ]; then \
-	  echo "ERROR: make test needs ruff exactly $(RUFF_VERSION), matching .github/workflows/ci.yml; found $$(ruff --version 2>/dev/null)." >&2; \
+	  echo "ERROR: make lint needs ruff exactly $(RUFF_VERSION), matching .github/workflows/ci.yml; found $$(ruff --version 2>/dev/null)." >&2; \
 	  echo "  Rule behavior diverges between versions, so CI and local runs must agree:" >&2; \
 	  echo "  uv tool install --force ruff==$(RUFF_VERSION)." >&2; exit 1; fi
 	@if ! command -v mypy >/dev/null 2>&1; then \
-	  echo "ERROR: make test needs mypy $(MYPY_VERSION) (type gate for scripts/*.py, config in mypy.ini)." >&2; \
-	  echo "  Install the pinned version: uv tool install mypy==$(MYPY_VERSION) and rerun make test." >&2; exit 127; fi
+	  echo "ERROR: make lint needs mypy $(MYPY_VERSION) (type gate for scripts/*.py, config in mypy.ini)." >&2; \
+	  echo "  Install the pinned version: uv tool install mypy==$(MYPY_VERSION) and rerun make lint." >&2; exit 127; fi
 	@if [ "$$(mypy --version 2>/dev/null | awk '{print $$2}')" != "$(MYPY_VERSION)" ]; then \
-	  echo "ERROR: make test needs mypy exactly $(MYPY_VERSION), matching .github/workflows/ci.yml; found $$(mypy --version 2>/dev/null)." >&2; \
+	  echo "ERROR: make lint needs mypy exactly $(MYPY_VERSION), matching .github/workflows/ci.yml; found $$(mypy --version 2>/dev/null)." >&2; \
 	  echo "  Checker behavior diverges between versions, so CI and local runs must agree:" >&2; \
 	  echo "  uv tool install --force mypy==$(MYPY_VERSION)." >&2; exit 1; fi
+
+preflight-scripts:
+	@if ! command -v python3 >/dev/null 2>&1; then \
+	  echo "ERROR: make check-scripts needs python3 (config-doc, version and cfg-guard gates)." >&2; \
+	  echo "  Install python3 and rerun make check-scripts." >&2; exit 127; fi
+
+# The second dotnet gate catches runtime-only hosts (distro 'dotnet' with zero
+# SDKs) that would otherwise sail past `command -v` and die mid-gate inside
+# `dotnet restore` with resolver noise.
+preflight-unit:
 	@if ! command -v dotnet >/dev/null 2>&1; then \
-	  echo "ERROR: make test needs the .NET SDK pinned by global.json (8.0 band), but no dotnet is on PATH." >&2; \
+	  echo "ERROR: make unit needs the .NET SDK pinned by global.json (8.0 band), but no dotnet is on PATH." >&2; \
 	  echo "  A real SDK install under ~/.cache/dotnet-sdk or ~/.dotnet is picked up automatically;" >&2; \
-	  echo "  otherwise install the pinned band and rerun make test, e.g.:" >&2; \
+	  echo "  otherwise install the pinned band and rerun make unit, e.g.:" >&2; \
 	  echo "    dotnet-install.sh --channel 8.0 --install-dir \"\$$HOME/.cache/dotnet-sdk\"" >&2; exit 127; fi
 	@if ! dotnet --list-sdks 2>/dev/null | grep -q .; then \
-	  echo "ERROR: make test needs the .NET SDK pinned by global.json (8.0 band); the dotnet on PATH resolved no installed SDKs (runtime-only host?)." >&2; \
+	  echo "ERROR: make unit needs the .NET SDK pinned by global.json (8.0 band); the dotnet on PATH resolved no installed SDKs (runtime-only host?)." >&2; \
 	  echo "  Install the pinned band, e.g.: dotnet-install.sh --channel 8.0 --install-dir \"\$$HOME/.cache/dotnet-sdk\"" >&2; \
-	  echo "  (auto-detected by this Makefile), or your distro's dotnet-sdk-8.0 package, and rerun make test." >&2; exit 127; fi
+	  echo "  (auto-detected by this Makefile), or your distro's dotnet-sdk-8.0 package, and rerun make unit." >&2; exit 127; fi
+
 # -x follows sourced files so checks see through `. ./lib.sh` style sharing.
+lint: preflight-lint
 	shellcheck -x $(wildcard $(ROOT)/scripts/*.sh)
 	ruff check $(ROOT)/scripts
 	mypy $(ROOT)/scripts
-# Stdlib-only syntax gate for the scripts make test never executes
+
+# Locked restore: fails when a PackageReference changed without regenerating
+# packages.lock.json, instead of silently floating to newer versions.
+unit: preflight-unit
+	dotnet restore --locked-mode $(ROOT)/Source/EfficientServer.Tests
+	dotnet run --project $(ROOT)/Source/EfficientServer.Tests -c Release --no-restore
+
+check-scripts: preflight-scripts
+# Stdlib-only syntax gate for the scripts these targets never execute
 # (validate_*.py / measure_es_onoff.py need a live server). Bytecode lands in
 # scripts/__pycache__, which is gitignored.
 	python3 -m compileall -q $(ROOT)/scripts
-# Locked restore: fails when a PackageReference changed without regenerating
-# packages.lock.json, instead of silently floating to newer versions.
-	dotnet restore --locked-mode $(ROOT)/Source/EfficientServer.Tests
-	dotnet run --project $(ROOT)/Source/EfficientServer.Tests -c Release --no-restore
 	python3 $(ROOT)/scripts/repo_root.py --selftest
 	python3 $(ROOT)/scripts/check_config_doc.py
 	python3 $(ROOT)/scripts/check_config_doc.py --selftest
@@ -127,6 +155,15 @@ test:
 	python3 $(ROOT)/scripts/check_version.py --selftest
 	python3 $(ROOT)/scripts/es_cfg_guard.py --selftest
 	python3 $(ROOT)/scripts/coverage_badge.py --selftest
+
+test:
+	@mkdir -p "$(TMPDIR)"
+# Order matters and is the CI order: shell lints, then the .NET harness, then
+# the doc/version gates. A preflight failure in any of them stops the run
+# before the next tool is needed.
+	$(MAKE) --no-print-directory lint
+	$(MAKE) --no-print-directory unit
+	$(MAKE) --no-print-directory check-scripts
 
 # Line coverage of the unit suite via dotnet-coverage. Writes
 # TestResults/coverage.cobertura.xml; CI renders it into the README badge

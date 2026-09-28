@@ -32,7 +32,8 @@ make run DS="/path/to/7 Days to Die Dedicated Server"
 ```
 
 Contributing: [`CONTRIBUTING.md`](CONTRIBUTING.md) (PR gates are `make test`,
-the same command CI runs).
+the same command CI runs; `make lint`, `make unit` and `make check-scripts` are
+its three parts, for a narrower loop).
 
 Configuration is in [`config/efficientserver.json`](config/efficientserver.json).
 Change one feature group at a time and validate it with the same loadgen

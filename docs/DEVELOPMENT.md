@@ -76,6 +76,8 @@ Change **one group at a time**, then re-measure.
    (normalize/clamps/invariants/fuzz), config-doc
    coverage gate, version-consistency gate (ModInfo == Assembly == docs);
    also runs in CI on every PR and on pushes to main (.github/workflows/ci.yml)
+   Narrower loop while editing: make lint (scripts), make unit (the C# harness),
+   make check-scripts (doc/version gates). 'make test' is those three in order.
 1. Baseline: 7dtd-loadgen workload + 7dtd-server-apm capture
 2. Edit one feature group (config and/or patch code)
 3. Rebuild and install against current dedicated Managed
