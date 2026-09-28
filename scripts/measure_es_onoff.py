@@ -38,7 +38,7 @@ from pathlib import Path
 from typing import TypedDict
 
 from cli_common import run_cli
-from es_cfg_guard import ConfigSwap
+from es_cfg_guard import CFG_ENCODING, ConfigSwap
 from harness_common import (
     DS,
     ES_CFG,
@@ -278,7 +278,7 @@ def set_config_enabled(on: bool, live_reload: bool) -> None:
     """Set Enabled in the installed config. With live_reload, apply it now via
     `es reload` (toggle mode); otherwise stage it for the next boot only
     (matched-arm mode: the fresh server starts with the arm's setting)."""
-    cfg = json.loads(ES_CFG.read_text(encoding="utf-8"))
+    cfg = json.loads(ES_CFG.read_text(encoding=CFG_ENCODING))
     cfg["Enabled"] = on
     # Atomic: same kill-mid-write hazard write_path_config guards against.
     write_atomic(ES_CFG, json.dumps(cfg, indent=2) + "\n")

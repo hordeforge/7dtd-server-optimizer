@@ -274,10 +274,17 @@ namespace EfficientServer.Tests
         // Numeric and structural junk that a lenient reader may accept where a
         // number belongs, plus a mid-file BOM, an escaped NUL, an unterminated
         // string, and non-ASCII text (the config is UTF-8 on any host locale).
+        // The non-ASCII entries are the shapes an ASCII-only corpus cannot
+        // reach: an astral character (a surrogate PAIR in UTF-16), a lone
+        // surrogate escape, a combining mark that must not be split from its
+        // base, and a zero-width joiner inside a grapheme cluster. Each is
+        // well-formed enough to decode, so it exercises the reader rather than
+        // the replacement path the invalid byte runs above already cover.
         static readonly string[] HostileText = {
             "NaN", "-Infinity", "1e999999", "1e-999999", "0x10", "01", "1.", ".1", "-",
             "﻿", "  ", "\"\\u0000\"", "\"unterminated",
             "{\"AiLod\":", "[[[[[", "}}}}}", "\t\r\n", "\"é中文\"",
+            "\"\\ud83d\\ude00\"", "\"\\ud800\"", "\"é́\"", "\"\U0001f468‍\U0001f469‍\U0001f467\"",
         };
 
         static string DeepNest(int depth) => new string('[', depth) + new string(']', depth);
@@ -295,8 +302,18 @@ namespace EfficientServer.Tests
             => buf.InsertRange(at, Encoding.UTF8.GetBytes(text));
 
         // Failure lines must stay paste-able as a repro, so cap the embedded input.
+        // The cap is in UTF-16 code units, so land it on a pair boundary: cutting
+        // between a high and a low surrogate emits a lone surrogate, which
+        // Console.WriteLine then replaces with U+FFFD and which no longer
+        // decodes back to the input the operator needs to reproduce the failure.
         static string Truncate(string s)
-            => s.Length <= 400 ? s : s.Substring(0, 400) + "...[" + s.Length + " chars]";
+        {
+            const int Max = 400;
+            if (s.Length <= Max) return s;
+            int cut = Max;
+            if (char.IsHighSurrogate(s[cut - 1])) cut--;
+            return s.Substring(0, cut) + "...[" + s.Length + " chars]";
+        }
 
         // Dotted leaf paths derived from the config schema itself, so newly added
         // knobs join the fuzz corpus automatically instead of drifting stale.

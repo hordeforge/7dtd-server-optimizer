@@ -41,6 +41,15 @@ from pathlib import Path
 from cli_common import run_cli
 from selftest_support import Checks
 
+# The installed efficientserver.json is operator-editable and the game's own
+# reader (Config.Load) decodes it as UTF-8 with a leading BOM tolerated, so a
+# BOM is a legal config, not corruption. utf-8-sig is a strict superset of
+# utf-8: it decodes BOM-less files identically and strips a BOM when present.
+# Reading these configs as plain utf-8 made every reader here throw
+# "Unexpected UTF-8 BOM", which recover() then treated as a damaged file and
+# quarantined, and restore() treated as unreadable and overwrote wholesale.
+CFG_ENCODING = "utf-8-sig"
+
 STALE_SUFFIX = ".stale"
 # Marker write_atomic puts between a file name and its writer's pid, so a
 # temp stranded by a killed run is attributable to that run.
@@ -59,7 +68,7 @@ Backup/restore guard library for the installed EfficientServer config
 def _read_doc(path: Path) -> dict[str, object]:
     # Boundary pin: json.loads is typed Any; the guard protocol only ever
     # feeds it the object-shaped efficientserver.json.
-    doc: dict[str, object] = json.loads(path.read_text(encoding="utf-8"))
+    doc: dict[str, object] = json.loads(path.read_text(encoding=CFG_ENCODING))
     return doc
 
 
@@ -231,7 +240,7 @@ class ConfigSwap:
             # Not _read_doc: the live document's SHAPE is unknown here (that is
             # what the check below decides), so parse untyped like the boundary
             # json.loads is.
-            live: object = json.loads(self.cfg.read_text(encoding="utf-8"))
+            live: object = json.loads(self.cfg.read_text(encoding=CFG_ENCODING))
         except Exception as e:
             self._quarantine(f"live config unreadable: {e}")
             return
@@ -292,7 +301,7 @@ class ConfigSwap:
         try:
             # Not _read_doc, same reason as recover(): the live shape is what
             # the check below decides.
-            live: object = json.loads(self.cfg.read_text(encoding="utf-8"))
+            live: object = json.loads(self.cfg.read_text(encoding=CFG_ENCODING))
         except Exception as e:
             # Unreadable live JSON: rebuilding from {} would write back ONLY the
             # managed keys and destroy every other operator setting, so fall
@@ -368,7 +377,7 @@ def _selftest() -> int:
         section(doc, "Pathfinding")["MaxPathEnqueuesPerTick"] = 64
         cfg.write_text(json.dumps(doc, indent=2) + "\n", encoding="utf-8")
         s.restore()
-        expected = json.dumps(original, indent=2).encode() + b"\n"
+        expected = json.dumps(original, indent=2).encode("utf-8") + b"\n"
         t.check("roundtrip restores exact bytes", cfg.read_bytes() == expected)
 
         # 2. crash simulation: a NEW instance finishes the interrupted restore.
@@ -453,7 +462,59 @@ def _selftest() -> int:
         )
         t.check("backup consumed after corrupt-live restore", not s5.bak.exists())
 
-        # 8. public atomic write: create, overwrite, exact bytes, no temp litter.
+        # 8. A UTF-8 BOM is a legal installed config: the game's Config.Load
+        # decodes with Encoding.UTF8 and tolerates one, so every path here must
+        # read it too. Reading it as plain utf-8 raised "Unexpected UTF-8
+        # BOM", which quarantined a good backup and turned restore() into the
+        # unreadable-live full-overwrite branch. Non-ASCII values must also
+        # survive the backup/restore round trip byte for byte.
+        bom_cfg = root / "bom.json"
+        bom_doc = {"Enabled": True, "Note": "サーバ café \U0001f600"}
+        bom_cfg.write_bytes(
+            b"\xef\xbb\xbf" + (json.dumps(bom_doc, indent=2) + "\n").encode("utf-8")
+        )
+        bom_bak = bom_cfg.with_suffix(bom_cfg.suffix + ".swap-bak")
+        bom_bak.write_bytes(bom_cfg.read_bytes())
+        mk_bom = ConfigSwap(bom_cfg, [("Enabled",)], log=logs.append)
+        # recover(): a BOM'd live file whose only divergence is a managed key
+        # is an interrupted run, not stale evidence.
+        bom_live = dict(bom_doc, Enabled=False)
+        bom_cfg.write_bytes(
+            b"\xef\xbb\xbf" + (json.dumps(bom_live, indent=2) + "\n").encode("utf-8")
+        )
+        mk_bom.recover()
+        t.check(
+            "BOM'd live config finishes an interrupted restore, not a quarantine",
+            _canonical(_read_doc(bom_cfg)) == _canonical(bom_doc) and not bom_bak.exists(),
+        )
+
+        # restore(): key-scoped restore over a BOM'd live file. "Operator" is
+        # present only in the live file, never in the backup, so it survives
+        # ONLY on the key-scoped path. A BOM that fails to parse takes the
+        # unreadable-live branch instead and silently drops it.
+        bom_live2 = dict(bom_live, Operator="later edit")
+        bom_cfg.write_bytes(
+            b"\xef\xbb\xbf" + (json.dumps(bom_live2, indent=2) + "\n").encode("utf-8")
+        )
+        # recover() above consumed the backup. Re-snapshot the ORIGINAL document
+        # (Enabled=true, no "Operator"): the live file now carries the harness's
+        # managed-key edit plus an operator edit the backup never saw.
+        bom_bak.write_bytes(
+            b"\xef\xbb\xbf" + (json.dumps(bom_doc, indent=2) + "\n").encode("utf-8")
+        )
+        bom2 = ConfigSwap(bom_cfg, [("Enabled",)], log=logs.append)
+        bom2.restore()
+        after_bom = _read_doc(bom_cfg)
+        t.check(
+            "BOM'd live config restores key-scoped, keeping later operator edits",
+            after_bom["Enabled"] is True and after_bom["Operator"] == "later edit",
+        )
+        t.check(
+            "non-ASCII config value survives backup/restore",
+            after_bom["Note"] == bom_doc["Note"],
+        )
+
+        # 9. public atomic write: create, overwrite, exact bytes, no temp litter.
         wa = root / "atomic.json"
         write_atomic(wa, '{"k": 1}\n')
         write_atomic(wa, '{"k": 2}\n')

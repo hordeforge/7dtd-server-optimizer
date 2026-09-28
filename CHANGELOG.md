@@ -53,6 +53,14 @@ So `EfficientServer-0.1.0.zip` logging `mod=1.17.0` is correct, not drift.
   `probeAllow=`.
 
 ### Fixed
+- The bench harnesses read the installed `efficientserver.json` as strict
+  UTF-8, so a leading BOM (which the game's own reader has always tolerated)
+  made every one of them fail: `recover()` quarantined a perfectly good backup
+  as "unreadable" and `restore()` fell into its unreadable-live branch and
+  overwrote the config from the snapshot instead of replaying the managed keys
+  only. All three readers now share one `CFG_ENCODING` (utf-8-sig) constant, so
+  a BOM'd config takes the same paths a BOM-less one does and a later operator
+  edit still survives a bench run.
 - `es status` reported `tickEmaMs` as a live number even with the governor
   disabled, where no tick was ever sampled and the EMA just holds its 50 ms
   seed. A server at 3 TPS read as a healthy idle tick. The field now prints

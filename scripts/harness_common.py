@@ -31,7 +31,7 @@ sys.path.insert(0, str(LOADGEN_ROOT / "scripts"))
 # is exempted per-file in ruff.toml instead of inline noqa noise.
 import bloodmoon_profile as B
 
-from es_cfg_guard import ConfigSwap, unique_path, write_atomic
+from es_cfg_guard import CFG_ENCODING, ConfigSwap, unique_path, write_atomic
 
 # Public surface of this shared module (mypy no_implicit_reexport: consumers
 # may import exactly these; B and write_atomic are deliberate re-exports).
@@ -154,7 +154,7 @@ def _rewrite_installed_section(section: str, updates: dict[str, object]) -> None
     if not ES_CFG.is_file():
         raise FileNotFoundError(f"missing {ES_CFG}")
     CFG_SWAP.begin()
-    cfg = json.loads(ES_CFG.read_text(encoding="utf-8"))
+    cfg = json.loads(ES_CFG.read_text(encoding=CFG_ENCODING))
     cfg.setdefault(section, {}).update(updates)
     write_atomic(ES_CFG, json.dumps(cfg, indent=2) + "\n")
 
