@@ -36,7 +36,7 @@ from __future__ import annotations
 import json
 import os
 import sys
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from pathlib import Path
 
 STALE_SUFFIX = ".stale"
@@ -51,14 +51,14 @@ Backup/restore guard library for the installed EfficientServer config
 """
 
 
-def _read_doc(path: Path) -> dict:
+def _read_doc(path: Path) -> dict[str, object]:
     # Boundary pin: json.loads is typed Any; the guard protocol only ever
     # feeds it the object-shaped efficientserver.json.
-    doc: dict = json.loads(path.read_text(encoding="utf-8"))
+    doc: dict[str, object] = json.loads(path.read_text(encoding="utf-8"))
     return doc
 
 
-def _canonical(doc: dict) -> str:
+def _canonical(doc: dict[str, object]) -> str:
     return json.dumps(doc, sort_keys=True, separators=(",", ":"))
 
 
@@ -87,7 +87,7 @@ class ConfigSwap:
     def __init__(
         self,
         cfg_path: Path,
-        keys: list[tuple[str, ...]],
+        keys: Sequence[tuple[str, ...] | str],
         log: Callable[..., None] = print,
     ):
         self.cfg = cfg_path
@@ -100,8 +100,8 @@ class ConfigSwap:
 
     # -- key helpers -------------------------------------------------------
 
-    def _get(self, doc: dict, kp: tuple[str, ...]) -> tuple[bool, object]:
-        node = doc
+    def _get(self, doc: dict[str, object], kp: tuple[str, ...]) -> tuple[bool, object]:
+        node: object = doc
         for k in kp[:-1]:
             if not isinstance(node, dict) or k not in node:
                 return False, None
@@ -110,7 +110,13 @@ class ConfigSwap:
             return False, None
         return True, node[kp[-1]]
 
-    def _set(self, doc: dict, kp: tuple[str, ...], present: bool, value: object) -> None:
+    def _set(
+        self,
+        doc: dict[str, object],
+        kp: tuple[str, ...],
+        present: bool,
+        value: object,
+    ) -> None:
         node = doc
         for k in kp[:-1]:
             child = node.get(k)
@@ -256,6 +262,13 @@ def _selftest() -> int:
             print("FAIL: " + name, file=sys.stderr)
             failures.append(name)
 
+    def section(doc: dict[str, object], key: str) -> dict[str, object]:
+        """Narrow a top-level JSON object to one of its nested sections."""
+        sub = doc[key]
+        if not isinstance(sub, dict):
+            raise TypeError(f"config section {key!r} is not a JSON object")
+        return sub
+
     keys = [
         ("Pathfinding", "MaxPathEnqueuesPerTick"),
         ("Pathfinding", "DropPathWhenFarDistSq"),
@@ -281,7 +294,7 @@ def _selftest() -> int:
         s.begin()
         doc = _read_doc(cfg)
         doc["Enabled"] = False
-        doc["Pathfinding"]["MaxPathEnqueuesPerTick"] = 64
+        section(doc, "Pathfinding")["MaxPathEnqueuesPerTick"] = 64
         cfg.write_text(json.dumps(doc, indent=2) + "\n", encoding="utf-8")
         s.restore()
         expected = json.dumps(original, indent=2).encode() + b"\n"
@@ -300,14 +313,14 @@ def _selftest() -> int:
         # 3. stale backup: live diverged beyond managed keys -> untouched.
         s.begin()
         doc = _read_doc(cfg)
-        doc["Network"]["EntityDistributionEveryTicks"] = 3  # operator edit
+        section(doc, "Network")["EntityDistributionEveryTicks"] = 3  # operator edit
         cfg.write_text(json.dumps(doc, indent=2) + "\n", encoding="utf-8")
         mk().recover()
         stale = s.bak.with_suffix(s.bak.suffix + STALE_SUFFIX)
         check("stale quarantined", stale.is_file() and not s.bak.exists())
         check(
             "stale recover leaves live untouched",
-            _read_doc(cfg)["Network"]["EntityDistributionEveryTicks"] == 3,
+            section(_read_doc(cfg), "Network")["EntityDistributionEveryTicks"] == 3,
         )
 
         # 4. restore is key-scoped and repeat-safe; absence is preserved too.
@@ -316,19 +329,19 @@ def _selftest() -> int:
         stale.unlink()
         doc = _read_doc(cfg)
         doc["Enabled"] = False
-        doc["Pathfinding"]["DropPathWhenFarDistSq"] = 2500  # key absent in snapshot
+        section(doc, "Pathfinding")["DropPathWhenFarDistSq"] = 2500  # key absent in snapshot
         cfg.write_text(json.dumps(doc, indent=2) + "\n", encoding="utf-8")
         s2.restore()
         s2.restore()  # second call must be a no-op
         after = _read_doc(cfg)
         check(
             "key-scoped restore keeps other keys",
-            after["Network"]["EntityDistributionEveryTicks"] == 3,
+            section(after, "Network")["EntityDistributionEveryTicks"] == 3,
         )
         check("restore reverts managed key", after["Enabled"] is True)
         check(
             "restore removes key absent in snapshot",
-            "DropPathWhenFarDistSq" not in after["Pathfinding"],
+            "DropPathWhenFarDistSq" not in section(after, "Pathfinding"),
         )
         check("repeat restore is a no-op", not s2.bak.exists())
 

@@ -184,7 +184,24 @@ def read_apm(logf: Path) -> _ApmCounters | None:
     return st["last"]
 
 
-def windowed(a: _ApmCounters, b: _ApmCounters) -> dict | None:
+class _ApmWindow(TypedDict):
+    """Windowed rate derived from two cumulative _ApmCounters reads."""
+
+    gmUpdateAvg: float
+    gmUpdateAvg_err_ms: float
+    tickAvg: float
+    tickAvg_err_ms: float
+    spikes: int
+    window_updates: int
+
+
+class _ApmSample(_ApmWindow):
+    """A _ApmWindow stamped with the phase label it was sampled under."""
+
+    label: str
+
+
+def windowed(a: _ApmCounters, b: _ApmCounters) -> _ApmWindow | None:
     """Windowed (instantaneous-ish) metrics from two cumulative APM reads.
 
     gmUpdateAvg / tickAvg are cumulative since boot; the per-window value is
@@ -218,7 +235,7 @@ def windowed(a: _ApmCounters, b: _ApmCounters) -> dict | None:
     }
 
 
-def sample_apm(label: str, logf: Path, seconds: float = SAMPLE_S) -> dict | None:
+def sample_apm(label: str, logf: Path, seconds: float = SAMPLE_S) -> _ApmSample | None:
     """Sample the windowed APM rate over a window; None if the bridge is silent."""
     first = read_apm(logf)
     if first is None:
@@ -231,11 +248,10 @@ def sample_apm(label: str, logf: Path, seconds: float = SAMPLE_S) -> dict | None
         r = read_apm(logf)
         if r is not None and r["updates"] > last["updates"]:
             last = r
-    w = windowed(first, last)
-    if w is None:
+    win = windowed(first, last)
+    if win is None:
         return None
-    w["label"] = label
-    return w
+    return _ApmSample(label=label, **win)
 
 
 def set_config_enabled(on: bool, live_reload: bool) -> None:
@@ -260,7 +276,7 @@ def main() -> int:
     # dict instead of reaching through report's object-valued slots. Values are
     # nullable on purpose: sample_apm returns None when no APM window was read,
     # and the report must record that absence rather than drop the phase.
-    phases: dict[str, dict | None] = {}
+    phases: dict[str, _ApmSample | None] = {}
     report = {"players": PLAYERS, "zombies": ZOMBIES, "gamestage": GAMESTAGE, "phases": phases}
     bots = None
     code = 0

@@ -22,6 +22,7 @@ import json
 import math
 import re
 import sys
+from typing import TypedDict
 
 from repo_root import repo_root
 
@@ -87,9 +88,16 @@ def values_equal(cs_val: object, json_val: object) -> bool:
     return cs_val == json_val
 
 
-def parse_cs_schema(src: str) -> dict[str, dict]:
+class ClassInfo(TypedDict):
+    """One Config.cs class: its scalar defaults and its nested section classes."""
+
+    scalars: dict[str, object]
+    sections: dict[str, str]
+
+
+def parse_cs_schema(src: str) -> dict[str, ClassInfo]:
     """class name -> {'scalars': {name: default}, 'sections': {name: class type}}."""
-    schema: dict[str, dict] = {}
+    schema: dict[str, ClassInfo] = {}
     for cls, body in CLASS_BLOCK.findall(src):
         scalars = {
             p: parse_cs_default(init)
@@ -101,7 +109,7 @@ def parse_cs_schema(src: str) -> dict[str, dict]:
     return schema
 
 
-def unknown_json_keys(schema: dict[str, dict], data: dict) -> list[str]:
+def unknown_json_keys(schema: dict[str, ClassInfo], data: dict[str, object]) -> list[str]:
     """Dotted paths in the shipped JSON that match no Config.cs property."""
     problems: list[str] = []
     root = schema["ServerPerfConfig"]
@@ -121,7 +129,7 @@ def unknown_json_keys(schema: dict[str, dict], data: dict) -> list[str]:
     return problems
 
 
-def default_drift(schema: dict[str, dict], data: dict) -> list[str]:
+def default_drift(schema: dict[str, ClassInfo], data: dict[str, object]) -> list[str]:
     """Shipped JSON values that differ from the C# built-in defaults.
 
     Only keys PRESENT in the template are compared (absent keys legitimately
@@ -246,7 +254,8 @@ def _selftest() -> int:
     )
     check(
         "parse_cs_schema ignores methods without { get; set; }",
-        all("Reset" not in part for part in schema["AiLodConfig"].values()),
+        "Reset" not in schema["AiLodConfig"]["scalars"]
+        and "Reset" not in schema["AiLodConfig"]["sections"],
     )
 
     # unknown_json_keys: typo paths at both levels plus wrong-shape values.

@@ -181,7 +181,7 @@ def write_diag_config(allow_benchgod: bool) -> None:
     )
 
 
-def write_report(prefix: str, report: dict) -> Path:
+def write_report(prefix: str, report: dict[str, object]) -> Path:
     """Write a run's JSON report as OUT_DIR/<prefix>_<timestamp>.json.
 
     UTC, not local: across a DST fall-back the local wall clock repeats an

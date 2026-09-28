@@ -10,6 +10,9 @@ src = ["scripts"]
 # must pass on the tree before its selector lands. Deliberately not selected:
 # - T20 (print): these are CLI harnesses; stdout is the product.
 # - SIM / RET / PTH: style churn with no defect signal in this tree yet.
+# - BLE (blind except): every hit is a teardown or quarantine boundary that
+#   must log-and-continue so a failed cleanup never masks the real result, the
+#   same rationale as S110 below. Select it once those handlers narrow.
 # The S (bandit) group is selected minus the two rules with standing,
 # documented findings on this tree:
 # - S110 (except-pass): teardown paths log-and-continue on purpose so a
@@ -33,6 +36,17 @@ select = [
     "S",    # flake8-bandit security rules (minus scoped ignores below)
     "FURB", # refurb modernizations
     "RUF",  # ruff-specific (stale noqa directives, etc.)
+    "PERF", # per-call loops that should be comprehensions
+    "PIE",  # misc lints (misplaced conditionals, redundant parens)
+    "RSE",  # unnecessary parentheses on raise
+    "G",    # logging-format (%-args and f-strings in logging calls)
+    "LOG",  # logging misuse
+    "ARG",  # unused function arguments
+    "ASYNC",  # blocking calls inside async def
+    "PT",   # pytest style (fixture/parametrize hygiene)
+    "TID",  # banned imports (relative-parent, crippled-encoding, etc.)
+    "PGH",  # blanket noqa / type: ignore without a code
+    "SLF",  # private member access
 ]
 
 # Standing exceptions for the S band, each tied to a documented pattern

@@ -35,6 +35,7 @@ import os
 import re
 import sys
 import time
+from typing import TypedDict
 
 from harness_common import (
     CFG_SWAP,
@@ -70,7 +71,20 @@ PATH_DROP = float(os.environ.get("PATH_DROP_FAR_SQ", "2500"))
 SKIP_START = os.environ.get("SKIP_SERVER_START", "0") == "1"
 
 
-def sample_health(label: str, seconds: float = SAMPLE_S) -> dict:
+class HealthSample(TypedDict):
+    """One averaged health window, as embedded in the run report."""
+
+    label: str
+    frameMs_avg: float | None
+    frameMs_min: float | None
+    frameMs_max: float | None
+    tickAvgMs: float | None
+    entityAlives_avg: float | None
+    players: object
+    raw_last: dict[str, object]
+
+
+def sample_health(label: str, seconds: float = SAMPLE_S) -> HealthSample:
     """Average a few health snapshots over a window."""
     frames = []
     ticks = []
@@ -89,7 +103,7 @@ def sample_health(label: str, seconds: float = SAMPLE_S) -> dict:
             time.sleep(max(0.5, seconds / n))
     def avg(xs: list[float]) -> float | None:
         return round(sum(xs) / len(xs), 2) if xs else None
-    out = {
+    out: HealthSample = {
         "label": label,
         "frameMs_avg": avg(frames),
         "frameMs_min": round(min(frames), 2) if frames else None,
@@ -107,7 +121,13 @@ def sample_health(label: str, seconds: float = SAMPLE_S) -> dict:
     return out
 
 
-def parse_animstate(text: str) -> list[dict]:
+def _num(row: dict[str, object], key: str) -> float:
+    """Numeric field of a parsed animstate row; 0.0 when absent or non-numeric."""
+    v = row.get(key)
+    return float(v) if isinstance(v, (int, float)) else 0.0
+
+
+def parse_animstate(text: str) -> list[dict[str, object]]:
     """Parse `es animstate` lines like:
       123 zombieBoe: en=True spd=1.00 rootMotion=True cull=CullCompletely ...
       vel=0.120 dp=0.0000 ...
@@ -149,7 +169,7 @@ def parse_animstate(text: str) -> list[dict]:
     return rows
 
 
-def animstate_snapshot() -> tuple[str, list[dict]]:
+def animstate_snapshot() -> tuple[str, list[dict[str, object]]]:
     text = B.telnet(["es animstate"], settle=2.0)
     return text, parse_animstate(text)
 
@@ -190,14 +210,19 @@ def main() -> int:
     B.ZOMBIES = ZOMBIES
     B.GAMESTAGE = GAMESTAGE
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    report: dict = {
+    # Nested containers are built here and embedded by reference so the
+    # verdict/phase writes below index a precisely typed dict instead of
+    # reaching through report's object-valued slots.
+    phases: dict[str, object] = {}
+    verdicts: dict[str, str] = {}
+    report: dict[str, object] = {
         "players": PLAYERS,
         "zombies": ZOMBIES,
         "gamestage": GAMESTAGE,
         "path_cap": PATH_CAP,
         "path_drop_far_sq": PATH_DROP,
-        "phases": {},
-        "verdicts": {},
+        "phases": phases,
+        "verdicts": verdicts,
     }
     bots = None
     code = 0
@@ -223,10 +248,10 @@ def main() -> int:
         report["joined"] = joined
         if joined < max(1, int(PLAYERS * 0.5)):
             log(f"FAIL: only {joined}/{PLAYERS} players joined")
-            report["verdicts"]["join"] = "FAIL"
+            verdicts["join"] = "FAIL"
             code = 2
             return code
-        report["verdicts"]["join"] = "PASS"
+        verdicts["join"] = "PASS"
         B.set_gamestage(GAMESTAGE)
         # Bench-god needs the runtime allow switch (the console gate refuses to
         # arm without it): write it swap-guarded, reload, then arm. CFG_SWAP
@@ -241,22 +266,22 @@ def main() -> int:
         # ----- Phase A: animator CullCompletely -----
         log("=== Phase A: animator emergency A/B ===")
         base = sample_health("anim_baseline")
-        report["phases"]["anim_baseline"] = base
+        phases["anim_baseline"] = base
 
         off_txt = B.telnet(["es animoff"], settle=2.0)
         report["animoff_reply"] = off_txt[-800:]
         log(f"animoff: {off_txt[-300:].replace(chr(10), ' | ')}")
         time.sleep(2)
         off = sample_health("anim_off")
-        report["phases"]["anim_off"] = off
+        phases["anim_off"] = off
         _, off_rows = animstate_snapshot()
         report["animstate_off_n"] = len(off_rows)
-        report["animstate_off_cull_modes"] = sorted({r.get("cull") for r in off_rows})
+        report["animstate_off_cull_modes"] = sorted({str(r.get("cull", "")) for r in off_rows})
         cull_ok = any(
             r.get("cull") and "CullCompletely" in str(r.get("cull")) for r in off_rows
         )
         # if animstate empty, still ok if frame moved
-        report["verdicts"]["anim_cull_mode"] = (
+        verdicts["anim_cull_mode"] = (
             "PASS" if cull_ok or not off_rows else "FAIL_no_CullCompletely"
         )
 
@@ -265,22 +290,22 @@ def main() -> int:
         log(f"animon: {on_txt[-300:].replace(chr(10), ' | ')}")
         time.sleep(3)
         on = sample_health("anim_restored")
-        report["phases"]["anim_restored"] = on
+        phases["anim_restored"] = on
         _, on_rows = animstate_snapshot()
         report["animstate_on_n"] = len(on_rows)
-        moving = [r for r in on_rows if r.get("vel", 0) > 0.05]
-        moving_dp = [r for r in moving if r.get("dp", 0) > 0.001]
+        moving = [r for r in on_rows if _num(r, "vel") > 0.05]
+        moving_dp = [r for r in moving if _num(r, "dp") > 0.001]
         report["animstate_on_moving"] = len(moving)
         report["animstate_on_moving_dp_gt0"] = len(moving_dp)
         report["animstate_on_sample"] = on_rows[:8]
         if moving:
-            report["verdicts"]["anim_root_motion"] = (
+            verdicts["anim_root_motion"] = (
                 "PASS" if moving_dp else "FAIL_dp_zero_crawl"
             )
         elif on_rows:
-            report["verdicts"]["anim_root_motion"] = "SKIP_no_moving_zombies"
+            verdicts["anim_root_motion"] = "SKIP_no_moving_zombies"
         else:
-            report["verdicts"]["anim_root_motion"] = "SKIP_no_animstate"
+            verdicts["anim_root_motion"] = "SKIP_no_animstate"
 
         # frame delta (lower is better under load)
         fb, fo = base.get("frameMs_avg"), off.get("frameMs_avg")
@@ -289,11 +314,11 @@ def main() -> int:
         if isinstance(fb, (int, float)) and isinstance(fo, (int, float)) and fb > 55:
             delta = fo - fb
             report["anim_frame_delta_ms"] = round(delta, 2)
-            report["verdicts"]["anim_frame_win"] = (
+            verdicts["anim_frame_win"] = (
                 "PASS" if fo <= fb * 0.95 or delta < -2 else "WEAK_no_frame_cut"
             )
         else:
-            report["verdicts"]["anim_frame_win"] = "SKIP_light_load"
+            verdicts["anim_frame_win"] = "SKIP_light_load"
 
         # ----- Phase B: path admission -----
         log("=== Phase B: path admission A/B ===")
@@ -302,7 +327,7 @@ def main() -> int:
         B.telnet(["es reload"], settle=1.5)
         time.sleep(2)
         path_base = sample_health("path_baseline")
-        report["phases"]["path_baseline"] = path_base
+        phases["path_baseline"] = path_base
 
         write_path_config(PATH_CAP, PATH_DROP)
         reload_txt = B.telnet(["es reload", "es status"], settle=2.0)
@@ -312,23 +337,23 @@ def main() -> int:
             log("WARN: status pathCap may not match expected")
         time.sleep(3)
         path_on = sample_health("path_admission_on")
-        report["phases"]["path_admission_on"] = path_on
+        phases["path_admission_on"] = path_on
         # fidelity proxy: entity count should not collapse
         ab = path_base.get("entityAlives_avg") or 0
         ao = path_on.get("entityAlives_avg") or 0
         if ab > 20 and ao < ab * 0.4:
-            report["verdicts"]["path_fidelity"] = "FAIL_entity_collapse"
+            verdicts["path_fidelity"] = "FAIL_entity_collapse"
             code = max(code, 3)
         else:
-            report["verdicts"]["path_fidelity"] = "PASS"
+            verdicts["path_fidelity"] = "PASS"
         pb, po = path_base.get("frameMs_avg"), path_on.get("frameMs_avg")
         if isinstance(pb, (int, float)) and isinstance(po, (int, float)):
             report["path_frame_delta_ms"] = round(po - pb, 2)
-            report["verdicts"]["path_frame"] = (
+            verdicts["path_frame"] = (
                 "PASS_or_noise" if po <= pb * 1.15 else "REGRESSION_frame_up"
             )
         else:
-            report["verdicts"]["path_frame"] = "SKIP"
+            verdicts["path_frame"] = "SKIP"
 
         # restore vanilla path knobs
         write_path_config(0, 0.0)
@@ -337,13 +362,13 @@ def main() -> int:
         # overall
         hard = {
             k: v
-            for k, v in report["verdicts"].items()
+            for k, v in verdicts.items()
             if str(v).startswith("FAIL")
         }
         if hard:
             code = max(code, 1)
         report["exit_code"] = code
-        report["verdicts"]["overall"] = "PASS" if code == 0 else "FAIL"
+        verdicts["overall"] = "PASS" if code == 0 else "FAIL"
         log(f"=== VERDICTS: {json.dumps(report['verdicts'])} ===")
 
     except KeyboardInterrupt:
@@ -353,7 +378,7 @@ def main() -> int:
     except Exception as e:
         log(f"FAIL exception: {e}")
         report["error"] = repr(e)
-        report["verdicts"]["overall"] = "ERROR"
+        verdicts["overall"] = "ERROR"
         code = 4
     finally:
         # Isolated per step: a restore failure must not skip the reload, and

@@ -24,6 +24,7 @@ import json
 import os
 import sys
 import time
+from typing import TypedDict
 
 from harness_common import (
     CFG_SWAP,
@@ -53,7 +54,19 @@ SAMPLE_S = float(os.environ.get("BM_HOLD_SAMPLE_S", "12"))
 SKIP_START = os.environ.get("SKIP_SERVER_START", "0") == "1"
 
 
-def sample_health(label: str, seconds: float = SAMPLE_S) -> dict:
+class HealthSample(TypedDict):
+    """One averaged health window, as embedded in the run report."""
+
+    label: str
+    frameMs_avg: float | None
+    frameMs_max: float | None
+    tickAvgMs_avg: float | None
+    entityAlives: int
+    players: object
+    samples: int
+
+
+def sample_health(label: str, seconds: float = SAMPLE_S) -> HealthSample:
     frames, ticks = [], []
     # Monotonic window so a wall-clock step cannot truncate the sample period.
     t0 = time.monotonic()
@@ -100,7 +113,7 @@ def main() -> int:
     # Nested containers are built here and embedded by reference so the
     # verdict/phase writes below index a precisely typed dict instead of
     # reaching through report's object-valued slots.
-    phases: dict[str, dict] = {}
+    phases: dict[str, object] = {}
     verdicts: dict[str, str] = {}
     report = {
         "players": PLAYERS,
