@@ -26,6 +26,10 @@ jobs:
       # Actions pinned by full commit SHA (tag in comment) so a moved tag or a
       # compromised major-version release cannot inject code into the pipeline.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        # Same rationale as ci.yml: this job only reads the manifest, so the
+        # checkout does not need to leave a token behind in the workspace.
+        with:
+          persist-credentials: false
       - name: Check the tag matches Source/EfficientServer/ModInfo.xml
         shell: bash
         run: |

@@ -459,7 +459,7 @@ their defaults, so a fresh install refuses.
 | `SEVENDTD_GC_INCREMENTAL` | unset | Opt-in incremental GC: sets `GC_ENABLE_INCREMENTAL=1`; pair with `GC_PAUSE_TIME_TARGET` (ms) to cap each pause. |
 | (`settargetfps` console cmd) | 20 | Tick rate = frame rate (see `Server.TargetFps` above for the persistent mod knob). |
 | `SEVENDTD_CPU_AFFINITY` | unset | **Leave off.** Naive pinning measured a LOSS (+122% jitter): it defeats Ryzen CPPC preferred-core boost (HOST_TUNING). |
-| `SEVENDTD_CONFIG` | auto | Path of the serverconfig XML passed as `-configfile`. Default: `server/serverconfig.optimized.xml` if present, else the repo-root one. |
+| `SEVENDTD_CONFIG` | auto | Path of the serverconfig XML passed as `-configfile`. Default: `server/serverconfig.optimized.xml` if present, else the repo-root one. Copied into the server root when it lives elsewhere; an existing differing file there is kept once as `<name>.pre-optimized`. |
 | `SEVENDTD_LOGDIR` | `server/logs` | Where run_server.sh writes timestamped server logs. |
 | `SEVENDTD_DS_DIR` | Steam default | Dedicated install root used by build/install/run scripts (same var as `make ... DS=`). |
 

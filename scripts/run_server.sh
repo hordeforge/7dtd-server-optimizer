@@ -116,9 +116,17 @@ TS="$(date -u +%Y%m%d_%H%M%S)"
 LOG="$LOGDIR/server_$TS.log"
 
 # If config is outside the install tree, copy it beside the binary (the game often
-# resolves -configfile relative to its cwd).
+# resolves -configfile relative to its cwd). An existing, differing file there is
+# the operator's own server config, so keep the first copy this script would
+# overwrite: `<name>.pre-optimized` is written once and never rewritten, so a
+# later re-optimized launch cannot lose the original to a half-tuned config.
 CFG_ARG="$(basename "$CFG")"
 if [[ "$(readlink -f "$(dirname "$CFG")")" != "$(readlink -f "$SRV")" ]]; then
+  if [[ -f "$SRV/$CFG_ARG" ]] && ! cmp -s "$CFG" "$SRV/$CFG_ARG" \
+     && [[ ! -e "$SRV/$CFG_ARG.pre-optimized" ]]; then
+    cp -f "$SRV/$CFG_ARG" "$SRV/$CFG_ARG.pre-optimized"
+    echo "  Backup:  $CFG_ARG.pre-optimized (your pre-optimization config)"
+  fi
   cp -f "$CFG" "$SRV/$CFG_ARG"
 fi
 

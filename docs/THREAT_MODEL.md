@@ -45,7 +45,7 @@ write APIs under `Source/EfficientServer/`; only config reads,
 | B2 | Console-equivalent actor to mod commands (E3) | Whoever passes the game's telnet password (or connects from loopback with no password set) or holds console permission in game. This mod adds no second gate |
 | B3 | Mod to game host process (E1, E3, E4) | No boundary in a memory-safety sense: the mod shares the process, and patches rewrite game method behavior (prefix/transpiler/finalizer) |
 | B4 | Build and publish to installed server (E5) | `dist/EfficientServer/` copied verbatim into the game's `Mods/` tree; zips additionally published via `dist/*.zip` |
-| B5 | Host environment to server process (E5) | Env vars consumed at process init: `GC_FREE_SPACE_DIVISOR`, `GC_NPROCS`, `MONO_ENV_OPTIONS`, optional heap/affinity vars (`scripts/run_server.sh:48-60`); plus `LD_LIBRARY_PATH` prepended with the server dir (`run_server.sh:30`) |
+| B5 | Host environment to server process (E5) | Env vars consumed at process init: `GC_FREE_SPACE_DIVISOR`, `GC_NPROCS`, `MONO_ENV_OPTIONS`, optional heap/affinity vars (`scripts/run_server.sh:77-100`); plus `LD_LIBRARY_PATH` prepended with the server dir (`run_server.sh:75`) |
 | B6 | CI runner to repository (E6) | GitHub Actions with `permissions: contents: read` (`.github/workflows/ci.yml:10`), token not persisted into the runner workspace (`ci.yml:29`) |
 
 ## Assets
