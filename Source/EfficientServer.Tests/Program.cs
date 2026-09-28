@@ -761,6 +761,28 @@ namespace EfficientServer.Tests
                 "tick clock wrap: signed-negative sum still owns its uint slot");
             Check(!EfficientServer.Patches.TickClock.OwnsSlot(2, wrapT + 2, 3), "tick clock wrap: post-wrap tick -> no run");
 
+            // The animator stripe (AnimatorLodPatch) pumps calm-far rigs on an Nth-frame
+            // slot, so its phase has to come from the same zero-seeded cursor as every
+            // other cadence consumer: a run replayed from its seed must land the same
+            // rigs on the same frames. Capture what the live clock actually decides over
+            // 64 advances and re-derive it from the pure predicate at the same absolute
+            // frame indices; the traces must agree exactly.
+            int animStride = 4;
+            bool animReplayHeld = true;
+            for (int k = 0; k < 64 && animReplayHeld; k++)
+            {
+                EfficientServer.Patches.TickClock.Advance();
+                int frame = EfficientServer.Patches.TickClock.Ticks;
+                for (int id = 0; id < 8; id++)
+                {
+                    if (EfficientServer.Patches.TickClock.OwnsCurrentSlot(id, animStride)
+                        != EfficientServer.Patches.TickClock.OwnsSlot(id, frame, animStride))
+                    { animReplayHeld = false; break; }
+                }
+            }
+            Check(animReplayHeld,
+                "animator stripe replays off the shared frame cursor (live trace == pure predicate)");
+
             // TickIntervalEma deterministic replay. The explicit-timestamp overload is
             // the pure transition function behind BOTH the governor's tier machine and
             // the tick guard's shed decision; driving it here with synthetic tick

@@ -92,11 +92,17 @@ namespace EfficientServer.Patches
             // NOTE: calm-far LOD still uses enabled=false; emergency uses CullCompletely only.
             if (anim.enabled)
                 anim.enabled = false;
-            // Same wrap-safe striped-slot predicate TickClock's tests pin, driven by
-            // Time.frameCount instead of the tick clock (animator evaluation is
-            // per-frame, not per-tick). The uint cast inside keeps frameCount +
-            // entityId crossing int.MaxValue from flipping every entity's slot phase.
-            bool slotFrame = TickClock.OwnsSlot(entity.entityId, Time.frameCount, cfg.FarStride);
+            // Same wrap-safe striped-slot predicate every other cadence consumer
+            // uses, on TickClock (which steps per UpdateTick invocation = per frame,
+            // so the cursor granularity animator evaluation wants is unchanged).
+            // The engine's Time.frameCount also counted frames outside UpdateTick
+            // and reset nothing the mod could seed, so a replay could not reproduce
+            // the stripe phase; TickClock starts at zero and advances from the driver
+            // patch, so the same entity id takes the same slot on the same frame of a
+            // replayed run. Fail open to a pump every frame if that driver ever goes
+            // missing, the same degrade-don't-corrupt rule the other consumers use.
+            bool slotFrame = !TickClock.Alive
+                || TickClock.OwnsSlot(entity.entityId, TickClock.Ticks, cfg.FarStride);
             if (!slotFrame)
                 return false; // no pump, no managed interpretation this frame
             if (pump)
