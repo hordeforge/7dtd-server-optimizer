@@ -238,38 +238,18 @@ namespace EfficientServer.Tests
             return LoadTemp(json);
         }
 
-        // The shipped template, located by walking up from this binary for the
-        // directory that holds it (the same "find the project root by its
-        // marker" rule the scripts use) rather than by a relative path that
-        // only resolves from one build layout. Returns null when the harness
-        // runs outside the source tree (a bare published copy of this binary),
-        // and the caller SKIPs instead of passing on an absent file.
-        static string? ConfigTemplatePath() => FindRepoFile("config", "efficientserver.json");
-
         // Project-root-relative lookup by walking up from this binary, so a
         // check against a shipped file resolves from any build layout and from
         // a worktree, and reports "absent" (null) instead of throwing when the
-        // harness runs outside the source tree.
-        static string? FindRepoFile(params string[] relativeParts)
+        // harness runs outside the source tree. Pass Directory.Exists for a
+        // path that names a directory.
+        static string? FindRepoEntry(Func<string, bool> exists, params string[] relativeParts)
         {
             var dir = new DirectoryInfo(AppContext.BaseDirectory);
             while (dir != null)
             {
                 string candidate = Path.Combine(new[] { dir.FullName }.Concat(relativeParts).ToArray());
-                if (File.Exists(candidate)) return candidate;
-                dir = dir.Parent;
-            }
-            return null;
-        }
-
-        // Same walk, for a path that names a directory rather than a file.
-        static string? FindRepoDir(params string[] relativeParts)
-        {
-            var dir = new DirectoryInfo(AppContext.BaseDirectory);
-            while (dir != null)
-            {
-                string candidate = Path.Combine(new[] { dir.FullName }.Concat(relativeParts).ToArray());
-                if (Directory.Exists(candidate)) return candidate;
+                if (exists(candidate)) return candidate;
                 dir = dir.Parent;
             }
             return null;
@@ -287,7 +267,7 @@ namespace EfficientServer.Tests
         // untested. Self-skipping outside the source tree, like the checks above.
         static void CheckHarnessCoverageMap()
         {
-            string? srcDir = FindRepoDir("Source", "EfficientServer");
+            string? srcDir = FindRepoEntry(Directory.Exists, "Source", "EfficientServer");
             if (srcDir == null)
             {
                 Console.WriteLine("SKIP: harness coverage map (no source tree above this binary)");
@@ -295,7 +275,7 @@ namespace EfficientServer.Tests
             }
             var dir = new DirectoryInfo(srcDir);
             string[] compiled;
-            var csproj = FindRepoFile("Source", "EfficientServer.Tests", "EfficientServer.Tests.csproj");
+            var csproj = FindRepoEntry(File.Exists, "Source", "EfficientServer.Tests", "EfficientServer.Tests.csproj");
             if (csproj == null)
             {
                 Check(false, "the test csproj is reachable, so the coverage map can be checked");
@@ -367,7 +347,7 @@ namespace EfficientServer.Tests
         // channel set). Self-skipping outside the source tree.
         static void CheckLogStubFidelity()
         {
-            string? real = FindRepoFile("Source", "EfficientServer", "EsLog.cs");
+            string? real = FindRepoEntry(File.Exists, "Source", "EfficientServer", "EsLog.cs");
             if (real == null)
             {
                 Console.WriteLine("SKIP: EsLog stub fidelity (no source tree above this binary)");
@@ -2526,7 +2506,7 @@ namespace EfficientServer.Tests
             // The shipped template must be clean by construction: its keys are
             // the documented surface, so a regression here means CONFIG.md and
             // config/efficientserver.json drifted apart again.
-            var template = ConfigTemplatePath();
+            var template = FindRepoEntry(File.Exists, "config", "efficientserver.json");
             if (template == null)
             {
                 Console.WriteLine("SKIP: shipped-template unknown-key check (no source tree above this binary)");

@@ -863,6 +863,35 @@ def _selftest() -> int:
         "apm: a missing log reads as no data, and leaves no state",
         read_apm(Path(tempfile.gettempdir()) / "bench_parse-absent.log") is None,
     )
+    # The read happens on a one-second poll, so an un-announced miss would repeat
+    # for the rest of the run.
+    warned: list[str] = []
+    gone = Path(tempfile.gettempdir()) / "bench_parse-gone.log"
+    read_apm(gone, warn=warned.append)
+    read_apm(gone, warn=warned.append)
+    t.check("apm: a missing log is announced exactly once", len(warned) == 1)
+    # A gap larger than one poll's read cap, so the offset has to advance by what
+    # was read and not by the file size: claiming the whole size would skip the
+    # health line at the end of the gap and the server would look silent.
+    with tempfile.TemporaryDirectory() as td:
+        gap = Path(td) / "bench_parse-gap.log"
+        _write(
+            gap,
+            b"y" * (MAX_APM_READ_BYTES + 4096) + _apm_line(42, 12.0, 11.0, 0).encode() + b"\n",
+        )
+        after_gap = None
+        for _ in range(8):
+            after_gap = read_apm(gap)
+            if after_gap is not None:
+                break
+        t.check(
+            "apm: a gap past the read cap is drained until the trailing line parses",
+            after_gap is not None and after_gap["updates"] == 42,
+        )
+        t.check(
+            "apm: the offset never claims more than the file holds",
+            _APM_TAIL[gap]["off"] == gap.stat().st_size,
+        )
     # A replacement that kept the size AND the first 64 bytes, the width a
     # timestamp-only head prefix covers: only a window reaching past it sees that
     # the bytes at the old offset belong to a different file. Without the reset
