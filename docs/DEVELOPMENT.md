@@ -142,7 +142,8 @@ same version, add that version's row to the `docs/RESULTS.md` version
 history, and update the supported-version sentence in [`SECURITY.md`](../SECURITY.md).
 `check_version.py` (in `make test`) fails when the newest release
 section is not the version the mod reports, when sections are not newest-first,
-when a section is undated or repeated, when the `docs/RESULTS.md`
+when a section is undated or repeated, when a section carries two headings for
+one impact level (or an unknown one), when the `docs/RESULTS.md`
 version-history table has no row for the shipped version, and when
 `SECURITY.md` does not name it, so notes, history, security promise and
 manifest cannot be tagged out of sync.
@@ -152,7 +153,9 @@ server, and, under `### Breaking`, what a configured key or console command now
 does instead. A removed config key belongs under `### Breaking` with its
 migration step, not only under `### Removed`: config load fails soft, so a
 deleted key still parses and the lever is simply gone with no error to notice
-it by.
+it by. One heading per impact level per section: a second `### Fixed` in the same
+release splits those entries in half, and a reader scanning the first list never
+sees the rest.
 
 `## [Unreleased]` is staging: an operator runs nothing described there yet, so a
 config-facing change is announced only once its notes sit under a dated
@@ -211,7 +214,7 @@ Offline gates run by `make test` and CI. Live-server harnesses need a running de
 | `repo_root.py` | Shared repository-root lookup (marker walk, not `parent.parent`) used by the gates below; selftest pins the walk |
 | `cli_common.py` | Shared argument dispatch (`-h`/`--help`, `--selftest`, unknown-argument exit 2) for the gates below and every other script in this directory, plus `preflight_usage` for the three live harnesses, which answer `--help` before importing the loadgen sibling. Not an entry point |
 | `check_config_doc.py` | Regression gate (in `make test`): every `ServerPerfConfig` field must be documented in CONFIG.md; selftest pins its parsing/comparison logic |
-| `check_version.py` | Regression gate (in `make test`): ModInfo (source, plus dist when it has been packaged) == AssemblyVersion, no doc claims a future minor, the CHANGELOG release list is dated/newest-first and matches the shipped mod version, RESULTS.md's version-history table has a row for it, and SECURITY.md's supported-versions section names it; selftest pins version extraction/normalization |
+| `check_version.py` | Regression gate (in `make test`): ModInfo (source, plus dist when it has been packaged) == AssemblyVersion, no doc claims a future minor, the CHANGELOG release list is dated/newest-first, carries at most one heading per impact level per section and matches the shipped mod version, RESULTS.md's version-history table has a row for it, and SECURITY.md's supported-versions section names it; selftest pins version extraction/normalization and both changelog structure rules |
 | `es_cfg_guard.py` | Config swap/restore primitive: snapshot the installed `efficientserver.json` before a harness mutates it, and restore it on every exit path (a SIGKILLed run's interrupted restore is finished, or its backup quarantined, by the NEXT run); selftest pins the guard protocol, fixture by fixture and then over seeded-random hostile configs (operator-edited bytes, leftover backups, random step order) against the protocol invariants |
 | `bench_parse.py` | The parsers for text this repo does not write: the `[7dtd-server-apm]` health line out of the Unity server log (incremental tailing reader + windowed-rate reconstruction) and the `es animstate` console dump. They sit here, not in the harnesses that use them, because the harness import needs the `7dtd-loadgen` sibling and no gate can reach a parser behind it. Selftest pins the known-good line shapes, then fuzzes both: the log reader is judged differentially against a full-file rescan after every append (the incremental offset, carry buffer and remembered value must never disagree with the file), and both must stay fail-soft, so a malformed field is skipped whole rather than raised or half-applied |
 | `apm_tail.py` | Standalone copy of the APM reader and window math, split out of `measure_es_onoff.py` (which cannot be imported without a live server, so the tail cache would have had no test) and since superseded by `bench_parse.py`. Nothing imports it; `make check-scripts` still runs its selftest. Not an entry point |

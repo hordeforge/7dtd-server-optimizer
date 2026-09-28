@@ -15,7 +15,9 @@ Checks that:
    run newest-first by both version and date without repeats, and the newest
    one is the shipped mod version (a bump with no notes, a two-digit year, a
    date that does not exist, or notes for a version the manifest does not
-   carry, is caught).
+   carry, is caught). Each section also carries at most one heading per impact
+   level, from the known set, so a release's entries cannot be split across
+   two `### Fixed` blocks or hidden in a misspelled group.
 6. The shipped version has a row in the docs/RESULTS.md version-history
    table, so a release cannot ship with a version history that stops at the
    release before it.
@@ -110,10 +112,49 @@ def norm(v: str) -> tuple[int, ...]:
 # else at that level is not a release record.
 _SECTION_RE = re.compile(r"^## \[(?P<label>[^\]]+)\](?:\s+-\s+(?P<date>\S+))?\s*$", re.MULTILINE)
 
+# Impact groups a release section may split its entries into. Keep a matching
+# heading, `Fixed` or `Breaking` included, and a release carrying two of them is
+# a release whose entries are split in two: a reader scanning for one kind of
+# change reads the first list and misses the rest.
+_IMPACT_GROUPS = ("Added", "Changed", "Fixed", "Breaking", "Removed", "Deprecated")
+_HEADING_RE = re.compile(r"^### (?P<title>.+?)\s*$", re.MULTILINE)
+
 
 def changelog_sections(text: str) -> list[tuple[str, str | None]]:
     """Every `## [label] - date` section in file order, as (label, date)."""
     return [(m.group("label"), m.group("date")) for m in _SECTION_RE.finditer(text)]
+
+
+def _impact_group_fails(text: str) -> list[str]:
+    """Each release section must carry one heading per impact level.
+
+    A release section runs from its `## [X.Y.Z]` heading to the next one, with
+    the `[Unreleased]` staging area included. Two subsections of the same impact
+    level split that level's entries in half with nothing in between saying so
+    (the [Unreleased] staging section grew a second `### Fixed` and the second
+    list was a screen further down), and a heading outside the known set
+    (`### Breakin`) silently opens a group no reader scans. Both are cheap to
+    write and impossible to spot in review, which is what a gate is for.
+    """
+    fails: list[str] = []
+    bounds = [m.start() for m in _SECTION_RE.finditer(text)] + [len(text)]
+    for section, start, end in zip(
+        _SECTION_RE.finditer(text), bounds[:-1], bounds[1:], strict=True
+    ):
+        label = section.group("label")
+        body = text[start:end]
+        seen: set[str] = set()
+        for title in (m.group("title") for m in _HEADING_RE.finditer(body)):
+            if title not in _IMPACT_GROUPS:
+                fails.append(
+                    f"CHANGELOG.md section [{label}] has a `### {title}` heading, "
+                    f"which is not one of {', '.join(_IMPACT_GROUPS)}"
+                )
+            elif title in seen:
+                fails.append(f"CHANGELOG.md section [{label}] repeats the `### {title}` group")
+            else:
+                seen.add(title)
+    return fails
 
 
 def released_sections(text: str) -> list[tuple[str, str | None]]:
@@ -151,6 +192,8 @@ def _changelog_fails(text: str, shipped: str) -> list[str]:
     released = released_sections(text)
     if not released:
         return ["CHANGELOG.md has no `## [X.Y.Z] - date` release section"]
+
+    fails.extend(_impact_group_fails(text))
 
     seen: list[tuple[int, ...]] = []
     dates: list[tuple[str, date_type]] = []
@@ -349,9 +392,47 @@ def _selftest() -> int:
         "## [1.19.0] - 2026-09-20\n\n### Fixed\n- thing\n\n"
         "## [1.18.0] - 2026-09-11\n\n### Fixed\n- thing\n"
     )
+    # One impact group split in two: the shape a release section grows by
+    # accident when entries are appended to whichever group is open.
+    repeated_group = (
+        "## [1.19.0] - 2026-09-20\n\n### Added\n- a\n\n### Fixed\n- b\n\n### Fixed\n- c\n"
+    )
     t.check(
         "_changelog_fails accepts a well-formed newest-first list",
         _changelog_fails(good, "1.19.0") == [],
+    )
+    t.check(
+        "_changelog_fails accepts one heading per impact group",
+        _impact_group_fails("## [1.19.0] - 2026-09-20\n\n### Fixed\n- a\n\n### Breaking\n- b\n")
+        == [],
+    )
+    t.check(
+        "_impact_group_fails catches a group repeated inside one section",
+        any(
+            "repeats" in f
+            for f in _impact_group_fails(
+                "## [Unreleased]\n\n### Fixed\n- a\n\n### Breaking\n- b\n\n### Fixed\n- c\n"
+            )
+        ),
+    )
+    # The same heading in two different sections is the normal case, not a repeat.
+    t.check(
+        "_impact_group_fails reads one section at a time",
+        _impact_group_fails(
+            "## [Unreleased]\n\n### Fixed\n- a\n\n## [1.19.0] - 2026-09-20\n\n### Fixed\n- b\n"
+        )
+        == [],
+    )
+    t.check(
+        "_impact_group_fails catches a misspelled group",
+        any(
+            "not one of" in f
+            for f in _impact_group_fails("## [1.19.0] - 2026-09-20\n\n### Breakin\n- a\n")
+        ),
+    )
+    t.check(
+        "_changelog_fails surfaces the group split in a release section",
+        any("repeats" in f for f in _changelog_fails(repeated_group, "1.19.0")),
     )
     t.check(
         "released_sections drops Unreleased and prose headings",

@@ -32,7 +32,9 @@ This is the de facto policy, read off the history below rather than a scheme
 chosen up front:
 
 - **patch**: fixes only. The mod version lineage has one (1.4.1, follow-up
-  fixes); the tag scheme began at 0.1.0, so no tagged patch release exists yet.
+  fixes). No mod patch release has shipped under a tag: the one
+  patch-numbered tag, `v1.17.1`, re-tagged the 1.17.0 mod for metadata and
+  packaging changes and is described under `[1.17.1]` below.
 - **minor**: features, fixes, and config-surface changes, including removals
   and renames. 1.13.0 renamed config keys and 1.19.0 removed
   `scripts/gen_sbom.py`; the GC megapause probe's removal is the current
@@ -47,58 +49,11 @@ chosen up front:
   then check the startup log for `config unknown key` to catch anything the
   notes missed. Anything that removes or renames a config key, a console
   command, or a documented default lands under one of those two headings;
-  nothing breaking goes under `Changed` alone.
+  nothing breaking goes under `Changed` alone. Each impact level appears once
+  per release section (`scripts/check_version.py` enforces both), so a reader
+  scanning for one kind of change finds one list.
 
 ## [Unreleased]
-
-### Fixed
-- A retry of `make install` after a FAILED install no longer loses the operator's
-  config. The preserved `Config/` went to a `mktemp` name that only the failure
-  message named, so the next run found an install tree whose config the failed
-  run's `rm -rf` had already destroyed, installed the shipped default over it,
-  and left the tuning in a directory nothing read again. The copy now goes to a
-  fixed path (`SEVENDTD_INSTALL_BACKUP_DIR`, default
-  `<DS>/EfficientServer-install-backup`, overridable and warned about when it
-  sits inside the install tree like the uninstall backup is), and a run that
-  finds one adopts it instead of overwriting it. A successful install removes
-  it. A live config that differs from both the shipped default and the
-  preserved copy is an edit made after the failure and still wins, with a NOTE
-  naming which copy the install kept.
-- Quarantined `.stale` config backups no longer accumulate without bound beside
-  the installed `Config/`. The quarantine name is suffix-resolved so a repeat
-  never destroys the previous run's evidence, which meant a bench loop that
-  kept hitting a damaged config wrote one more file per run forever, in the
-  directory the game reads at boot and `install.sh` copies verbatim on every
-  reinstall. The newest `STALE_KEEP` (5) are kept, older ones pruned; count, not
-  age, because a burst of kills inside one bench session is exactly when the
-  history is wanted.
-- `scripts/bench_parse.py --selftest` no longer fails on a loaded host. The fuzz
-  gate asserted its 4000 rounds finished inside a fixed 30s wall-clock budget,
-  which grades the machine rather than the parser: the same run took 49.3s here
-  and passed everywhere else. The check is now a per-round ceiling, so it fires
-  on a round that stopped returning (the failure a fixed-iteration fuzz can
-  actually see) and not on a slow disk. The total stays on the PASS line as a
-  measurement.
-- `ruff format --check scripts`, the formatter half of `make lint`, is green
-  again: three harness files were committed in a layout the pinned ruff
-  (0.16.4) does not produce, so the gate failed on a clean checkout.
-- `make package` names a missing `zip`, `git`, `find`, `sort`, `touch` or `sed`
-  before it spends a compile. `zip` runs at the end of a pipeline, so its
-  absence used to surface as a bare "command not found" after the whole build.
-- The start-time and `es reload` apply chains no longer cascade. Both ran every
-  lever inside one `try`, so a single throwing step (mesh budgets, governor
-  re-base, dedicated skips) skipped every step behind it and the operator's only
-  record was a single "handler failed" line with no list of what actually
-  applied. Each lever now gets its own boundary through a shared `ApplyChain`
-  runner; the remaining levers apply, and the failures are collected and named
-  as `step[Type]: message` in one ERROR line. `es reload` still refuses to print
-  its success echo over a partial apply, so the console contract is unchanged.
-- A tick-guard shed batch that failed part-way no longer disappears from the
-  record. Entity removal is irreversible, so a throw mid-batch used to remove
-  the ids before it, skip the rest, and escape before the lifetime counter and
-  the shed line were written, under-reporting what left the world. The batch now
-  counts what was actually removed, continues past failures, and prints the
-  failed ids on the shed line.
 
 ### Breaking
 - The opt-in GC megapause diagnostic is gone: `Diagnostics.GcMegapauseTest`,
@@ -182,6 +137,53 @@ chosen up front:
   its inline `at uptime Ns` is the new trailing field, not a separate one.
 
 ### Fixed
+- A retry of `make install` after a FAILED install no longer loses the operator's
+  config. The preserved `Config/` went to a `mktemp` name that only the failure
+  message named, so the next run found an install tree whose config the failed
+  run's `rm -rf` had already destroyed, installed the shipped default over it,
+  and left the tuning in a directory nothing read again. The copy now goes to a
+  fixed path (`SEVENDTD_INSTALL_BACKUP_DIR`, default
+  `<DS>/EfficientServer-install-backup`, overridable and warned about when it
+  sits inside the install tree like the uninstall backup is), and a run that
+  finds one adopts it instead of overwriting it. A successful install removes
+  it. A live config that differs from both the shipped default and the
+  preserved copy is an edit made after the failure and still wins, with a NOTE
+  naming which copy the install kept.
+- Quarantined `.stale` config backups no longer accumulate without bound beside
+  the installed `Config/`. The quarantine name is suffix-resolved so a repeat
+  never destroys the previous run's evidence, which meant a bench loop that
+  kept hitting a damaged config wrote one more file per run forever, in the
+  directory the game reads at boot and `install.sh` copies verbatim on every
+  reinstall. The newest `STALE_KEEP` (5) are kept, older ones pruned; count, not
+  age, because a burst of kills inside one bench session is exactly when the
+  history is wanted.
+- `scripts/bench_parse.py --selftest` no longer fails on a loaded host. The fuzz
+  gate asserted its 4000 rounds finished inside a fixed 30s wall-clock budget,
+  which grades the machine rather than the parser: the same run took 49.3s here
+  and passed everywhere else. The check is now a per-round ceiling, so it fires
+  on a round that stopped returning (the failure a fixed-iteration fuzz can
+  actually see) and not on a slow disk. The total stays on the PASS line as a
+  measurement.
+- `ruff format --check scripts`, the formatter half of `make lint`, is green
+  again: three harness files were committed in a layout the pinned ruff
+  (0.16.4) does not produce, so the gate failed on a clean checkout.
+- `make package` names a missing `zip`, `git`, `find`, `sort`, `touch` or `sed`
+  before it spends a compile. `zip` runs at the end of a pipeline, so its
+  absence used to surface as a bare "command not found" after the whole build.
+- The start-time and `es reload` apply chains no longer cascade. Both ran every
+  lever inside one `try`, so a single throwing step (mesh budgets, governor
+  re-base, dedicated skips) skipped every step behind it and the operator's only
+  record was a single "handler failed" line with no list of what actually
+  applied. Each lever now gets its own boundary through a shared `ApplyChain`
+  runner; the remaining levers apply, and the failures are collected and named
+  as `step[Type]: message` in one ERROR line. `es reload` still refuses to print
+  its success echo over a partial apply, so the console contract is unchanged.
+- A tick-guard shed batch that failed part-way no longer disappears from the
+  record. Entity removal is irreversible, so a throw mid-batch used to remove
+  the ids before it, skip the rest, and escape before the lifetime counter and
+  the shed line were written, under-reporting what left the world. The batch now
+  counts what was actually removed, continues past failures, and prints the
+  failed ids on the shed line.
 - A failure to read whether the host is a dedicated server failed closed and
   silent. That read gates EVERY patch prefix, so a host where it kept throwing
   left the whole mod unpatched, and `es status` showed it only as
@@ -352,6 +354,25 @@ chosen up front:
   without the sibling names the directory it looked in instead of raising.
 - `check_config_doc.py` reported an unreadable gate input as a Python
   traceback; it now prints the FAIL line every other gate uses.
+- `make package` no longer builds a zip whose name contradicts what the mod
+  reports. The name came from `git describe` while the game reads the version
+  from `ModInfo.xml`, so a tag pushed past a manifest bump produced an
+  `EfficientServer-1.20.0.zip` whose mod announced `mod=1.19.0` in the server
+  log and every mod listing, with nothing catching it (`check_version.py` ties
+  the manifest to the assembly, the notes and the docs, and has no tag to
+  compare against). A release-form name that disagrees with `ModInfo.xml` now
+  fails the run and names both numbers; a commit-id or dirty name is still
+  free-form. An explicit `VERSION=` override also takes the `-dirty` mark a
+  modified tree would have gotten from `describe`, so a hand-named release
+  zip can no longer ship a modified tree under a clean release name.
+- The bench config guard wrote its atomic-replace temp through a name
+  (`efficientserver.json.tmp<pid>`) it predicted, in the live install
+  directory, with a create that followed anything already sitting there. A
+  pre-planted symlink at that name redirected the write to a file the run could
+  write but did not own. The temp is now created `O_EXCL` with an attempt
+  counter, exhausting every name fails the write loudly, the live file's own
+  permissions carry over to the replacement instead of the temp's 0600, and a
+  descriptor opened before an `fdopen` failure is closed instead of leaked.
 
 ### Changed
 - The governor throttle-ceiling constants (`EntityStrideMax`, `GraphUpdateMax`)
