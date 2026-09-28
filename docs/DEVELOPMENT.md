@@ -28,6 +28,7 @@ Two projects under `Source/`. The mod (`net48`) cannot build without a game inst
 | Path | Role |
 |---|---|
 | `EfficientServer/ModApi.cs` | `IModApi` entry point and composition root: the only place patches are enumerated (`RequiredGroups`), and the only place that installs, reloads, and re-bases the governor |
+| `EfficientServer/ApplyChain.cs` | The step runner both apply chains share: one boundary per lever, so a throwing step cannot skip the steps behind it, plus the collected `name[Type]: message` report the callers log (and `ModApi.ReloadConfig` rethrows on) |
 | `EfficientServer/Config.cs` | Config model: one sealed section class per config block, `ServerPerfConfig` with `Load` / `Normalize` / `FeatureActive`, and the pure `ShouldRunFor` / `BenchGodArmAllowed` policy the tests exercise |
 | `EfficientServer/EsLog.cs`, `LogLine.cs` | The single logging surface; the `LogLevel` enum lives here so low-level modules log without depending on `ModApi`. `LogLine` owns the record shape `Emit` renders: one physical line per record (a reported exception's breaks become ` | `) plus the `uptimeS=` stamp shared with the `es status` runtime line |
 | `EfficientServer/ConsoleCmdEfficientServer.cs` | The `es` console command; reads the live config, never owns state |

@@ -130,12 +130,37 @@ namespace EfficientServer.Patches
             // cut it by World.Entities.list order; never below the keep floor.
             List<int> shedIds = ShedOrder.Select(Census,
                 Mathf.Min(cfg.ShedBatch, enemies - cfg.MinEnemiesKept));
+            // Removal is IRREVERSIBLE and per-entity, so a throw part-way through
+            // the batch is the one place this loop can leave the world in a state
+            // no log line describes: the entities before the failure are gone, the
+            // rest stay, and an unguarded loop escapes before ShedTotal is updated
+            // and before the shed line is printed, so the lifetime count
+            // under-reports what actually happened while the cooldown still starts.
+            // Count what really left the world, keep going, and name the failure.
+            int shed = 0;
+            List<string> failures = null;
             for (int i = 0; i < shedIds.Count; i++)
-                world.RemoveEntity(shedIds[i], EnumRemoveEntityReason.Despawned);
-            int shed = shedIds.Count;
+            {
+                try
+                {
+                    world.RemoveEntity(shedIds[i], EnumRemoveEntityReason.Despawned);
+                    shed++;
+                }
+                catch (System.Exception ex)
+                {
+                    if (failures == null) failures = new List<string>();
+                    failures.Add(shedIds[i] + "[" + ex.GetType().Name + "]: " + ex.Message);
+                }
+            }
             ShedTotal += shed;
+            // A partial batch names the ids it could not remove, so "shed 7 of 15"
+            // is never read as a full batch of seven.
+            string why = failures == null
+                ? ""
+                : " PARTIAL: " + failures.Count + " of " + shedIds.Count
+                    + " removals failed: " + string.Join("|", failures.ToArray());
             EmitShedLine(cfg, emaMs, "shed " + shed + " farthest enemies ("
-                + enemies + " -> " + (enemies - shed) + ", lifetime " + ShedTotal + ")");
+                + enemies + " -> " + (enemies - shed) + ", lifetime " + ShedTotal + ")" + why);
         }
 
         // The trigger fired (tick over budget) but the shed was withheld. Same

@@ -26,29 +26,47 @@ namespace EfficientServer.Patches
                 // on the same number.
                 EsLog.Emit(LogLevel.Info, "world loaded; start-time knobs applying "
                     + "(fps, job workers, mesh budgets, dedicated skips, GC)");
-                // First: a world just loaded, so nothing the load-dependent gates
-                // derived from the previous world's ticks may carry into this one.
-                // The governor and the tick guard each keep a tick-interval average
-                // plus escalation windows; every one of those spans the world load
-                // itself unless it is re-based, and the shed/tier decisions they
-                // drive are not reversible. For the governor that includes its tier
-                // and a standing tier-2 animator emergency over rigs that no longer
-                // exist.
-                GovernorPatch.OnWorldChanged();
-                TickGuardPatch.OnWorldChanged();
-                DynamicMeshBudgetPatch.ApplyBudgets();
-                DedicatedSkipPatch.ApplyOptional();
-                GcIncremental.Apply();
-                ApplyTargetFps();
-                ApplyJobWorkers();
+                // Each lever is independent and gets its own boundary, so a throw
+                // in one cannot skip the rest: the chain reports what failed by
+                // name and the operator's `es status` keeps working.
+                ApplyChainResult applied = ApplyChain.Run(StartSteps);
+                if (applied.AnyFailed)
+                    EsLog.Emit(LogLevel.Error, "GameStartDone: " + applied.Failed
+                        + " of " + (applied.Applied + applied.Failed)
+                        + " start-time apply step(s) FAILED, the rest applied: "
+                        + applied.Summary());
             }
             catch (Exception ex)
             {
-                // Full exception: this wraps the whole start-time chain, so the type
-                // and stack are what say WHICH apply step broke.
+                // Anything outside the chain itself (the world-loaded anchor line
+                // and the step table). Full exception, because nothing here names
+                // the failing step the way the chain's own report does.
                 EsLog.Emit(LogLevel.Error, "GameStartDone handler failed: " + ex);
             }
         }
+
+        // The start-time chain, in apply order. The two re-bases lead: the world
+        // just loaded, so the governor's and the tick guard's tick history must be
+        // dropped before any measurement-driven lever below reads it. Each keeps a
+        // tick-interval average plus escalation windows, every one of which spans
+        // the world load itself unless it is re-based, and the shed/tier decisions
+        // they drive are not reversible; for the governor that includes a standing
+        // tier-2 animator emergency over rigs the new world never had.
+        //
+        // Every lever is independent and gets its own boundary: a single throw in
+        // one of them used to skip every step behind it, leaving the operator one
+        // "handler failed" line with a stack and no list of what did apply.
+        // Allocates once at class init, not per world load.
+        static readonly ApplyStep[] StartSteps =
+        {
+            new ApplyStep("governorReBase", GovernorPatch.OnWorldChanged),
+            new ApplyStep("tickGuardReBase", TickGuardPatch.OnWorldChanged),
+            new ApplyStep("meshBudgets", DynamicMeshBudgetPatch.ApplyBudgets),
+            new ApplyStep("dedicatedSkips", DedicatedSkipPatch.ApplyOptional),
+            new ApplyStep("gcIncremental", GcIncremental.Apply),
+            new ApplyStep("targetFps", ApplyTargetFps),
+            new ApplyStep("jobWorkers", ApplyJobWorkers),
+        };
 
         // Same live-UNDO pair as ApplyTargetFps: a reload to 0 (or a disable)
         // must restore the pre-mod worker count, not leave our value in place.

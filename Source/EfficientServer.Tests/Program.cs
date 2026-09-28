@@ -1068,6 +1068,51 @@ namespace EfficientServer.Tests
                 "log line: Emit records one stamped single-line entry per call, on the right channel");
         }
 
+        // The apply-chain runner behind GameStartPatch.OnGameStartDone and
+        // ModApi.ReloadConfig. The property that matters is failure ISOLATION: a
+        // chain of independent levers used to sit in one try, so a single throwing
+        // step silently skipped every step behind it and the operator's only
+        // record was one line with no list of what DID apply.
+        static void CheckApplyChainIsolation()
+        {
+            var ran = new List<string>();
+            var steps = new List<EfficientServer.ApplyStep>
+            {
+                new EfficientServer.ApplyStep("first", () => ran.Add("first")),
+                new EfficientServer.ApplyStep("throws", () => { ran.Add("throws"); throw new InvalidOperationException("boom"); }),
+                new EfficientServer.ApplyStep("third", () => ran.Add("third")),
+                new EfficientServer.ApplyStep("alsoThrows", () => { throw new NotSupportedException("nope"); }),
+                new EfficientServer.ApplyStep("last", () => ran.Add("last")),
+            };
+            EfficientServer.ApplyChainResult result = EfficientServer.ApplyChain.Run(steps);
+
+            Check(ran.Count == 4 && ran[0] == "first" && ran[1] == "throws"
+                    && ran[2] == "third" && ran[3] == "last",
+                "apply chain: a throwing step does not skip the steps after it (ran: "
+                + string.Join(",", ran.ToArray()) + ")");
+            Check(result.Applied == 3 && result.Failed == 2,
+                "apply chain: every step is counted as applied or failed (applied "
+                + result.Applied + ", failed " + result.Failed + ")");
+            Check(result.AnyFailed,
+                "apply chain: a chain with a failed step reports it, so the caller can still rethrow");
+
+            // The failure text is the operator-facing half: it must name WHICH
+            // lever broke, with the exception type, in run order, one entry per
+            // failed step.
+            string summary = result.Summary();
+            Check(summary == "throws[InvalidOperationException]: boom|alsoThrows[NotSupportedException]: nope",
+                "apply chain: summary names each failed step with its type and message (got: " + summary + ")");
+
+            // A clean chain reports nothing, so a healthy world load or reload
+            // stays silent exactly as it was.
+            EfficientServer.ApplyChainResult clean = EfficientServer.ApplyChain.Run(
+                new List<EfficientServer.ApplyStep> { new EfficientServer.ApplyStep("ok", () => { }) });
+            Check(!clean.AnyFailed && clean.Summary() == "",
+                "apply chain: an all-clean run reports no failures and stays silent");
+            Check(EfficientServer.ApplyChain.Run(new List<EfficientServer.ApplyStep>()).Applied == 0,
+                "apply chain: an empty chain is a no-op, not a failure");
+        }
+
         static int RunChecks()
         {
             // Defaults.
@@ -1801,6 +1846,7 @@ namespace EfficientServer.Tests
             CheckDedicatedHostGate();
             CheckDegradeRegistry();
             CheckLogLineFormat();
+            CheckApplyChainIsolation();
 
             // Fuzz: the config file is the mod's untrusted-input surface, so a
             // deterministic target hammers Load. Structure-aware mutations of the

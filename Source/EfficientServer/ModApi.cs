@@ -176,47 +176,74 @@ namespace EfficientServer
                 EsLog.Emit(LogLevel.Warn, "config reloaded without Diagnostics.AllowFidelityProbes: "
                     + "armed animator/rig probes released");
             }
+            ApplyChainResult applied;
             try
             {
-                // The governor holds state derived from the PREVIOUS config object
-                // (cached vanilla base + in-place throttle levers); re-base it before
-                // anything reads the new object mid-tier.
-                Patches.GovernorPatch.OnConfigReloaded();
-                // Re-run the apply-once knobs so "reload takes effect immediately" holds
-                // for them too (idempotent; they log only real changes).
-                Patches.DynamicMeshBudgetPatch.ApplyBudgets();
-                Patches.GameStartPatch.ApplyTargetFps();
-                Patches.GameStartPatch.ApplyJobWorkers();
-                // The imperative skip group is installed at GameStartDone ONLY when the
-                // then-current config was enabled (ApplyOptional early-outs otherwise),
-                // so a disabled->enabled reload must install it here or the contract
-                // above ("patches are installed so reload can enable it") silently fails
-                // for music/splash/env-audio/spectrum skips until restart. Idempotent:
-                // Harmony replaces an existing patch by MethodInfo instead of stacking.
-                // Each skip's prefix live-gates on ShouldRun AND its own knob per call,
-                // so a reload can take a skip away again without a restart too.
-                // GcIncremental joins for the same reason: its one-shot guard is what
-                // makes late-enable possible (disable stays impossible by design).
-                // Both calls self-guard on Enabled/ShouldRun.
-                Patches.DedicatedSkipPatch.ApplyOptional();
-                GcIncremental.Apply();
+                applied = ApplyChain.Run(ReloadSteps);
             }
             catch (Exception ex)
+            {
+                // A failure in the chain's own machinery (building or walking the
+                // step table), so the per-step isolation never ran and an unknown
+                // number of levers are un-applied.
+                EsLog.Emit(LogLevel.Error, "config reload apply failed [" + ex.GetType().Name
+                    + "] - new config loaded, some levers may not have applied: " + ex);
+                throw;
+            }
+            if (applied.AnyFailed)
             {
                 // Load already swapped the config object, so after a failed apply the
                 // state is "new values live, some levers not applied". Log that with
                 // the mod prefix (the game's own command-exception dump is unprefixed),
                 // then rethrow so the caller's success echo never prints over a
                 // partial apply.
-                EsLog.Emit(LogLevel.Error, "config reload apply failed [" + ex.GetType().Name
-                    + "] - new config loaded, some levers may not have applied: " + ex);
-                throw;
+                EsLog.Emit(LogLevel.Error, "config reload partially applied: "
+                    + applied.Failed + " of "
+                    + (applied.Applied + applied.Failed)
+                    + " step(s) did not apply, new config loaded - " + applied.Summary());
+                throw new InvalidOperationException(
+                    "config reload partially applied: " + applied.Summary());
             }
             EsLog.Emit(LogLevel.Info, "config reloaded; enabled=" + Config.Enabled
                 + (File.Exists(path) ? ""
                     : " (NO CONFIG FILE at " + path + " - built-in defaults applied)"));
             return true;
         }
+
+        // The re-apply chain `es reload` runs, in apply order.
+        //
+        // The governor re-base leads because it settles state derived from the
+        // PREVIOUS config object (the cached vanilla base and the in-place
+        // throttle levers), which every other step below then reads against the
+        // swapped-in object. The rest re-run the apply-once knobs, so "reload
+        // takes effect immediately" holds for them too (all idempotent; they log
+        // only real changes). The imperative skip group is installed at
+        // GameStartDone ONLY when the then-current config was enabled
+        // (ApplyOptional early-outs otherwise), so a disabled->enabled reload
+        // must install it here or the contract above ("patches are installed so
+        // reload can enable it") silently fails for music/splash/env-audio/
+        // spectrum skips until restart; Harmony replaces an existing patch by
+        // MethodInfo instead of stacking, and each skip's prefix live-gates on
+        // ShouldRun AND its own knob per call, so a reload can also take a skip
+        // away again without a restart. GcIncremental joins for the same reason:
+        // its one-shot guard is what makes late-enable possible (disable stays
+        // impossible by design). Both self-guard on Enabled/ShouldRun.
+        //
+        // Run through ApplyChain, not one try, so a single throwing lever cannot
+        // skip the ones behind it. It used to: a governor re-base failing on a
+        // new build left the other five un-reapplied, and the console suppressed
+        // its success echo over the "failure", so the operator was told the
+        // reload failed with no way to learn that five of the six levers were in
+        // fact live.
+        static readonly ApplyStep[] ReloadSteps =
+        {
+            new ApplyStep("governorReBase", Patches.GovernorPatch.OnConfigReloaded),
+            new ApplyStep("meshBudgets", Patches.DynamicMeshBudgetPatch.ApplyBudgets),
+            new ApplyStep("targetFps", Patches.GameStartPatch.ApplyTargetFps),
+            new ApplyStep("jobWorkers", Patches.GameStartPatch.ApplyJobWorkers),
+            new ApplyStep("dedicatedSkips", Patches.DedicatedSkipPatch.ApplyOptional),
+            new ApplyStep("gcIncremental", GcIncremental.Apply),
+        };
 
         // One ordered table owns BOTH lists that used to live apart: the required
         // patch groups InitMod installs (in this order) and the

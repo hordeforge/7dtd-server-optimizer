@@ -51,6 +51,22 @@ chosen up front:
 
 ## [Unreleased]
 
+### Fixed
+- The start-time and `es reload` apply chains no longer cascade. Both ran every
+  lever inside one `try`, so a single throwing step (mesh budgets, governor
+  re-base, dedicated skips) skipped every step behind it and the operator's only
+  record was a single "handler failed" line with no list of what actually
+  applied. Each lever now gets its own boundary through a shared `ApplyChain`
+  runner; the remaining levers apply, and the failures are collected and named
+  as `step[Type]: message` in one ERROR line. `es reload` still refuses to print
+  its success echo over a partial apply, so the console contract is unchanged.
+- A tick-guard shed batch that failed part-way no longer disappears from the
+  record. Entity removal is irreversible, so a throw mid-batch used to remove
+  the ids before it, skip the rest, and escape before the lifetime counter and
+  the shed line were written, under-reporting what left the world. The batch now
+  counts what was actually removed, continues past failures, and prints the
+  failed ids on the shed line.
+
 ### Breaking
 - The opt-in GC megapause diagnostic is gone: `Diagnostics.GcMegapauseTest`,
   `Diagnostics.WarmupSeconds` and `Diagnostics.GrowSeconds` no longer exist,
