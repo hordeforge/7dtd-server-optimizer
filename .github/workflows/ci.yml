@@ -54,6 +54,37 @@ jobs:
       - run: uv tool install mypy==${{ steps.versions.outputs.mypy }}
       - run: make test
 
+  windows-harness:
+    # The shipped DLL is OS-neutral managed code loaded by the game's own
+    # runtime, and a Windows host is where a dedicated server usually runs, so
+    # the game-type-free harness (config load, normalize, config-path
+    # discovery, file IO) runs there too. The Linux gate above can only show
+    # Linux behavior: a case-insensitive filesystem, backslash paths and no
+    # POSIX mode bits are exactly the conditions the path and IO code has to
+    # survive on that host. Only that project runs here; the shell, Makefile
+    # and Python gates stay Linux, which is what the build tooling targets.
+    # Pinned image for the same reason as ubuntu-24.04 above: a floating
+    # runner changes the preinstalled SDK and tool set under the gate.
+    runs-on: windows-2022
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Same pin and cache key as the Linux jobs; global.json supplies the SDK.
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          cache: true
+          cache-dependency-path: Source/EfficientServer.Tests/packages.lock.json
+      # `make unit` without the Makefile: it exports POSIX paths and its
+      # preflights shell out to unix tools, and the dotnet commands it wraps
+      # are the whole recipe.
+      - run: dotnet restore --locked-mode Source/EfficientServer.Tests
+      - run: dotnet run --project Source/EfficientServer.Tests -c Release --no-restore
+
   coverage-badge:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: optimizer

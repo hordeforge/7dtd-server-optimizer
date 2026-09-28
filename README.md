@@ -134,7 +134,11 @@ supported retarget: rebuild with `make build` and reinstall.
 - Fallback backend `SEVENDTD_BUILD_BACKEND=mcs` (Mono `mcs`) when no SDK is present
 - Host OS: the build/run/package tooling targets **Linux** hosts (Steam library
   paths, GNU coreutils, `taskset`); the packaged DLL itself is OS-neutral
-  managed code loaded by the game's own runtime on any dedicated-server host
+  managed code loaded by the game's own runtime on any dedicated-server host.
+  CI runs the game-type-free harness (`Source/EfficientServer.Tests`, config
+  load/normalize and config-path discovery) on a Windows runner as well as
+  Linux, so the OS-neutral claim is exercised, not just asserted; the
+  Harmony patches themselves need a game install and are covered on Linux
 - `make test` additionally needs `shellcheck`, `ruff` (pinned install:
   `uv tool install ruff==0.16.4`; config in `ruff.toml`), `mypy` (pinned install:
   `uv tool install mypy==2.1.0`; config in `mypy.ini`), and Python 3

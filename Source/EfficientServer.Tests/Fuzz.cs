@@ -322,6 +322,12 @@ namespace EfficientServer.Tests
             return s.Substring(0, cut) + "...[" + s.Length + " chars]";
         }
 
+        // A knob is an INSTANCE property the serializer writes into the document.
+        // A static one (LastLoadFailed) is a load outcome, not a setting: the
+        // serializer never emits it, so the deserialized-defaults seed has no node
+        // for it and it has no business in the mutation corpus.
+        static bool IsKnob(PropertyInfo p) => p.GetMethod != null && !p.GetMethod.IsStatic;
+
         // Dotted leaf paths derived from the config schema itself, so newly added
         // knobs join the fuzz corpus automatically instead of drifting stale. The
         // binding surface is ServerPerfConfig.ConfigProperties, the same one the
@@ -334,6 +340,7 @@ namespace EfficientServer.Tests
             var leaves = new List<string[]>();
             foreach (var top in ServerPerfConfig.ConfigProperties)
             {
+                if (!IsKnob(top)) continue;
                 if (top.PropertyType == typeof(bool) || top.PropertyType == typeof(int))
                 {
                     leaves.Add(new[] { top.Name });

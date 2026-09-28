@@ -2,7 +2,10 @@
 
 The whole CI gate is one local command. If `make test` passes on your machine,
 CI will pass: it runs exactly `make test` on every PR and on pushes to main
-(`.github/workflows/ci.yml`).
+(`.github/workflows/ci.yml`). A second job runs the game-type-free harness
+(`Source/EfficientServer.Tests`) on Windows, because the shipped DLL is
+OS-neutral managed code that a Windows host loads; the shell, Makefile and
+Python gates stay Linux, which is what the build tooling targets.
 
 ## Requirements
 

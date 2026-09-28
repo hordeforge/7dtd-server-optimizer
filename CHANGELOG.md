@@ -41,6 +41,11 @@ version 1.17.0; every release after them takes its number from the tag.
   informed is the allocation work it argued for.
 
 ### Added
+- The game-type-free harness (config load, normalize, config-path discovery)
+  now also runs on a Windows CI runner, so the README's claim that the shipped
+  DLL is OS-neutral managed code is exercised on the host OS a dedicated
+  server usually runs, not asserted from a Linux-only run. No shipped behavior
+  changed.
 - A JSON key that binds to no knob is now named at load
   (`config unknown key 'Pathfinding.GraphUpdateEveryTick' ignored ...` on the
   WARNING channel) instead of silently leaving the lever at its default. The
@@ -56,6 +61,11 @@ version 1.17.0; every release after them takes its number from the tag.
   `probeAllow=`.
 
 ### Fixed
+- The config structure fuzz treated the static `ServerPerfConfig.LastLoadFailed`
+  load outcome as a knob, so it mutated a leaf the serializer never writes and
+  the suite failed on `leaf 'LastLoadFailed' present in serialized defaults`.
+  The reflected schema now walks instance properties only, which is what the
+  deserialized-defaults seed actually contains.
 - `TickGuard` shed batches were not reproducible: co-located enemies share a
   distance exactly, and the batch was cut by `World.Entities.list` order, so the
   same horde at the same distances could shed different zombies on two runs.
