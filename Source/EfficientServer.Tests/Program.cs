@@ -10,6 +10,13 @@ using EfficientServer.Patches;
 // Stub the only external symbols Config.cs touches (game-type-free), so the real
 // Config source compiles and runs under the plain .NET SDK. Warnings are recorded
 // so tests can pin which channel each config problem is reported on.
+//
+// This is a hand-maintained mirror of Source/EfficientServer/EsLog.cs, kept
+// separate because the real one calls the game's global::Log (LogLibrary.dll),
+// which this project deliberately does not reference. Nothing checks the two
+// agree, so a signature change to Emit or a new LogLevel member must be copied
+// here by hand, or this project keeps compiling against a shape the net48
+// build no longer has.
 namespace EfficientServer
 {
     internal enum LogLevel { Info, Warn, Error }

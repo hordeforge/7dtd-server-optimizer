@@ -21,12 +21,29 @@ This file is **optimizer-only**: how to change EfficientServer without inventing
 
 Default config: `DedicatedOnly: true`. Do not turn EfficientServer into a client overhaul or a measurement suite.
 
+## Source layout
+
+Two projects under `Source/`. The mod (`net48`) cannot build without a game install; the test harness (`net8.0`) builds and runs on the bare .NET SDK, which is what `make test` runs.
+
+| Path | Role |
+|---|---|
+| `EfficientServer/ModApi.cs` | `IModApi` entry point and composition root: the only place patches are enumerated (`RequiredGroups`), and the only place that installs, reloads, and re-bases the governor |
+| `EfficientServer/Config.cs` | Config model: one sealed section class per config block, `ServerPerfConfig` with `Load` / `Normalize` / `FeatureActive`, and the pure `ShouldRunFor` / `BenchGodArmAllowed` policy the tests exercise |
+| `EfficientServer/EsLog.cs` | The single logging surface; the `LogLevel` enum lives here so low-level modules log without depending on `ModApi` |
+| `EfficientServer/ConsoleCmdEfficientServer.cs` | The `es` console command; reads the live config, never owns state |
+| `EfficientServer/GcIncremental.cs`, `BoehmNative.cs` | One-shot Boehm mode flip and the only P/Invoke surface into it |
+| `EfficientServer/Patches/` | Harmony patches plus the shared types they call. The `*Patch` suffix marks a class that participates in Harmony patching, but not all of them are processed the same way: `[HarmonyPatch]`-annotated classes go through Harmony's class processor from `ModApi.RequiredGroups` and MUST match a game method, while `GameStartPatch`, `DynamicMeshBudgetPatch` and `DedicatedSkipPatch` install their patches imperatively from the `ModEvents.GameStartDone` hook instead (a missing target there logs its own status, it does not fail the group). Non-suffixed files here (`TickClock`, `TickIntervalEma`, `AiAlertGate`, `AnimatorEmergency`) are support types, never patched at all |
+| `EfficientServer.Tests/` | Assert harness (no test framework, so it builds offline) over a hand-picked, game-type-free subset of the mod, listed as `<Compile Include>` paths in its csproj |
+
+**Getting new code under test:** the harness compiles real production files by path rather than referencing the mod assembly, because the mod needs the game DLLs. A new module is testable only if it references no game type, and it gets zero coverage until its path is added to that csproj. `EsLog` is the one production type the harness re-declares as a stub, because the real one calls the game's `global::Log`.
+
 ## Patch groups
 
 See [`FEATURES.md`](FEATURES.md) for behavior and validation notes. Groups are applied independently from `ModApi` so one missing target should not kill the rest.
 
 | Group | Config block | Intent |
 |---|---|---|
+| Tick clock | (none, always on) | `TickClock` counter every stripe reads; unconditional, no config gate may stop a clock other groups consume |
 | AI LOD | `AiLod` | Distant AI scale / distance bands |
 | Task skip | (with AI LOD) | Distant non-alert `updateTasks` throttling |
 | Dedicated skips | `SkipOnDedicated` | Presentation paths useless on headless (incl. `ExplosionParticles`, ambient spectrum) |
@@ -37,6 +54,7 @@ See [`FEATURES.md`](FEATURES.md) for behavior and validation notes. Groups are a
 | Path admission | `Pathfinding.MaxPathEnqueuesPerTick` / `DropPathWhenFarDistSq` | Cap / drop far non-priority path enqueues |
 | InitScan node pool | `Pathfinding.PoolInitScanNodes` | UNSAFE: reuse nav node array across scans |
 | Fast single-target send | `Network.FastSingleTargetSend` | O(1) recipient lookup in `SendPackage` |
+| Client-list snapshot | `Network.ClientListSnapshot` | Scan a private copy of the client list, closing the stock receive-thread enumeration race |
 | Replication stride | `Network.EntityDistributionEveryTicks` | Run the replication pass every Nth tick |
 | Chunk-send throttle | `WorldTransfer.ChunkPackagesPerObserverPerTick` | Cap chunk packages per observer per tick |
 | Target FPS | `Server.TargetFps` | Persistent frame-rate set at game start |
@@ -46,6 +64,8 @@ See [`FEATURES.md`](FEATURES.md) for behavior and validation notes. Groups are a
 | TickGuard | `TickGuard` | Last-resort emergency load shedding |
 | BenchGod | console `es benchgod` | BENCH ONLY diagnostic (player damage immunity; arming needs `Diagnostics.AllowBenchGod: true`) |
 | Game start reapply | (lifecycle) | Re-apply mesh settings after start |
+
+The authoritative list is the `RequiredGroups` table in `Source/EfficientServer/ModApi.cs`: one row per patch group, pairing the type the class processor patches with the `ServerPerfConfig.Key*` constant its init log reports against, so the apply list and the feature vocabulary cannot drift. `Game start reapply` is not in it (that is the `ModEvents.GameStartDone` lifecycle hook, not a Harmony group).
 
 Change **one group at a time**, then re-measure.
 
@@ -134,15 +154,21 @@ are self-contained under the MIT license terms.
 
 ### Validation tooling (scripts/)
 
+Offline gates run by `make test` and CI. Live-server harnesses need a running dedicated server plus the `7dtd-loadgen` sibling, so `make test` only syntax-checks them (`compileall`); the shell build/install scripts are `make` targets, not gates.
+
 | Script | Role |
 |---|---|
 | `repo_root.py` | Shared repository-root lookup (marker walk, not `parent.parent`) used by the gates below; selftest pins the walk |
 | `check_config_doc.py` | Regression gate (in `make test`): every `ServerPerfConfig` field must be documented in CONFIG.md; selftest pins its parsing/comparison logic |
 | `check_version.py` | Regression gate (in `make test`): ModInfo (source+dist) == AssemblyVersion, no doc claims a future minor; selftest pins version extraction/normalization |
-| `verify_reproducible.sh` (`make verify-reproducible`) | Rebuild-and-compare proof of the packaging reproducibility claim: same-tree repackage, full recompile, out-of-tree path variation; needs a game install |
+| `es_cfg_guard.py` | Config swap/restore primitive: snapshot the installed `efficientserver.json` before a harness mutates it, and restore it on every exit path including a SIGKILLed run; selftest pins the guard protocol |
+| `coverage_badge.py` | Renders the Cobertura report from `make coverage` into a badge SVG (CI pastes it into the README); selftest pins the percentage and colour bands |
+| `harness_common.py` | Shared plumbing for the three live harnesses below: loadgen import path, env-driven paths, readiness probe, report writer. Not an entry point |
 | `validate_anim_path_admission.py` | Live A/B: animator-emergency + path-admission against real bots/zombies (telnet + loadgen); see RESULTS |
 | `validate_bloodmoon_path.py` | Live blood-moon path-admission A/B: real director-spawned horde, baseline vs path knobs on; writes a JSON report |
 | `measure_es_onoff.py` | Live whole-mod ES on/off APM compare; `ES_ARM=on|off` = matched-arm mode (fresh server per arm) |
+| `verify_reproducible.sh` (`make verify-reproducible`) | Rebuild-and-compare proof of the packaging reproducibility claim: same-tree repackage, full recompile, out-of-tree path variation; needs a game install |
+| `build.sh` / `install.sh` / `package.sh` / `run_server.sh` | `make build` / `install` / `package` / `run`; the only scripts that need a game install |
 
 Known infra note: >12 loadgen bots can trigger a stock LiteNetLib join flake
 (`Collection was modified` in `CreateEvent`) that drops clients; use small

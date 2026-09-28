@@ -72,7 +72,7 @@ namespace EfficientServer
 
         /// <summary>
         /// One choke point for command output that must outlive the console
-        /// session: echoes to the live console AND persists via EsLog.Log, so
+        /// session: echoes to the live console AND persists via EsLog.Emit, so
         /// state-changing commands (animprobe, rigprobe, benchgod) leave an audit
         /// trail in the server log for incident investigation. Read-only bulk
         /// output (status, animstate dumps) stays on SdtdConsole only.
