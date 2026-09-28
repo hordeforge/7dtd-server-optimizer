@@ -12,7 +12,9 @@
 # build.sh); it exists for hosts without an SDK, not for releases.
 #
 # Version: taken from the newest git tag (vX.Y.Z -> X.Y.Z), or overridden
-# with VERSION=x.y.z. Requires a local game install: build.sh compiles
+# with VERSION=x.y.z, with -dirty appended whenever the tree is modified. A
+# release-form name must match the Version in Source/EfficientServer/ModInfo.xml.
+# Requires a local game install: build.sh compiles
 # against the shipped Assembly-CSharp.dll, which this repo does not
 # redistribute (see ../AGENTS.md).
 set -euo pipefail
@@ -30,7 +32,9 @@ everything is read from the environment.
 
 Environment:
   VERSION             version suffix for the zip name (default: newest git tag,
-                      with -dirty on a modified tree, else the short commit id)
+                      with -dirty on a modified tree, else the short commit id).
+                      A release-form value (x.y.z) must equal the Version in
+                      Source/EfficientServer/ModInfo.xml; the run fails otherwise
   SOURCE_DATE_EPOCH   zip entry mtime epoch (default: last commit time). Held
                       constant across builds, so two builds of one tree are
                       byte-identical
@@ -62,18 +66,53 @@ stage_tmpdir
 
 "$ROOT/scripts/build.sh"
 
-# --dirty is mandatory here: without it a modified working tree describes as
-# the clean tag and ships a different zip under the release name of the
+# The dirty mark is a property of the tree, not of where the version came from:
+# --dirty is mandatory on the describe below, and the same mark is applied to an
+# explicit VERSION= override, which describe would have stamped. Without either,
+# a modified working tree describes as the clean tag (or is handed a release
+# name verbatim) and ships a different zip under the release name of the
 # untouched release.
+if [[ -n "$(git -C "$ROOT" status --porcelain 2>/dev/null)" ]]; then
+  DIRTY_SUFFIX="-dirty"
+else
+  DIRTY_SUFFIX=""
+fi
 VERSION="${VERSION:-$(git -C "$ROOT" describe --tags --always --dirty 2>/dev/null || true)}"
 VERSION="${VERSION#v}"
-if [[ -z "$VERSION" || "$VERSION" == *-* && "$VERSION" != *-dirty ]]; then
-  # No tag yet (or an annotated-tag distance like v1.17.0-3-gabc1234): fall
-  # back to a short commit id.
+# Strip the mark before the distance test, so a tag-distance form on a dirty
+# tree (v1.17.0-3-gabc1234-dirty) is still recognized as a distance and not
+# shipped under a version string. The mark is reapplied below.
+VERSION="${VERSION%-dirty}"
+if [[ -z "$VERSION" || "$VERSION" == *-* ]]; then
+  # No tag yet (or an annotated-tag distance like v1.17.0-3-gabc1234): neither
+  # names a release, so fall back to a short commit id.
   VERSION="$(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null || echo unknown)"
 fi
+VERSION="$VERSION$DIRTY_SUFFIX"
 if [[ ! "$VERSION" =~ ^[0-9A-Za-z._-]+$ ]]; then
   echo "ERROR: unusable version '$VERSION' (set VERSION=x.y.z explicitly)" >&2
+  exit 1
+fi
+
+# The zip is named for the tag, but the game reads the mod version from
+# ModInfo.xml, so a release tagged past the manifest ships a v1.20.0 zip whose
+# mod reports 1.19.0 to the server console and to every mod listing. Nothing
+# else cross-checks the two: check_version.py ties ModInfo to AssemblyInfo, the
+# CHANGELOG and the docs, and has no tag to compare against. Only a release-form
+# version is checked (the mark is stripped above, so the check also fires while
+# the tree is still dirty); a commit-id name already says what it is.
+MODINFO_VERSION="$(sed -n 's/.*<Version value="\([^"]*\)".*/\1/p' \
+  "$ROOT/Source/EfficientServer/ModInfo.xml" | head -n 1)"
+if [[ -z "$MODINFO_VERSION" ]]; then
+  echo "ERROR: no <Version> in Source/EfficientServer/ModInfo.xml" >&2
+  exit 1
+fi
+if [[ "${VERSION%-dirty}" =~ ^[0-9]+(\.[0-9]+)*$ \
+   && "${VERSION%-dirty}" != "$MODINFO_VERSION" ]]; then
+  echo "ERROR: release version ${VERSION%-dirty} does not match the shipped ModInfo.xml" >&2
+  echo "  (ModInfo.xml says $MODINFO_VERSION)." >&2
+  echo "  Bump Source/EfficientServer/ModInfo.xml to ${VERSION%-dirty}, or set" >&2
+  echo "  VERSION=$MODINFO_VERSION to rebuild the release the manifest describes." >&2
   exit 1
 fi
 
@@ -124,4 +163,17 @@ fi
 rm -f "$ENTRIES"
 mv -f "$ZIP_TMP" "$OUT"
 ZIP_TMP=""
+# The release attachment is picked by name out of dist/, which keeps every zip
+# this tree has ever packaged (`make clean` is the only thing that clears it).
+# Name the sibling zips so the wrong one cannot be uploaded by a glance at the
+# directory listing instead of at this line.
+shopt -s nullglob
+SIBLINGS=("$ROOT"/dist/EfficientServer-*.zip)
+shopt -u nullglob
+if [[ ${#SIBLINGS[@]} -gt 1 ]]; then
+  echo "NOTE: dist/ holds ${#SIBLINGS[@]} zips; this run produced $(basename "$OUT")."
+  for z in "${SIBLINGS[@]}"; do
+    [[ "$z" == "$OUT" ]] || echo "      other: ${z##*/}"
+  done
+fi
 echo "Packaged -> $OUT (entry mtime epoch $EPOCH)"
