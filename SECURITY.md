@@ -74,13 +74,15 @@ What ships and how it is protected:
   exact-pinned in its csproj, hash-pinned in a committed
   `Source/EfficientServer.Tests/packages.lock.json`, and restored with
   `dotnet restore --locked-mode` by `make test`, so a changed dependency fails
-  instead of floating. The mod project fetches one more,
-  `Microsoft.NETFramework.ReferenceAssemblies.net48`, exact-pinned as `[1.0.3]`
-  in `Source/EfficientServer/EfficientServer.csproj`; that package is
-  reference metadata only (`PrivateAssets="all"`), so it cannot change the
-  emitted IL. Its graph is hash-pinned too: a committed
-  `Source/EfficientServer/packages.lock.json` records the content hash of the
-  explicit reference and of the parent package the SDK pulls in implicitly.
+  instead of floating. The mod project fetches two more,
+  `Microsoft.NETFramework.ReferenceAssemblies` and its `.net48` leaf, both
+  exact-pinned as `[1.0.3]` in
+  `Source/EfficientServer/EfficientServer.csproj`; declaring the parent there
+  overrides the SDK's own implicit reference, which it would otherwise add
+  with an open `[1.0.3, )` range. Those packages are
+  reference metadata only (`PrivateAssets="all"`), so they cannot change the
+  emitted IL. Their graph is hash-pinned too: a committed
+  `Source/EfficientServer/packages.lock.json` records the content hash of both.
   The hash is not enforced, because `make build` restores without
   `--locked-mode` and CI never restores the mod project at all, so a lock file
   that drifts is rewritten in place rather than failing a gate. A substituted

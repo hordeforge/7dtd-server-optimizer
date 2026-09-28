@@ -25,13 +25,24 @@
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
   </PropertyGroup>
   <ItemGroup>
-    <!-- The SDK pulls this in implicitly for a net48 target on a non-Windows
-         host, with a version the SDK chooses, so every `make build` fetches
-         whatever nuget.org currently serves. Declaring it here with an exact
-         range (brackets, like Newtonsoft.Json in the test project) makes the
-         reference assemblies a reviewed, pinned input instead of a float. It
-         supplies reference metadata only, so it cannot change the emitted IL.
-         Bump = reviewed change of this string, like global.json's SDK pin. -->
+    <!-- The SDK pulls these in implicitly for a net48 target on a non-Windows
+         host, with versions the SDK chooses, so every `make build` fetches
+         whatever nuget.org currently serves. Declaring them here with exact
+         ranges (brackets, like Newtonsoft.Json in the test project) makes the
+         reference assemblies a reviewed, pinned input instead of a float. They
+         supply reference metadata only, so they cannot change the emitted IL.
+         Bump = reviewed change of these strings, like global.json's SDK pin.
+
+         The parent is the one that needed the explicit entry to be pinned: the
+         SDK adds it as a bare `Version="1.0.3"`, which NuGet normalizes to the
+         open range [1.0.3, ), so a restore that is not in locked mode can float
+         it to any 1.x. The SDK only adds that implicit reference when no
+         PackageReference with this identity is already present
+         (Microsoft.NET.Sdk.FrameworkReferenceResolution.targets checks
+         _ExistingReferenceAssembliesPackageReference), so declaring it here
+         overrides the implicit one instead of duplicating it. Keep the two
+         versions in step: the parent 1.0.3 depends on the leaf 1.0.3. -->
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="[1.0.3]" PrivateAssets="all" />
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies.net48" Version="[1.0.3]" PrivateAssets="all" />
   </ItemGroup>
   <ItemGroup>

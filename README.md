@@ -130,9 +130,11 @@ supported retarget: rebuild with `make build` and reinstall.
 - The test project's one NuGet dependency is hash-pinned in the committed
   `packages.lock.json` and restored in locked mode by `make test`; the mod
   project fetches only the net48 reference assemblies the SDK would otherwise
-  pull in implicitly, declared there with an exact version range. That one is
-  version-pinned but not hash-pinned: no mod-project lock file is committed and
-  `make build` restores without locked mode (see R7 in
+  pull in itself, both declared there with an exact version range, so neither
+  floats. That pair is version-pinned and its hashes are recorded in a
+  committed `Source/EfficientServer/packages.lock.json`, but the hash is not
+  enforced: `make build` restores without locked mode and CI never restores the
+  mod project (see R7 in
   [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md)). The restore source list is
   pinned in-repo by [`NuGet.config`](NuGet.config) (nuget.org only, inherited
   machine/user feeds cleared)
