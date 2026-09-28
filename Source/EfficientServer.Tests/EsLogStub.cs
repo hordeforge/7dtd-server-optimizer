@@ -20,10 +20,12 @@ namespace EfficientServer
     internal static class EsLog
     {
         public static readonly List<string> Warnings = new List<string>();
+        public static readonly List<string> Errors = new List<string>();
 
         public static void Emit(LogLevel severity, string msg)
         {
             if (severity == LogLevel.Warn) Warnings.Add(msg);
+            if (severity == LogLevel.Error) Errors.Add(msg);
         }
     }
 }

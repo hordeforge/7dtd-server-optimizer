@@ -62,6 +62,14 @@ namespace EfficientServer
                 EsLog.Emit(LogLevel.Info, cfgFound
                     ? "config: " + cfgPath
                     : "NO CONFIG FILE at " + cfgPath + " - built-in defaults applied");
+                if (ServerPerfConfig.LastLoadFailed)
+                {
+                    // Distinct from the missing-file line above, which is a normal
+                    // "no config shipped" case: here the file is there and was
+                    // rejected, so the ERROR from Load already named the cause.
+                    EsLog.Emit(LogLevel.Error, "CONFIG FILE REJECTED at " + cfgPath
+                        + " - the mod runs on built-in defaults, not the operator's tuning; fix the file and 'es reload'");
+                }
                 if (!Config.Enabled)
                 {
                     EsLog.Emit(LogLevel.Info, "disabled by config; patches are installed so reload can enable it");
@@ -113,10 +121,26 @@ namespace EfficientServer
             }
         }
 
-        public static void ReloadConfig()
+        /// <summary>
+        /// Re-read the config file and apply it. Returns false (config object
+        /// untouched, no apply) when the file was present but unusable, so the
+        /// console never prints a success echo over a reload that did not happen.
+        /// </summary>
+        public static bool ReloadConfig()
         {
             string path = ServerPerfConfig.DefaultPathBesideAssembly();
-            Config = ServerPerfConfig.Load(path);
+            ServerPerfConfig loaded = ServerPerfConfig.Load(path);
+            if (ServerPerfConfig.LastLoadFailed)
+            {
+                // A rejected file is not a config. Swapping it in would revert every
+                // knob the operator tuned back to built-in defaults mid-session, which
+                // is worse than the stale value it would have replaced; the ERROR
+                // line from Load already names the parse failure and the path.
+                EsLog.Emit(LogLevel.Error, "config reload REJECTED: " + path
+                    + " was not readable, keeping the previous config; fix the file and rerun 'es reload'");
+                return false;
+            }
+            Config = loaded;
             try
             {
                 // The governor holds state derived from the PREVIOUS config object
@@ -156,6 +180,7 @@ namespace EfficientServer
             EsLog.Emit(LogLevel.Info, "config reloaded; enabled=" + Config.Enabled
                 + (File.Exists(path) ? ""
                     : " (NO CONFIG FILE at " + path + " - built-in defaults applied)"));
+            return true;
         }
 
         // One ordered table owns BOTH lists that used to live apart: the required

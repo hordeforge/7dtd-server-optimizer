@@ -16,6 +16,16 @@ case-insensitively (Newtonsoft's rule), so a recased key is a bind, not a typo.
 Typos in the shipped template are caught before packaging by
 `scripts/check_config_doc.py`.
 
+A file that is present but unreadable (malformed JSON, wrong type for a knob, a
+document that is JSON `null`) is REJECTED: one ERROR line (`Config load failed
+[<type>], using defaults: ...` or the JSON null line), plus `CONFIG FILE REJECTED
+at <path>` at init. At startup there is no previous config, so the mod runs on
+built-in defaults and says so. `es reload` keeps the last good config live instead
+of swapping the defaults in, and the command reports `reload REJECTED` rather than
+a success echo, so a half-written file edited live can never revert the operator's
+tuning. A MISSING file is not a rejection: built-in defaults are the documented
+answer there.
+
 **Defaults policy:** ON when a lever improves performance with **no gameplay
 impact** (provable equivalence or headless-only work). OFF when it changes anything
 a player could perceive (staleness, despawns, nav freshness beyond the validated

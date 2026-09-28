@@ -43,7 +43,17 @@ namespace EfficientServer
                     // over a partial apply is the misleading outcome this guards).
                     try
                     {
-                        ModApi.ReloadConfig();
+                        // A rejected file returns false with the previous config still
+                        // live: nothing was applied, so the operator gets the failure
+                        // line and the live status instead of a success echo.
+                        bool applied = ModApi.ReloadConfig();
+                        if (!applied)
+                        {
+                            Output("reload REJECTED: the config file could not be read, so the previous "
+                                + "config is still live; see the mod's ERROR line in the server log");
+                            Status();
+                            break;
+                        }
                     }
                     catch (Exception ex)
                     {

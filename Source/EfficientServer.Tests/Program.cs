@@ -234,6 +234,7 @@ namespace EfficientServer.Tests
         static ServerPerfConfig LoadTempTracked(string json)
         {
             EsLog.Warnings.Clear();
+            EsLog.Errors.Clear();
             return LoadTemp(json);
         }
 
@@ -332,14 +333,14 @@ namespace EfficientServer.Tests
         // "Config load failed [<CLR type name>], using defaults: <message>". Only
         // the type name is asserted, not the OS-specific message text, so the
         // check pins the shape operators grep for without pinning errno text.
-        static bool NamesExceptionType(string warning)
+        static bool NamesExceptionType(string message)
         {
             const string prefix = "Config load failed [";
             const string suffix = "], using defaults: ";
-            if (!warning.StartsWith(prefix, StringComparison.Ordinal)) return false;
-            int close = warning.IndexOf(suffix, prefix.Length, StringComparison.Ordinal);
+            if (!message.StartsWith(prefix, StringComparison.Ordinal)) return false;
+            int close = message.IndexOf(suffix, prefix.Length, StringComparison.Ordinal);
             if (close < 0) return false;
-            string type = warning.Substring(prefix.Length, close - prefix.Length);
+            string type = message.Substring(prefix.Length, close - prefix.Length);
             return type.EndsWith("Exception", StringComparison.Ordinal) && type.Length > "Exception".Length;
         }
 
@@ -427,15 +428,18 @@ namespace EfficientServer.Tests
                     if (!stillReadable)
                     {
                         EsLog.Warnings.Clear();
+                        EsLog.Errors.Clear();
                         var cfg = ServerPerfConfig.Load(p);
                         Check(cfg != null && cfg.Enabled,
                             "unreadable config file -> defaults (fail-soft like parse errors)");
+                        Check(ServerPerfConfig.LastLoadFailed,
+                            "unreadable config file -> LastLoadFailed set");
                         // The bracketed token is the exception type name the operator
                         // greps for; require a plausible CLR type name in it, so a
                         // message that dropped the type fails here instead of
                         // passing on the prefix alone.
-                        Check(EsLog.Warnings.Count == 1 && NamesExceptionType(EsLog.Warnings[0]),
-                            "unreadable config file -> one WARNING naming the exception type");
+                        Check(EsLog.Errors.Count == 1 && NamesExceptionType(EsLog.Errors[0]),
+                            "unreadable config file -> one ERROR naming the exception type");
                     }
                     else
                     {
@@ -794,10 +798,25 @@ namespace EfficientServer.Tests
             // Malformed JSON -> defaults, no throw.
             var bad = LoadTempTracked("{ this is not json ][");
             Check(bad != null && bad.Enabled, "malformed json -> defaults");
-            // The failure must surface on the WARNING channel (operators grep the
-            // dedicated log for WARNING/ERROR; info-level config failures vanish).
-            Check(EsLog.Warnings.Count == 1 && NamesExceptionType(EsLog.Warnings[0]),
-                "malformed json -> one WARNING naming the exception type");
+            // The failure must surface on the ERROR channel: it is the one load
+            // outcome that leaves the server running on knobs the operator never
+            // chose, and `es reload` keys its keep-previous behavior off the same
+            // signal, so it must be distinguishable from a routine clamp line.
+            Check(ServerPerfConfig.LastLoadFailed, "malformed json -> LastLoadFailed set");
+            Check(EsLog.Errors.Count == 1 && NamesExceptionType(EsLog.Errors[0]),
+                "malformed json -> one ERROR naming the exception type");
+            Check(EsLog.Warnings.Count == 0,
+                "malformed json -> not also reported as a warning");
+            // A clean load clears the flag: it is per-Load, never sticky, so a
+            // fixed file reloads to the operator's own values.
+            var good = LoadTempTracked("{\"Server\":{\"TargetFps\":44}}");
+            Check(good != null && good.Server.TargetFps == 44, "valid json after a failure -> loaded");
+            Check(!ServerPerfConfig.LastLoadFailed, "valid json -> LastLoadFailed cleared");
+            // A missing file is not a failure: built-in defaults are documented
+            // for that case, so `es reload` must still swap the config object.
+            ServerPerfConfig.Load(Path.Combine(Path.GetTempPath(),
+                "does_not_exist_" + Guid.NewGuid().ToString("N") + ".json"));
+            Check(!ServerPerfConfig.LastLoadFailed, "missing file -> LastLoadFailed not set");
 
             // Non-object value for a section key: deserialization throws ->
             // Load fails soft with full defaults.
@@ -805,11 +824,14 @@ namespace EfficientServer.Tests
             Check(secBad != null && secBad.Enabled && secBad.Pathfinding.GraphUpdateEveryTicks == 4,
                 "section value of wrong type -> full defaults");
 
-            // Whole-document JSON null deserializes to a null reference -> the
-            // dedicated defaults branch, silently (valid JSON, so not a parse error).
+            // Whole-document JSON null deserializes to a null reference: valid
+            // JSON that carries no config, so it must be reported as a rejected
+            // file (defaults in effect) rather than pass as a clean load.
             var docNull = LoadTempTracked("null");
             Check(docNull != null && docNull.Enabled, "whole-document null -> defaults");
-            Check(EsLog.Warnings.Count == 0, "whole-document null -> no warning (not malformed)");
+            Check(ServerPerfConfig.LastLoadFailed, "whole-document null -> LastLoadFailed set");
+            Check(EsLog.Errors.Count == 1 && EsLog.Errors[0].Contains("JSON null document"),
+                "whole-document null -> one ERROR naming the JSON null document");
 
             // Empty object -> defaults filled.
             var empty = LoadTemp("{}");
@@ -1730,7 +1752,7 @@ namespace EfficientServer.Tests
             // scan into a throw; the deserializer still decides what it means.
             var notAnObject = LoadTempTracked("[1,2,3]");
             Check(notAnObject != null && notAnObject.Enabled, "array document -> defaults, no throw");
-            Check(EsLog.Warnings.Count == 1 && NamesExceptionType(EsLog.Warnings[0]),
+            Check(EsLog.Errors.Count == 1 && NamesExceptionType(EsLog.Errors[0]),
                 "array document reports the deserializer failure, not a scan failure");
 
             // Idempotency: re-normalizing an already-normalized config must be

@@ -367,8 +367,20 @@ namespace EfficientServer
         public TickGuardConfig TickGuard { get; set; } = new TickGuardConfig();
         public DiagnosticsConfig Diagnostics { get; set; } = new DiagnosticsConfig();
 
+        /// <summary>
+        /// True when the most recent <see cref="Load"/> found a config file it
+        /// could not read (malformed JSON, wrong type for a knob, unreadable
+        /// bytes). A MISSING file is not a failure: built-in defaults are the
+        /// documented answer there. Callers read this right after Load on the
+        /// same thread to tell "the operator's file is in effect" from "the
+        /// built-in defaults are in effect because the file was rejected", which
+        /// no return value can express (both return a fully valid config).
+        /// </summary>
+        public static bool LastLoadFailed { get; private set; }
+
         public static ServerPerfConfig Load(string path)
         {
+            LastLoadFailed = false;
             if (string.IsNullOrEmpty(path) || !File.Exists(path))
                 return new ServerPerfConfig();
 
@@ -387,7 +399,17 @@ namespace EfficientServer
                     EsLog.Emit(LogLevel.Warn, "config unknown key '" + PrintableKey(key)
                         + "' ignored; that knob keeps its default (names are case-insensitive, spelling is not)");
                 var loaded = JsonConvert.DeserializeObject<ServerPerfConfig>(json);
-                if (loaded == null) return new ServerPerfConfig();
+                if (loaded == null)
+                {
+                    // A document that is literally `null` parses cleanly and binds
+                    // nothing, so without this it would reach the operator as a
+                    // silent full reset to defaults. Same outcome as a parse error
+                    // (defaults, file not in effect), so it reports the same way.
+                    LastLoadFailed = true;
+                    EsLog.Emit(LogLevel.Error, "Config load failed: " + path
+                        + " contains a JSON null document, no config in it; using defaults");
+                    return new ServerPerfConfig();
+                }
                 BackfillNullSections(loaded);
                 loaded.Normalize();
                 return loaded;
@@ -395,8 +417,13 @@ namespace EfficientServer
             catch (Exception ex)
             {
                 // Type name + message: a parse error names its JSON line in Message,
-                // and the type separates syntax errors from IO failures.
-                EsLog.Emit(LogLevel.Warn, "Config load failed [" + ex.GetType().Name + "], using defaults: " + ex.Message);
+                // and the type separates syntax errors from IO failures. ERROR, not
+                // warn: this is the one load outcome that leaves the server running
+                // on knobs the operator never chose, so it must not sit in the same
+                // stream as the routine unknown-key and clamp lines above.
+                LastLoadFailed = true;
+                EsLog.Emit(LogLevel.Error, "Config load failed [" + ex.GetType().Name
+                    + "], using defaults: " + ex.Message + " (ignored file: " + path + ")");
                 return new ServerPerfConfig();
             }
         }

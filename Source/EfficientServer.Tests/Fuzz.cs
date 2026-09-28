@@ -188,6 +188,7 @@ namespace EfficientServer.Tests
             Func<string, ServerPerfConfig> loadText, byte[] bytes, string what, bool roundTrip)
         {
             EsLog.Warnings.Clear();
+            EsLog.Errors.Clear();
             ServerPerfConfig loaded;
             try { loaded = loadBytes(bytes); }
             catch (Exception ex)
@@ -197,8 +198,11 @@ namespace EfficientServer.Tests
                 return;
             }
             check(loaded != null, what + ": Load returned null");
-            check(EsLog.Warnings.Count <= MaxWarningsPerLoad,
-                what + ": " + EsLog.Warnings.Count + " warnings from one file (max " + MaxWarningsPerLoad + ")");
+            // Both channels: a rejected file is an ERROR, an unknown key or a clamp
+            // is a WARNING, and the log-volume bound below covers the load either way.
+            check(EsLog.Warnings.Count + EsLog.Errors.Count <= MaxWarningsPerLoad,
+                what + ": " + EsLog.Warnings.Count + " warning(s) + " + EsLog.Errors.Count
+                + " error(s) from one file (max " + MaxWarningsPerLoad + ")");
             if (loaded == null) return;
             string? bad = Violations(loaded);
             check(bad == null, what + ": " + bad + " for: " + Truncate(Encoding.UTF8.GetString(bytes)));
@@ -207,6 +211,7 @@ namespace EfficientServer.Tests
             // Persistence round trip: what a reload would read back off disk.
             string reSerialized = JsonConvert.SerializeObject(loaded);
             EsLog.Warnings.Clear();
+            EsLog.Errors.Clear();
             try
             {
                 ServerPerfConfig again = loadText(reSerialized);
@@ -219,9 +224,10 @@ namespace EfficientServer.Tests
                 check(false, what + ": round-trip Load threw " + ex.GetType().Name);
                 return;
             }
-            check(EsLog.Warnings.Count == 0,
+            check(EsLog.Warnings.Count == 0 && EsLog.Errors.Count == 0,
                 what + ": re-loading the normalized config reported " + EsLog.Warnings.Count
-                + " correction(s), first: " + (EsLog.Warnings.Count > 0 ? EsLog.Warnings[0] : ""));
+                + " correction(s) and " + EsLog.Errors.Count + " error(s), first: "
+                + (EsLog.Warnings.Count > 0 ? EsLog.Warnings[0] : EsLog.Errors.Count > 0 ? EsLog.Errors[0] : ""));
         }
 
         // Build a hostile file by cutting and splicing the real default config, so
