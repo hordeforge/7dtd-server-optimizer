@@ -67,6 +67,21 @@ mypy-version:
 # declared prereq, so a removed .scratch/ cannot silently unroute a gate.
 scratch:
 	@mkdir -p "$(TMPDIR)"
+# Reap the .NET SDK's own leftovers, which it never removes: every
+# `dotnet build` creates an empty MSBuildTemp*/NuGetScratch* (plus a
+# randomly named) directory under TMPDIR and leaves it behind, so the
+# scratch root gains a few empty dirs per build and nothing else ever
+# removes them. Empty AND older than a day, so an in-flight build's temp
+# (which lives for seconds) can never be caught, and the sweep is
+# restricted to those SDK shapes: a script that deliberately KEEPS a
+# directory there (install.sh's preserved Config backup on a failed
+# install) is never a candidate. Scratch dirs, not files: a leftover file
+# with bytes in it is evidence of a killed run, not ours to delete.
+	@find "$(TMPDIR)" -mindepth 1 -maxdepth 1 -type d -empty -mtime +1 \
+	  \( -name 'MSBuildTemp*' -o -name 'NuGetScratch*' \
+	     -o -regextype posix-extended \
+	        -regex '.*/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}' \) \
+	  -exec rm -rf {} + 2>/dev/null || true
 help:
 	@echo "EfficientServer: Harmony optimization mod for 7 Days to Die dedicated servers"
 	@echo

@@ -56,7 +56,9 @@ esac
 # full mod staging tree would be held in RAM and lost on reboot. mktemp honors
 # TMPDIR, and .scratch/ is gitignored.
 export TMPDIR="$ROOT/.scratch/tmp"
-mkdir -p "$TMPDIR"
+# shellcheck source=scripts/stage_tmp.sh
+source "$ROOT/scripts/stage_tmp.sh"
+stage_tmpdir
 
 "$ROOT/scripts/build.sh"
 
@@ -79,7 +81,7 @@ EPOCH="${SOURCE_DATE_EPOCH:-$(git -C "$ROOT" log -1 --pretty=%ct)}"
 [[ "$EPOCH" =~ ^[0-9]+$ ]] || { echo "ERROR: bad epoch '$EPOCH'" >&2; exit 1; }
 
 OUT="$ROOT/dist/EfficientServer-$VERSION.zip"
-STAGE="$(mktemp -d)"
+STAGE="$(stage_new es-package)"
 ZIP_TMP=""
 # Same contract as install.sh: a failed run must not leave the only copy of an
 # artifact destroyed (or a partial zip sitting under the release name).

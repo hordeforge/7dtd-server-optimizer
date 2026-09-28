@@ -55,7 +55,9 @@ esac
 # of disk. mktemp honors TMPDIR, and .scratch/ is gitignored (and excluded from
 # the tar below, or the copy would recurse into its own destination).
 export TMPDIR="$ROOT/.scratch/tmp"
-mkdir -p "$TMPDIR"
+# shellcheck source=scripts/stage_tmp.sh
+source "$ROOT/scripts/stage_tmp.sh"
+stage_tmpdir
 
 for tool in git zip sha256sum find tar; do
   command -v "$tool" >/dev/null 2>&1 || { echo "ERROR: required tool '$tool' not found" >&2; exit 1; }
@@ -89,7 +91,7 @@ H2="$(sha256sum "$Z2")"
 echo "  identical"
 
 echo "== leg 3: full recompile from a copied tree at another path"
-STAGE="$(mktemp -d "$TMPDIR/es-repro.XXXXXX")"
+STAGE="$(stage_new es-repro)"
 trap 'rm -rf "$STAGE"' EXIT
 # Copy including .git so version resolution sees the same history; exclude
 # build outputs, local launch state and .scratch (which holds $STAGE itself)
