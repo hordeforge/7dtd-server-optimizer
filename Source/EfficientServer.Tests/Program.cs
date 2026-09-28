@@ -125,6 +125,38 @@ namespace EfficientServer.Tests
             return null;
         }
 
+        // A JSON document naming EVERY public property of ServerPerfConfig and of
+        // every config section, so the unknown-key scan can be checked against the
+        // declared surface rather than a hand-copied key list. Values are
+        // type-shaped (null sections, zero scalars); the caller asserts only on
+        // unknown-key lines, which a value correction never produces.
+        static string EveryDeclaredKeyJson()
+        {
+            var buf = new System.Text.StringBuilder("{");
+            bool first = true;
+            foreach (PropertyInfo prop in typeof(ServerPerfConfig)
+                .GetProperties(BindingFlags.Public | BindingFlags.Instance))
+            {
+                if (!first) buf.Append(',');
+                first = false;
+                bool section = prop.PropertyType.IsClass
+                    && prop.PropertyType != typeof(string)
+                    && prop.PropertyType.Namespace == typeof(ServerPerfConfig).Namespace;
+                if (!section) { buf.Append('"').Append(prop.Name).Append("\":0"); continue; }
+                buf.Append('"').Append(prop.Name).Append("\":{");
+                bool inner = true;
+                foreach (PropertyInfo leaf in prop.PropertyType
+                    .GetProperties(BindingFlags.Public | BindingFlags.Instance))
+                {
+                    if (!inner) buf.Append(',');
+                    inner = false;
+                    buf.Append('"').Append(leaf.Name).Append("\":0");
+                }
+                buf.Append('}');
+            }
+            return buf.Append('}').ToString();
+        }
+
         // "Config load failed [<CLR type name>], using defaults: <message>". Only
         // the type name is asserted, not the OS-specific message text, so the
         // check pins the shape operators grep for without pinning errno text.
@@ -279,6 +311,18 @@ namespace EfficientServer.Tests
             const int Readers = 4;
             bool[] readerOk = new bool[Readers];
             long reads = 0;
+
+            // Seed the holder with a writer-shaped generation before any thread
+            // runs. ConfigPublication's static initializer publishes built-in
+            // defaults, whose PoolInitScanNodes is false; a reader that samples
+            // that seed before the writer's first store trips the marker assertion
+            // on a correctly published config, which is a startup race, not the
+            // tearing this test is about.
+            var seed = new ServerPerfConfig();
+            seed.Pathfinding.PoolInitScanNodes = true;
+            seed.Pathfinding.MaxPathEnqueuesPerTick = 1;
+            seed.Enabled = true;
+            ConfigPublication.Current = seed;
             var stop = new ManualResetEventSlim(false);
 
             // Writer: publish a config whose nested Pathfinding section carries a
@@ -595,6 +639,34 @@ namespace EfficientServer.Tests
             var typo = LoadTempTracked("{\"Pathfinding\":{\"GraphUpdateEveryTick\":8}}");
             Check(typo != null && typo.Pathfinding.GraphUpdateEveryTicks == 4,
                 "typo'd knob keeps default, other fields unaffected");
+            // ...and it is NAMED on the warning channel (docs/CONFIG.md: an
+            // unknown key must not leave the operator with a knob that silently
+            // did nothing), with the dotted path locating it in the section.
+            Check(EsLog.Warnings.Count == 1
+                && EsLog.Warnings[0].Contains("config unknown key 'Pathfinding.GraphUpdateEveryTick'"),
+                "typo'd knob -> one WARNING naming the dotted key path");
+            var rootTypo = LoadTempTracked("{\"Enable\":true,\"Pathfinding\":{\"Nope\":1},\"Network\":{\"FastSingleTargetSend\":true}}");
+            Check(rootTypo.Enabled == true && rootTypo.Pathfinding != null
+                && rootTypo.Network.FastSingleTargetSend,
+                "root and nested typos load without disturbing the valid keys beside them");
+            Check(rootTypo != null
+                && EsLog.Warnings.Count == 2
+                && EsLog.Warnings.Any(w => w.Contains("config unknown key 'Enable'"))
+                && EsLog.Warnings.Any(w => w.Contains("config unknown key 'Pathfinding.Nope'")),
+                "root-level and nested typos each get their own WARNING, dotted path");
+            // Case variants bind, so they must NOT be reported as typos.
+            var caseNotTypo = LoadTempTracked("{\"ailod\":{\"enabled\":false},\"NETWORK\":{\"fastsingletargetsend\":false}}");
+            Check(caseNotTypo.AiLod.Enabled == false && caseNotTypo.Network.FastSingleTargetSend == false,
+                "case-variant keys still bind");
+            Check(EsLog.Warnings.Count == 0,
+                "case-variant keys are not reported as unknown keys");
+            // Every key the type declares must be recognized, so no own knob is
+            // ever reported as a typo (built by reflection, so a new section or
+            // knob is covered the day it lands).
+            var everyKey = LoadTempTracked(EveryDeclaredKeyJson());
+            Check(everyKey != null
+                && !EsLog.Warnings.Any(w => w.Contains("config unknown key")),
+                "no declared knob or section is reported as an unknown key");
             var caseBind = LoadTemp("{\"ailod\":{\"enabled\":false}}");
             Check(caseBind.AiLod.Enabled == false,
                 "case-variant key binds like Newtonsoft (value applied)");

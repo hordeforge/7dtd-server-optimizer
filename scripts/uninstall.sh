@@ -94,7 +94,15 @@ if [[ ${#PRESERVED[@]} -gt 0 ]]; then
 
 Restore after reinstalling:
   make install DS="$SRV"
-  cp -a $TARGET/efficientserver.json "$DEST/Config/efficientserver.json"
+EOF
+  # Only name the copy line for files that were actually preserved: the Config
+  # directory can hold the guard's .swap-bak with no efficientserver.json beside
+  # it, and a hint that names a file which was never copied sends the operator to
+  # a "No such file" instead of their tuning.
+  for f in "${PRESERVED[@]}"; do
+    echo "  cp -a \"$TARGET/$(basename "$f")\" \"$DEST/Config/$(basename "$f")\""
+  done
+  cat <<EOF
   es reload            # or restart the server
 EOF
 fi

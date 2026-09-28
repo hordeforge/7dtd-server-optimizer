@@ -203,10 +203,24 @@ def main() -> int:
     finally:
         # Isolated so a restore failure cannot skip bot teardown (a leaked
         # cohort keeps loading the server) or the report write.
+        restored = True
         try:
             CFG_SWAP.restore()
         except Exception as e:
             log(f"WARN: config restore failed ({e}); backup kept for next run")
+            restored = False
+        # Re-apply the restored file to the live server. The path knobs were
+        # armed with `es reload`, and every patch reads the config object per
+        # call, so a disk-only restore leaves this server shedding paths under
+        # the harness cap until someone reloads it by hand. Skipped when the
+        # restore failed, so a reload cannot re-arm the harness values the
+        # restore just failed to revert; and best effort, since the sampled
+        # server may already be gone.
+        if restored:
+            try:
+                B.telnet(["es reload"], settle=1.0)
+            except Exception as e:
+                log(f"  es reload after restore failed: {e}")
         teardown_bots(bots)
         write_report("bloodmoon_path", report)
     return 0

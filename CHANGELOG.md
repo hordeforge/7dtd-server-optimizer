@@ -38,6 +38,12 @@ So `EfficientServer-0.1.0.zip` logging `mod=1.17.0` is correct, not drift.
   informed is the allocation work it argued for.
 
 ### Added
+- A JSON key that binds to no knob is now named at load
+  (`config unknown key 'Pathfinding.GraphUpdateEveryTick' ignored ...` on the
+  WARNING channel) instead of silently leaving the lever at its default. The
+  dotted path points at the section the typo is in; case variants of real keys
+  still bind and are not reported. This is the behavior docs/CONFIG.md already
+  promised.
 - `Diagnostics.AllowFidelityProbes` (default false) gates the console arms of
   the fidelity probes: `es animoff` (every enemy animator culled, timer-only
   attack cadence) and `es rigoff` (unguarded rig visual components disabled)
@@ -71,6 +77,10 @@ So `EfficientServer-0.1.0.zip` logging `mod=1.17.0` is correct, not drift.
   a dead rig's saved mode and have it restored on exit. Each entry now carries
   the rig it was read from and is dropped at the next sweep when the live rig no
   longer owns the ID.
+- `make uninstall` prints a restore line only for the config files it actually
+  preserved. It keeps every file under `Mods/EfficientServer/Config/`, so with
+  only the guard's `.swap-bak` present the old hint named an
+  `efficientserver.json` that was never copied.
 
 ### Changed
 - The governor throttle-ceiling constants (`EntityStrideMax`, `GraphUpdateMax`)

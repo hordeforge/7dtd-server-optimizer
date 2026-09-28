@@ -126,12 +126,17 @@ def write_atomic(path: Path, data: str) -> None:
 
 
 class ConfigSwap:
-    """Backup-modify-restore for selected keys of one JSON config file."""
+    """Backup-modify-restore for selected keys of one JSON config file.
+
+    Each managed key is a path tuple (``("Pathfinding", "MaxPathEnqueuesPerTick")``),
+    root-level keys included: ``("Enabled",)``. A bare string is not accepted, because
+    the path walk would then address one character per step.
+    """
 
     def __init__(
         self,
         cfg_path: Path,
-        keys: Sequence[tuple[str, ...] | str],
+        keys: Sequence[tuple[str, ...]],
         log: Callable[..., None] = print,
     ):
         self.cfg = cfg_path
