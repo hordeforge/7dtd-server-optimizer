@@ -45,8 +45,25 @@ namespace EfficientServer
         // path of every log write.
         static readonly Stopwatch UptimeClock = Stopwatch.StartNew();
 
+        // The source UptimeSeconds reads, so a replay can stamp records from a
+        // virtual clock instead of the host's. Never null: SetUptimeClockSource
+        // falls back to the stopwatch.
+        static Func<double> _uptimeSource = () => UptimeClock.Elapsed.TotalSeconds;
+
         /// <summary>Seconds since the mod loaded; the shared age stamp.</summary>
-        public static double UptimeSeconds { get { return UptimeClock.Elapsed.TotalSeconds; } }
+        public static double UptimeSeconds { get { return _uptimeSource(); } }
+
+        /// <summary>
+        /// Replace the uptime source (seconds, any origin) so a caller driving
+        /// its own clock stamps the same record the same way; null restores the
+        /// stopwatch. Only the unit harness replaces it, and always back to null
+        /// (see the process-lifetime note on <see cref="Degrade.Reset"/> for the
+        /// same rule on shared state).
+        /// </summary>
+        public static void SetUptimeSource(Func<double> source)
+        {
+            _uptimeSource = source ?? (() => UptimeClock.Elapsed.TotalSeconds);
+        }
 
         /// <summary>
         /// Render one record: newlines collapsed, then <c>uptimeS=&lt;seconds&gt;</c>

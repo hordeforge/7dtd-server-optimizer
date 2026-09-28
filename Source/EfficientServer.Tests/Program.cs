@@ -1234,6 +1234,51 @@ namespace EfficientServer.Tests
                 && EsLog.Warnings[0].StartsWith("probe warn | with a break uptimeS=", StringComparison.Ordinal)
                 && Regex.IsMatch(EsLog.Errors[0], StampPattern),
                 "log line: Emit records one stamped single-line entry per call, on the right channel");
+
+            // The uptime source is injected, so a replay stamps records from a
+            // virtual clock: two runs driven by the same schedule must produce
+            // byte-identical log streams, and restoring the source puts the
+            // process clock back for every later check. The paired property
+            // matters as much as the equality - a stamp that ignores the
+            // injected source would still match the regex above while making
+            // every log line unreplayable.
+            double virtualSeconds = 0.0;
+            var stamps = new List<string>();
+            try
+            {
+                EfficientServer.LogLine.SetUptimeSource(() => virtualSeconds);
+                stamps.Add(EfficientServer.LogLine.Format("Governor: step down"));
+                EsLog.Warnings.Clear();
+                EsLog.Emit(LogLevel.Warn, "virtual-clock record");
+                stamps.Add(EsLog.Warnings[0]);
+                virtualSeconds = 3600.0;
+                stamps.Add(EfficientServer.LogLine.Format("Governor: step down"));
+            }
+            finally { EfficientServer.LogLine.SetUptimeSource(null!); }
+            Check(stamps[0].EndsWith(" uptimeS=0", StringComparison.Ordinal)
+                && stamps[1].EndsWith(" uptimeS=0", StringComparison.Ordinal)
+                && stamps[2].EndsWith(" uptimeS=3600", StringComparison.Ordinal),
+                "log line: with an injected uptime source, every record (Emit included) carries the virtual stamp");
+
+            var replayStamps = new List<string>();
+            double replaySeconds = 0.0;
+            try
+            {
+                EfficientServer.LogLine.SetUptimeSource(() => replaySeconds);
+                foreach (double step in new[] { 0.0, 0.0, 3600.0 })
+                {
+                    replaySeconds = step;
+                    replayStamps.Add(EfficientServer.LogLine.Format("Governor: step down"));
+                }
+            }
+            finally { EfficientServer.LogLine.SetUptimeSource(null!); }
+            Check(replayStamps.Count == 3
+                && replayStamps[0] == stamps[0] && replayStamps[2] == stamps[2],
+                "log line: the same virtual schedule replays to byte-identical records (no wall-clock leak into the log)");
+
+            double restored = EfficientServer.LogLine.UptimeSeconds;
+            Check(restored >= first && restored < 86400.0,
+                "log line: restoring the source hands the stamp back to process uptime");
         }
 
         // The apply-chain runner behind GameStartPatch.OnGameStartDone and
@@ -1812,6 +1857,39 @@ namespace EfficientServer.Tests
             }
             Check(tracesIdentical, "tick EMA same-seed replay is bitwise identical across instances");
             Check(noOvershoot, "tick EMA never overshoots the sampled interval (hysteresis precondition)");
+
+            // The production entry point Advance() takes its time from an
+            // injected source rather than a hardwired clock read, so the SAME code
+            // path a server runs replays from a recorded schedule. Two holders on
+            // one virtual clock must agree bitwise, and must equal the
+            // explicit-timestamp machine step for step: a divergence here would
+            // mean the shipping path measures something the tests never assert.
+            double virtualMs = 0.0;
+            var injectedA = new EfficientServer.Patches.TickIntervalEma(() => virtualMs);
+            var injectedB = new EfficientServer.Patches.TickIntervalEma(() => virtualMs);
+            var explicitTwin = new EfficientServer.Patches.TickIntervalEma();
+            double stampMs = 0.0;
+            bool injectedReplayed = true;
+            for (int i = 0; i < gaps.Count; i++)
+            {
+                virtualMs += gaps[i];
+                stampMs += gaps[i];
+                double a = injectedA.Advance();
+                if (a != injectedB.Advance() || a != explicitTwin.Advance(stampMs))
+                { injectedReplayed = false; break; }
+            }
+            Check(injectedReplayed,
+                "tick EMA on an injected clock replays a recorded schedule bitwise, identical to the explicit-timestamp machine");
+
+            // A null source binds the process stopwatch, so the constructor a
+            // server uses still measures real time (monotonic, seeded at 50 ms)
+            // rather than reading a torn-down or never-advanced source.
+            var wallClockBound = new EfficientServer.Patches.TickIntervalEma(null!);
+            double wallA = wallClockBound.Advance();
+            Thread.Sleep(2);
+            double wallB = wallClockBound.Advance();
+            Check(wallA == 50.0 && wallB > 0.0 && wallB < 50.0,
+                "a null clock source binds the process stopwatch (first tick seeds, later ticks measure real time)");
 
             // Decision-input tie-in with REAL defaults: how many sustained slow ticks
             // until the EMA the governor reads crosses OverBudgetMs must be derivable

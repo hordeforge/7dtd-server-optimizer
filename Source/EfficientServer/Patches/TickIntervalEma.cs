@@ -1,3 +1,4 @@
+using System;
 using System.Diagnostics;
 
 namespace EfficientServer.Patches
@@ -16,10 +17,13 @@ namespace EfficientServer.Patches
     /// trends. Seeds at the vanilla 50 ms idle interval so the first ticks after boot
     /// read as healthy instead of as a spike from an arbitrary seed.
     ///
-    /// The production path reads a Stopwatch started at construction; the
-    /// <see cref="Advance(double)"/> overload takes the tick timestamp explicitly so
-    /// tests can replay identical tick sequences deterministically instead of
-    /// inheriting host scheduler jitter into governor/tick-guard transitions.
+    /// Time comes from an injected source, not a hardwired clock read: the
+    /// parameterless constructor binds the shared <see cref="SystemClock"/>, and a
+    /// harness binds a virtual clock it steps itself, so the PRODUCTION entry point
+    /// <see cref="Advance()"/> replays from a recorded schedule instead of
+    /// inheriting host scheduler jitter into governor/tick-guard transitions. The
+    /// <see cref="Advance(double)"/> overload takes the tick timestamp explicitly
+    /// for callers that already hold one.
     /// </summary>
     internal sealed class TickIntervalEma
     {
@@ -30,14 +34,42 @@ namespace EfficientServer.Patches
         // EMA memory, in ticks: each new gap moves the average a 1/Nth of the way.
         const double MemoryTicks = 32.0;
 
-        readonly Stopwatch _clock = Stopwatch.StartNew();
+        /// <summary>
+        /// The production time source: one stopwatch for the process, started when
+        /// this type is first initialized. Shared rather than per-instance because
+        /// an instance only ever compares its own successive readings, so the
+        /// origin is irrelevant to its value and one timer is enough.
+        /// </summary>
+        public static double SystemClock() => ProcessClock.Elapsed.TotalMilliseconds;
+
+        static readonly Stopwatch ProcessClock = Stopwatch.StartNew();
+
+        // Reads milliseconds off an injected source; monotonic across the
+        // instance's lifetime is the only contract, and any origin is fine.
+        readonly Func<double> _clockMs;
         double _lastTickMs;
         double _ms = SeedMs;
+
+        /// <summary>Bind <see cref="SystemClock"/>.</summary>
+        // `null!` rather than a `Func<double>?` annotation: the net48 project
+        // builds with nullable annotations off, so the annotation would not
+        // compile in the shipping build that owns this file.
+        public TickIntervalEma() : this(null!) { }
+
+        /// <summary>
+        /// Bind an explicit time source (milliseconds, any origin), so a caller
+        /// that already has a virtual clock drives the same production entry
+        /// point a server does. A null source is <see cref="SystemClock"/>.
+        /// </summary>
+        public TickIntervalEma(Func<double> clockMs)
+        {
+            _clockMs = clockMs ?? SystemClock;
+        }
 
         /// <summary>Record one tick; returns the smoothed interval in ms.</summary>
         public double Advance()
         {
-            return Advance(_clock.Elapsed.TotalMilliseconds);
+            return Advance(_clockMs());
         }
 
         // Explicit-timestamp variant: the pure transition function behind Advance().
