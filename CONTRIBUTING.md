@@ -14,6 +14,15 @@ Python gates stay Linux, which is what the build tooling targets.
   picks up a local install from `~/.cache/dotnet-sdk` or `~/.dotnet`
   automatically; otherwise put `dotnet` on `PATH`
 - `shellcheck`, `ruff`, `mypy`, and Python 3 (`make test`)
+
+`ruff` and `mypy` are pinned to the exact versions `make test` and CI require
+(`make ruff-version`, `make mypy-version`; today `ruff==0.16.4` and
+`mypy==2.1.0`), because rule and checker behavior differs between releases and a
+mismatched local run is a false signal either way. Install them in one step:
+
+```bash
+uv tool install ruff=="$(make -s ruff-version)" mypy=="$(make -s mypy-version)"
+```
 - A dedicated server install ("7 Days to Die Dedicated Server") only for
   build/install/run/package/verify-reproducible: the mod compiles against the
   game's shipped DLLs, which this repo does not redistribute

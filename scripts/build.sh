@@ -61,14 +61,30 @@ for _var in SEVENDTD_DS_DIR DS; do
 done
 unset _var
 CLIENT="${SEVENDTD_GAME_DIR:-$HOME/.local/share/Steam/steamapps/common/7 Days To Die}"
+DS_NAMED=0
+if [[ -n "${SEVENDTD_DS_DIR+x}" || -n "${DS+x}" ]]; then DS_NAMED=1; fi
 if [[ -f "$SRV/7DaysToDieServer_Data/Managed/Assembly-CSharp.dll" ]]; then
   MANAGED="$SRV/7DaysToDieServer_Data/Managed"
   HARMONY="$SRV/Mods/0_TFP_Harmony/0Harmony.dll"
 elif [[ -f "$CLIENT/7DaysToDie_Data/Managed/Assembly-CSharp.dll" ]]; then
+  # The client fallback is what makes staging an install for another host work
+  # (install.sh may name a target that has no game data yet), so it stays. But
+  # when the caller named the install dir explicitly, a path that is not a
+  # dedicated install is a typo far more often than a staging target, and
+  # silently compiling against a different install than the caller named is the
+  # failure mode the empty-override guard above exists to prevent. Say so.
+  if [[ "$DS_NAMED" == 1 ]]; then
+    echo "WARNING: no 7DaysToDieServer_Data/Managed under the named install dir: $SRV" >&2
+    echo "WARNING: compiling against the Steam client install instead: $CLIENT" >&2
+    echo "WARNING: if $SRV was a typo, fix DS=; set SEVENDTD_GAME_DIR to silence this when staging." >&2
+  fi
   MANAGED="$CLIENT/7DaysToDie_Data/Managed"
   HARMONY="$CLIENT/Mods/0_TFP_Harmony/0Harmony.dll"
 else
-  echo "ERROR: Assembly-CSharp.dll not found under dedicated or client install" >&2
+  echo "ERROR: Assembly-CSharp.dll not found in either install:" >&2
+  echo "  dedicated: $SRV/7DaysToDieServer_Data/Managed/Assembly-CSharp.dll" >&2
+  echo "  client:    $CLIENT/7DaysToDie_Data/Managed/Assembly-CSharp.dll" >&2
+  echo "  Point DS= at a '7 Days to Die Dedicated Server' install, or SEVENDTD_GAME_DIR at a client one." >&2
   exit 1
 fi
 

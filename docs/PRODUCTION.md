@@ -23,6 +23,12 @@ cd ../7dtd-server-apm
 make bridge-build && make bridge-install                       # APM bridge (24/7-safe)
 ```
 
+`DS=` may be any dedicated install. When the named dir has no
+`7DaysToDieServer_Data/Managed` (a staging target for another host, or a typo),
+the build falls back to the Steam client install for the game DLLs and prints
+three `WARNING:` lines naming both paths; check them before shipping, since a
+typo means the DLL was built against a different game install than intended.
+
 Launch through `7dtd-server-optimizer/scripts/run_server.sh` (or replicate its env in your
 service unit):
 
