@@ -135,9 +135,7 @@ def _selftest() -> int:
     """
     import tempfile
 
-    checks = Checks("coverage_badge")
-
-    t = checks
+    t = Checks("coverage_badge")
 
     # Exact endpoints on BOTH sides of every threshold: a bound that quietly
     # tightens or loosens by one must fail here, not on the README badge.
@@ -236,7 +234,7 @@ def _selftest() -> int:
             out.read_text(encoding="utf-8") == before,
         )
 
-    return checks.finish()
+    return t.finish()
 
 
 if __name__ == "__main__":

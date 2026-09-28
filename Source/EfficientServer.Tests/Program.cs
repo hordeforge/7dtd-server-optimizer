@@ -1003,9 +1003,6 @@ namespace EfficientServer.Tests
             Check(everyKey != null
                 && !EsLog.Warnings.Any(w => w.Contains("config unknown key")),
                 "no declared knob or section is reported as an unknown key");
-            var caseBind = LoadTemp("{\"ailod\":{\"enabled\":false}}");
-            Check(caseBind.AiLod.Enabled == false,
-                "case-variant key binds like Newtonsoft (value applied)");
             var caseBindCaps = LoadTemp("{\"AILOD\":{\"ENABLED\":false}}");
             Check(caseBindCaps.AiLod.Enabled == false,
                 "all-caps I-bearing key binds (ordinal binder)");

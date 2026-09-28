@@ -167,9 +167,7 @@ def _selftest() -> int:
     Config.cs-shaped snippet and plain dicts so every helper's spec is asserted
     directly, following the --selftest convention of es_cfg_guard.
     """
-    checks = Checks("check_config_doc")
-
-    t = checks
+    t = Checks("check_config_doc")
 
     # parse_cs_default: every initializer form Config.cs uses.
     t.check(
@@ -303,7 +301,7 @@ def _selftest() -> int:
         default_drift(schema, {"Enabled": True, "AiLod": {"FullAiDistSq": 100}}) == [],
     )
 
-    return checks.finish()
+    return t.finish()
 
 
 def main() -> int:

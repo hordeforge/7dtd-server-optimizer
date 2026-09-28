@@ -44,9 +44,7 @@ def repo_root(start: Path | None = None) -> Path:
 def _selftest() -> int:
     import tempfile
 
-    checks = Checks("repo_root")
-
-    t = checks
+    t = Checks("repo_root")
 
     t.check("finds the real root from this file", (repo_root() / MARKERS[0]).is_file())
 
@@ -75,7 +73,7 @@ def _selftest() -> int:
             pass  # no root anywhere above: also a correct rejection of `partial`
         t.check("one marker of two is not a root", found != partial.resolve())
 
-    return checks.finish()
+    return t.finish()
 
 
 if __name__ == "__main__":

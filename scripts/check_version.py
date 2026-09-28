@@ -221,9 +221,7 @@ def _selftest() -> int:
     """
     import tempfile
 
-    checks = Checks("check_version")
-
-    t = checks
+    t = Checks("check_version")
 
     with tempfile.TemporaryDirectory(prefix="es-version-test.") as td:
         mi = Path(td) / "ModInfo.xml"
@@ -381,7 +379,7 @@ def _selftest() -> int:
         _results_history_fails(outside, "1.19.0") != [],
     )
 
-    return checks.finish()
+    return t.finish()
 
 
 def main() -> int:

@@ -33,6 +33,7 @@ truncated JSON behind for the game's config reader or the next run.
 """
 from __future__ import annotations
 
+import copy
 import json
 import os
 import random
@@ -303,7 +304,7 @@ class ConfigSwap:
         # Replay the backup's managed-key values onto the live doc; if that
         # makes the documents identical, only this harness touched the file
         # since the snapshot -> finish the interrupted restore.
-        replayed = json.loads(json.dumps(live))
+        replayed = copy.deepcopy(live)
         for kp in self.keys:
             present, value = self._get(bak_doc, kp)
             self._set(replayed, kp, present, value)
@@ -721,9 +722,7 @@ def _fuzz_protocol(failures: list[str], iteration: int) -> None:
 def _selftest() -> int:
     import tempfile
 
-    checks = Checks("es_cfg_guard")
-
-    t = checks
+    t = Checks("es_cfg_guard")
 
     def section(doc: dict[str, object], key: str) -> dict[str, object]:
         """Narrow a top-level JSON object to one of its nested sections."""
@@ -1177,7 +1176,7 @@ def _selftest() -> int:
         not failures,
     )
 
-    return checks.finish()
+    return t.finish()
 
 
 if __name__ == "__main__":

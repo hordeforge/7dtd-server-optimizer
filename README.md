@@ -89,33 +89,10 @@ Full ledger with session IDs, per-lever numbers, and honest negative results
 reference: [`docs/CONFIG.md`](docs/CONFIG.md). Deploying:
 [`docs/PRODUCTION.md`](docs/PRODUCTION.md).
 
-Docs:
+Docs: [`docs/INDEX.md`](docs/INDEX.md) indexes every document with its role.
+Sibling-repo research (private workspace, not on the public GitHub page):
 
-- Local docs hub: [`docs/INDEX.md`](docs/INDEX.md)
-- Workspace modding guide: [`hordeforge/.github` MODDING_BEST_PRACTICES.md](https://github.com/hordeforge/.github/blob/main/MODDING_BEST_PRACTICES.md)
-- EfficientServer workflow: [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md)
-- Hot path RE: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
-- Host CCD/NUMA/affinity: [`docs/HOST_TUNING.md`](docs/HOST_TUNING.md)
-- Optimization idea map: [`docs/OPTIMIZATION_IDEAS.md`](docs/OPTIMIZATION_IDEAS.md)
-- Optimization candidates (graded): [`docs/OPTIMIZATION_CANDIDATES.md`](docs/OPTIMIZATION_CANDIDATES.md)
-- Network/serialization optimization plan: [`docs/NETWORK_OPTIMIZATION.md`](docs/NETWORK_OPTIMIZATION.md)
-- Upstream allocation reduction plan (the real GC lever): [`docs/ALLOCATION_UPSTREAM.md`](docs/ALLOCATION_UPSTREAM.md)
-- Production deployment + operations runbook: [`docs/PRODUCTION.md`](docs/PRODUCTION.md)
-- Config reference (every option: mechanism, gameplay impact, measured gain): [`docs/CONFIG.md`](docs/CONFIG.md)
-- Results ledger (every lever, A/B numbers, session IDs, config): [`docs/RESULTS.md`](docs/RESULTS.md)
-- Pathfinding / nav-graph optimization plan: [`docs/PATHFINDING_OPTIMIZATION.md`](docs/PATHFINDING_OPTIMIZATION.md)
-- Scale thought experiment (1k players / 10k AI): [`docs/SCALE_1000x10000.md`](docs/SCALE_1000x10000.md)
-- Sim threading, extract-off-main, hot-path catalog: [`docs/SIM_PARALLELISM.md`](docs/SIM_PARALLELISM.md)
-- Feature groups: [`docs/FEATURES.md`](docs/FEATURES.md)
-- Bottleneck catalog (ranked, IL+APM verified): [`docs/bottlenecks.md`](docs/bottlenecks.md)
-- Algorithms & data structures of every hot subsystem: [`docs/algorithms.md`](docs/algorithms.md)
-- Measured scaling laws (live APM): [`docs/measured-scaling.md`](docs/measured-scaling.md)
-- Runtime tuning surfaces: [`docs/runtime-tuning.md`](docs/runtime-tuning.md)
-- Allocation reuse / zero-alloc levers: [`docs/allocation-reuse.md`](docs/allocation-reuse.md)
-- Aggressive / unsafe optimization catalog: [`docs/aggressive-optimizations.md`](docs/aggressive-optimizations.md)
-- Perf research brief (RE + APM → optimizer backlog): [`docs/PERF_RESEARCH_BRIEF.md`](docs/PERF_RESEARCH_BRIEF.md)
-- V3.1.0 APM / loadgen evidence baseline: [`docs/V310_APM_BASELINE.md`](docs/V310_APM_BASELINE.md)
-- OSS tools survey (research): [`../7dtd-engine-research/oss-tools/NOTES.md`](../7dtd-engine-research/oss-tools/NOTES.md)
+- OSS tools survey: [`../7dtd-engine-research/oss-tools/NOTES.md`](../7dtd-engine-research/oss-tools/NOTES.md)
 - Dedicated game loop RE map: [`../7dtd-engine-research/docs/loop/loop.md`](../7dtd-engine-research/docs/loop/loop.md)
 - RE dump index: [`../7dtd-engine-research/docs/INDEX.md`](../7dtd-engine-research/docs/INDEX.md)
 - Backlog: [`TODO.md`](TODO.md)
