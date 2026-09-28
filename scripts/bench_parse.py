@@ -26,6 +26,7 @@ loses the comparison entirely.
 Deterministic (fixed seeds), so a failure reproduces from the iteration number
 alone under ``make check-scripts`` with no fuzzing engine installed.
 """
+
 from __future__ import annotations
 
 import random
@@ -233,9 +234,7 @@ def read_apm(logf: Path, warn: Callable[[str], None] | None = None) -> ApmCounte
     # cannot see, a replacement that happens to be exactly as long as the
     # offset had reached.
     replaced = st is not None and (
-        st["dev"] != stat.st_dev
-        or st["ino"] != stat.st_ino
-        or size < st["off"]
+        st["dev"] != stat.st_dev or st["ino"] != stat.st_ino or size < st["off"]
     )
     if st is None or replaced:
         st = _new_state()
@@ -258,7 +257,7 @@ def read_apm(logf: Path, warn: Callable[[str], None] | None = None) -> ApmCounte
         nl = data.rfind(b"\n")
         if nl >= 0:
             text = data[:nl].decode("utf-8", errors="replace")
-            tail = data[nl + 1:]
+            tail = data[nl + 1 :]
             st["tail"] = tail[-MAX_APM_LINE_BYTES:]
             for line in text.splitlines():
                 if "[7dtd-server-apm]" not in line:
@@ -331,9 +330,7 @@ _ANIM_ROW_RE = re.compile(
     rf"(\d{{1,{_COUNTER_DIGITS}}})\s+(\S+):.*?en=(\w+).*?cull=(\S+)"
     rf".*?vel=({_MS_FIELD}).*?dp=({_MS_FIELD})"
 )
-_ANIM_LOOSE_RE = re.compile(
-    rf"cull=(\S+).*?vel=({_MS_FIELD}).*?dp=({_MS_FIELD})"
-)
+_ANIM_LOOSE_RE = re.compile(rf"cull=(\S+).*?vel=({_MS_FIELD}).*?dp=({_MS_FIELD})")
 _RAW_FIELD_CHARS = 200
 
 
@@ -381,13 +378,21 @@ def parse_animstate(text: str) -> list[dict[str, object]]:
             )
     return rows
 
+
 #
 # Fuzz gate
 #
 
 _APM_ITERATIONS = 2000
 _ANIM_ITERATIONS = 2000
-_FUZZ_TIME_BUDGET_S = 30.0
+# Per-round ceiling, not a total-run budget. A round is a handful of appends
+# plus a parse: microseconds on any host. The number a fixed-iteration fuzz can
+# actually detect is a round that stopped returning, and 5s is far above any
+# healthy round while a wedged one never clears it. A total ceiling measured the
+# machine instead of the parser: 4000 rounds took 49.3s on a loaded Linux host,
+# so a 30s budget failed a healthy run there and would have passed the same
+# change on a faster box.
+_FUZZ_MAX_ROUND_S = 5.0
 
 # Non-digits and shapes a number never takes, spliced into a real health line.
 # "." and "1.2.3" are the pair the old [0-9.]+ accepted and float() then
@@ -735,7 +740,6 @@ def _fuzz_anim(failures: list[str], rng: random.Random, iteration: int) -> None:
 
 def _selftest() -> int:
     t = Checks("bench_parse")
-    started = time.monotonic()
 
     # Positive controls first: a parser that matched nothing would pass every
     # random round below, so the known-good shapes are pinned on their own.
@@ -775,16 +779,12 @@ def _selftest() -> int:
     # then rejected: unreadable is the answer, a raised ValueError is not.
     t.check(
         "apm: a malformed magnitude is not understood",
-        APM_LINE_RE.search(
-            _apm_line(1, 0.0, 0.0, 0).replace("0.00ms tickAvg", ".ms tickAvg")
-        )
+        APM_LINE_RE.search(_apm_line(1, 0.0, 0.0, 0).replace("0.00ms tickAvg", ".ms tickAvg"))
         is None,
     )
     t.check(
         "apm: an over-long count is not understood",
-        APM_LINE_RE.search(
-            _apm_line(1, 1.0, 1.0, 1).replace("updates=1", "updates=" + "9" * 5000)
-        )
+        APM_LINE_RE.search(_apm_line(1, 1.0, 1.0, 1).replace("updates=1", "updates=" + "9" * 5000))
         is None,
     )
     t.check(
@@ -827,12 +827,18 @@ def _selftest() -> int:
     # Random rounds over both parsers. Fixed seeds: a failure has to replay
     # from its iteration number alone, with no fuzzing engine installed.
     failures: list[str] = []
+    slowest = 0.0
+    fuzz_started = time.monotonic()
     with tempfile.TemporaryDirectory() as td:
         root = Path(td)
         for iteration in range(_APM_ITERATIONS):
+            round_started = time.monotonic()
             _fuzz_apm(failures, root, random.Random(0xA9_1CE + iteration), iteration)  # noqa: S311
+            slowest = max(slowest, time.monotonic() - round_started)
         for iteration in range(_ANIM_ITERATIONS):
+            round_started = time.monotonic()
             _fuzz_anim(failures, random.Random(0xA1_45 + iteration), iteration)  # noqa: S311
+            slowest = max(slowest, time.monotonic() - round_started)
     for detail in failures[:10]:
         print("FAIL: fuzz: " + detail, file=sys.stderr)
     t.check(
@@ -841,11 +847,11 @@ def _selftest() -> int:
         not failures,
     )
 
-    elapsed = time.monotonic() - started
+    elapsed = time.monotonic() - fuzz_started
     t.check(
-        f"fuzz: {_APM_ITERATIONS + _ANIM_ITERATIONS} rounds finished in {elapsed:.1f}s "
-        f"(budget {_FUZZ_TIME_BUDGET_S:.0f}s)",
-        elapsed < _FUZZ_TIME_BUDGET_S,
+        f"fuzz: {_APM_ITERATIONS + _ANIM_ITERATIONS} rounds finished in {elapsed:.1f}s, "
+        f"slowest round {slowest:.3f}s (ceiling {_FUZZ_MAX_ROUND_S:.0f}s)",
+        slowest < _FUZZ_MAX_ROUND_S,
     )
     reset_apm_tail()
     return t.finish()

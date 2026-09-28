@@ -52,6 +52,19 @@ chosen up front:
 ## [Unreleased]
 
 ### Fixed
+- `scripts/bench_parse.py --selftest` no longer fails on a loaded host. The fuzz
+  gate asserted its 4000 rounds finished inside a fixed 30s wall-clock budget,
+  which grades the machine rather than the parser: the same run took 49.3s here
+  and passed everywhere else. The check is now a per-round ceiling, so it fires
+  on a round that stopped returning (the failure a fixed-iteration fuzz can
+  actually see) and not on a slow disk. The total stays on the PASS line as a
+  measurement.
+- `ruff format --check scripts`, the formatter half of `make lint`, is green
+  again: three harness files were committed in a layout the pinned ruff
+  (0.16.4) does not produce, so the gate failed on a clean checkout.
+- `make package` names a missing `zip`, `git`, `find`, `sort`, `touch` or `sed`
+  before it spends a compile. `zip` runs at the end of a pipeline, so its
+  absence used to surface as a bare "command not found" after the whole build.
 - The start-time and `es reload` apply chains no longer cascade. Both ran every
   lever inside one `try`, so a single throwing step (mesh budgets, governor
   re-base, dedicated skips) skipped every step behind it and the operator's only

@@ -56,6 +56,15 @@ case "${1:-}" in
     ;;
 esac
 
+# Name the tools this script needs before it spends a compile on them. zip is
+# the one that matters: it runs at the end of a pipeline inside a subshell, so a
+# host without it fails with a bare "command not found" after the whole build
+# has run, and the run before that (no git) degrades instead of failing, because
+# describe and status are allowed to be absent and fall back to a commit id.
+for tool in zip git find sort touch sed; do
+  command -v "$tool" >/dev/null 2>&1 || { echo "ERROR: required tool '$tool' not found" >&2; exit 1; }
+done
+
 # Stage on disk, never the stock /tmp: it is tmpfs on most Linux hosts, so a
 # full mod staging tree would be held in RAM and lost on reboot. mktemp honors
 # TMPDIR, and .scratch/ is gitignored.

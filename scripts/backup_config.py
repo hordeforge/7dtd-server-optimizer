@@ -584,9 +584,7 @@ def newest_age_hours(dest: Path, now: datetime | None = None) -> float | None:
     if match is None:
         return None
     try:
-        taken = datetime.strptime(match.group(1), STAMP_FORMAT).replace(
-            tzinfo=timezone.utc
-        )
+        taken = datetime.strptime(match.group(1), STAMP_FORMAT).replace(tzinfo=timezone.utc)
     except ValueError:
         return None
     return ((now or datetime.now(timezone.utc)) - taken).total_seconds() / 3600.0
@@ -850,9 +848,7 @@ def _dispatch(args: argparse.Namespace) -> int:
     return 0
 
 
-def _staleness(
-    dest: Path, max_age_hours: float, *, now: datetime | None = None
-) -> list[str]:
+def _staleness(dest: Path, max_age_hours: float, *, now: datetime | None = None) -> list[str]:
     """The freshness complaint `--max-age-hours` exists to make.
 
     Every snapshot in a dead backup set still verifies, so a job that stopped
@@ -1097,8 +1093,10 @@ def _selftest() -> int:
         # the names there are not ones this tool minted. `.staging-².x` raised
         # ValueError from int() and a 20-digit run raised OverflowError from
         # os.kill, both out of snapshot().
-        hostile = [dest / f"{STAGING_PREFIX}\N{SUPERSCRIPT TWO}.ijkl",
-                   dest / f"{STAGING_PREFIX}{'9' * 20}.mnop"]
+        hostile = [
+            dest / f"{STAGING_PREFIX}\N{SUPERSCRIPT TWO}.ijkl",
+            dest / f"{STAGING_PREFIX}{'9' * 20}.mnop",
+        ]
         for stray in hostile:
             stray.mkdir()
         snapshot(srv, dest, now=t1 + timedelta(seconds=1))
@@ -1147,14 +1145,15 @@ def _selftest() -> int:
         sc = srv / "serverconfig.xml"
         sc.write_text(
             '<?xml version="1.0" encoding="UTF-8"?>\n'
-            '<ServerSettings><ServerName>Holdout</ServerName>'
+            "<ServerSettings><ServerName>Holdout</ServerName>"
             "<ServerPassword>hunter2</ServerPassword></ServerSettings>\n",
             encoding="utf-8",
         )
         # The sibling run_server.sh keeps of the operator's original.
         pre = srv / "serverconfig.optimized.xml.pre-optimized"
-        pre.write_text("<ServerSettings><ServerName>Before</ServerName></ServerSettings>\n",
-                       encoding="utf-8")
+        pre.write_text(
+            "<ServerSettings><ServerName>Before</ServerName></ServerSettings>\n", encoding="utf-8"
+        )
         dest = td / "offhost"
         # Not inside the install tree, like every other dest here.
         target, _ = snapshot(srv, dest, now=t0)

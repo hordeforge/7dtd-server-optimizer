@@ -18,6 +18,7 @@ a live dedicated server and the 7dtd-loadgen sibling, so the cache and its
 invalidation had no test at all. Stdlib only: `make check-scripts` runs the
 selftest here.
 """
+
 from __future__ import annotations
 
 import re
@@ -135,12 +136,7 @@ def read_apm(logf: Path, log: Callable[..., None] = print) -> ApmCounters | None
     # resets the state the way a shrinking file does.
     replaced = st is not None and info.st_size < st["off"]
     rotated = st is not None and (info.st_dev != st["dev"] or info.st_ino != st["ino"])
-    rewritten = (
-        st is not None
-        and not replaced
-        and not rotated
-        and _head_bytes(logf) != st["head"]
-    )
+    rewritten = st is not None and not replaced and not rotated and _head_bytes(logf) != st["head"]
     if st is None or replaced or rotated or rewritten:
         st = {
             "dev": info.st_dev,
@@ -162,7 +158,7 @@ def read_apm(logf: Path, log: Callable[..., None] = print) -> ApmCounters | None
         nl = data.rfind(b"\n")
         if nl >= 0:
             text = data[:nl].decode("utf-8", errors="replace")
-            st["tail"] = data[nl + 1:]
+            st["tail"] = data[nl + 1 :]
             for line in text.splitlines():
                 if "[7dtd-server-apm]" not in line:
                     continue
@@ -343,11 +339,15 @@ def _selftest() -> int:
         "spikes": 3,
     }
     w = windowed(a, b)
-    t.check("window reconstructs the rate between two cumulative reads", w is not None
-            and w["gmUpdateAvg"] == 70.0 and w["tickAvg"] == 65.0)
+    t.check(
+        "window reconstructs the rate between two cumulative reads",
+        w is not None and w["gmUpdateAvg"] == 70.0 and w["tickAvg"] == 65.0,
+    )
     t.check("window reports the update span", w is not None and w["window_updates"] == 100)
-    t.check("window carries the reconstruction error bound", w is not None
-            and w["gmUpdateAvg_err_ms"] == round(HALF_QUANTUM_MS * 300 / 100, 3))
+    t.check(
+        "window carries the reconstruction error bound",
+        w is not None and w["gmUpdateAvg_err_ms"] == round(HALF_QUANTUM_MS * 300 / 100, 3),
+    )
     t.check("a window with no new updates is None", windowed(a, a) is None)
     t.check("a window against an earlier read is None", windowed(b, a) is None)
 
