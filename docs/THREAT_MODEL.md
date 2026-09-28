@@ -16,7 +16,7 @@ patch group, every change to `scripts/install.sh` / `uninstall.sh` /
 | # | Risk | Boundary | Why |
 |---|---|---|---|
 | R1 | Full-host-authority code runs inside the game server process | Mod to host | By design: a Harmony mod is arbitrary code with the server's privileges. No isolation exists or is possible while it stays a C# mod. Every bug is a server crash or worse, not a sandbox escape |
-| R2 | Unverified build artifact installed over the game tree | Build to runtime | `install.sh` does `rm -rf` of the destination and copies `dist/EfficientServer/` into `Mods/` with no hash or signature check (`scripts/install.sh:54,56`). Nothing on the install path compares the artifact to a trusted build. Whoever controls `dist/` or the Mods directory controls the server process |
+| R2 | Unverified build artifact installed over the game tree | Build to runtime | `install.sh` does `rm -rf` of the destination and copies `dist/EfficientServer/` into `Mods/` with no hash or signature check (`scripts/install.sh:94,96`). Nothing on the install path compares the artifact to a trusted build. Whoever controls `dist/` or the Mods directory controls the server process |
 | R3 | Config-file write access silently pre-authorizes every lever, including the diagnostic arms | Filesystem to mod | `Config/efficientserver.json` is read with no signature and no watcher. Anyone who can write that file controls policy: `es reload` re-reads it (`Source/EfficientServer/ModApi.cs:116`). The gates that guard `es benchgod on` and `es animoff`/`es rigoff` are themselves config flags (`Diagnostics.AllowBenchGod`, `Diagnostics.AllowFidelityProbes`, `Source/EfficientServer/Config.cs:534,541`), so a config write both sets the limits and lifts the guard. `es` is a consequence, not a prerequisite |
 | R4 | Console actor can degrade or disable live gameplay with one command | Console to mod | The bench-god and fidelity-probe arms are refused unless the operator opted in (B2, `ConsoleCmdEfficientServer.cs:324,184`). Where the opt-in is on, any console-level actor gets global damage immunity for every player (`Patches/BenchGodPatch.cs:23`) or enemy animation and rig disable, unconfirmed, unscoped, and unpersisted across restart. Disarming is never gated, so a refusal is always reversible |
 | R5 | Config-file self-denial-of-service paths | Filesystem to mod | Clamped maxima are still potent: `TickGuard` despawns enemies past a tick EMA (`Patches/TickGuardPatch.cs:97`) and `Governor.AnimatorEmergency` engages itself past `EmergencyOverMs` (`Patches/GovernorPatch.cs:129,132`); both default off, both config-enableable. The heap-growing GC megapause probe that used to sit here was removed after tag `v1.19.0` and is unreleased (`CHANGELOG.md:29`) |
@@ -36,7 +36,7 @@ write APIs under `Source/EfficientServer/`; the only file reads are
 | E2 | Config JSON file read | `Source/EfficientServer/Config.cs:364` (`Load`), path resolution `Config.cs:503` | Read once at init and again on every `es reload` (`ModApi.ReloadConfig`, `ModApi.cs:116`). Parsed with Newtonsoft.Json (game-bundled); read pinned to UTF-8 (`Config.cs:373`). No file watcher, no signature, no ownership check; disk changes apply only via E3 |
 | E3 | Operator console command `es` / `efficientserver` | `Source/EfficientServer/ConsoleCmdEfficientServer.cs:20` (`Execute`) | Subcommands: `reload`, `status`, `animoff`/`animon`, `animstate`, `rigoff`/`rigon`, `benchgod on\|off` (`ConsoleCmdEfficientServer.cs:32-73`). Reachable from the server terminal, the telnet remote console, and in-game clients the game's permission system admits to console commands |
 | E4 | P/Invoke into bundled Boehm GC library | `Source/EfficientServer/BoehmNative.cs` (declarations), `Source/EfficientServer/GcIncremental.cs:30` (call site) | `monobdwgc-2.0`; flips collector mode and sets the pause limit. The megapause probe P/Invokes were removed after `v1.19.0` (`CHANGELOG.md:29`); what remains is the mode flip and the optional pause target |
-| E5 | Install/run/uninstall scripts | `scripts/install.sh`, `scripts/uninstall.sh`, `scripts/run_server.sh`, `Makefile:142,147,149` | Build, back up user config, wipe and copy artifacts into `<DS>/Mods/EfficientServer/`, export GC/JIT env vars, exec the server binary. All three reject an exported-but-empty `SEVENDTD_DS_DIR` rather than defaulting (`install.sh:10`, and the same guard in `uninstall.sh` and `run_server.sh`) so the `rm -rf` cannot land on a different install. `uninstall.sh` copies `Config/` out to a timestamped backup before the wipe (`uninstall.sh:54,69`), and `run_server.sh` keeps the `<DS>/serverconfig*.xml` it replaces |
+| E5 | Install/run/uninstall scripts | `scripts/install.sh`, `scripts/uninstall.sh`, `scripts/run_server.sh`, `Makefile:142,147,149` | Build, back up user config, wipe and copy artifacts into `<DS>/Mods/EfficientServer/`, export GC/JIT env vars, exec the server binary. All three reject an exported-but-empty `SEVENDTD_DS_DIR` rather than defaulting (`install.sh:42`, and the same guard in `uninstall.sh` and `run_server.sh`) so the `rm -rf` cannot land on a different install. `uninstall.sh` copies `Config/` out to a timestamped backup before the wipe (`uninstall.sh:77,89`), and `run_server.sh` keeps the `<DS>/serverconfig*.xml` it replaces |
 | E6 | CI workflow | `.github/workflows/ci.yml:5` | Runs `make test` on pushes to main and on PRs |
 | E7 | Repo Python tooling | `scripts/check_config_doc.py`, `scripts/check_version.py`, `scripts/es_cfg_guard.py`, `scripts/coverage_badge.py`, `scripts/repo_root.py` | Stdlib-only, run by `make test` and CI over repo content and `config/efficientserver.json`. They read the working tree and exit nonzero; none writes outside the repo. `repo_root.py --selftest` is the only one with a self-test |
 | E8 | Offline measurement and validation scripts (not in `make test`) | `scripts/validate_anim_path_admission.py`, `scripts/validate_bloodmoon_path.py`, `scripts/measure_es_onoff.py` | Need a live dedicated server; syntax-gated by `compileall` only (`Makefile:114`). They connect to a server the operator names, so the target host is operator-supplied input, not a network listener this repo opens |
@@ -138,11 +138,12 @@ write APIs under `Source/EfficientServer/`; the only file reads are
 ### B4: build/publish to installed server
 
 - Tampering: no signature, checksum comparison, or provenance check anywhere on
-  the install path. `install.sh` backs up a differing user config via a trap
+  the install path. `install.sh` backs up the installed `Config/` (a differing
+  user config plus the guard backup files) via a trap
   that survives failure, then does `rm -rf` of the destination and copies from
-  `dist/` (`scripts/install.sh:40,54,56`). An exported-but-empty
+  `dist/` (`scripts/install.sh:70-88,94,96`). An exported-but-empty
   `SEVENDTD_DS_DIR` is rejected before the build and before the wipe
-  (`install.sh:10`), which is what keeps the `rm -rf` pointed at the install the
+  (`install.sh:42`), which is what keeps the `rm -rf` pointed at the install the
   operator named. `package.sh` produces a reproducible, byte-identical zip
   (`scripts/package.sh:42`); `scripts/verify_reproducible.sh` proves
   rebuildability. Named gap remains: install verifies none of this, and nothing
@@ -228,8 +229,8 @@ write APIs under `Source/EfficientServer/`; the only file reads are
 | State-changing console commands and refusals echoed to log | B2 repudiation | `ConsoleCmdEfficientServer.cs:100` |
 | Severity-split logging channels (INFO/WARN/ERROR) | triage of config corrections vs failures | `EsLog.cs:18,26` |
 | Emergency levers log as WARNING when engaged | B1/B3 unnoticed combat degradation or entity sheds | `Patches/GovernorPatch.cs:129`, `Patches/TickGuardPatch.cs:104` |
-| Install dir guard: exported-but-empty `SEVENDTD_DS_DIR` rejected before build and wipe | B4 `rm -rf` on an unintended install | `scripts/install.sh:10`, same guard in `uninstall.sh` and `run_server.sh` |
-| Failed install preserves the operator's config via EXIT trap | B4 silent config loss | `scripts/install.sh:40` |
+| Install dir guard: exported-but-empty `SEVENDTD_DS_DIR` rejected before build and wipe | B4 `rm -rf` on an unintended install | `scripts/install.sh:42`, same guard in `uninstall.sh` and `run_server.sh` |
+| Failed install preserves the operator's config via EXIT trap | B4 silent config loss | `scripts/install.sh:65-92` |
 | Commit-pinned CI actions, unpersisted read-only token, main-scoped push | B6 supply chain | `.github/workflows/ci.yml:6,10,24,29` |
 | Locked-mode restore from an in-repo source list, SDK pin | B4/B6 dependency drift | `NuGet.config`, `Makefile:119`, `global.json` |
 | Reproducible package build (sorted entries, epoch mtimes, rebuilt from scratch) | B4 artifact diffing | `scripts/package.sh:42` |

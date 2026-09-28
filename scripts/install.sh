@@ -7,8 +7,10 @@ usage() {
 usage: scripts/install.sh [-h | --help]
 
 Builds the mod and copies dist/EfficientServer into <DS>/Mods/EfficientServer.
-A user-edited installed config is preserved across the reinstall. Takes no
-arguments; everything is read from the environment.
+Every file under the installed Config/ is preserved across the reinstall: a
+user-edited efficientserver.json (when it differs from the shipped default),
+plus the bench harness' guard backup files. Takes no arguments; everything is
+read from the environment.
   -h, --help  show this help and exit
 
 Environment:
@@ -60,8 +62,11 @@ if [[ ! -f "$SRV/Mods/0_TFP_Harmony/0Harmony.dll" ]]; then
   echo "WARNING: $SRV has no Mods/0_TFP_Harmony/0Harmony.dll." >&2
   echo "WARNING: EfficientServer requires the stock 0_TFP_Harmony mod at load time; without it the server will not load this mod." >&2
 fi
-# Preserve a user-edited config across upgrade/reinstall: back up the installed
-# one before wiping, and keep it if it differs from the newly shipped default.
+# Preserve the whole installed Config/ across upgrade/reinstall, not just the
+# JSON: the guard backup (efficientserver.json.swap-bak) and its quarantined
+# .stale files are the only crash-recovery snapshot of a config a killed bench
+# run left half-swapped, and nothing regenerates them. Same rule uninstall.sh
+# applies, and the RPO claim in docs/PRODUCTION.md depends on it.
 BACKUP=""
 INSTALL_OK=0
 # Success consumes the backup copy; a FAILED install must keep it. The rm -rf
@@ -70,26 +75,51 @@ INSTALL_OK=0
 finish() {
   if [[ -n "$BACKUP" ]]; then
     if [[ "$INSTALL_OK" == 1 ]]; then
-      rm -f "$BACKUP"
+      rm -rf "$BACKUP"
     else
-      echo "WARNING: install failed; your previous EfficientServer config was preserved at $BACKUP" >&2
+      echo "WARNING: install failed; your previous EfficientServer Config/ was preserved at $BACKUP" >&2
     fi
   fi
 }
 trap finish EXIT
-if [[ -f "$DEST/Config/efficientserver.json" ]]; then
-  BACKUP="$(mktemp)"
-  cp "$DEST/Config/efficientserver.json" "$BACKUP"
+# nullglob covers both globs below: an empty (or absent) Config/ must expand to
+# no operands, never to the literal pattern.
+shopt -s nullglob
+if [[ -d "$DEST/Config" ]]; then
+  BACKUP="$(mktemp -d)"
+  for f in "$DEST"/Config/*; do
+    cp -a "$f" "$BACKUP/"
+  done
 fi
 rm -rf "$DEST"
 mkdir -p "$DEST"
 cp -a "$ROOT/dist/EfficientServer/." "$DEST/"
-if [[ -n "$BACKUP" ]] && ! cmp -s "$BACKUP" "$DEST/Config/efficientserver.json"; then
-  cp "$BACKUP" "$DEST/Config/efficientserver.json"
+# Match the installed tree to the shipped zip: package.sh normalizes modes
+# before archiving, so an install must not leave build-host umask modes behind.
+find "$DEST" -type d -exec chmod 755 {} +
+find "$DEST" -type f -exec chmod 644 {} +
+CONFIG_RESTORED=0
+if [[ -n "$BACKUP" ]]; then
+  for f in "$BACKUP"/*; do
+    name="$(basename "$f")"
+    if [[ "$name" == "efficientserver.json" ]]; then
+      # Byte-identical to the newly shipped default: nothing the operator did.
+      if cmp -s "$f" "$DEST/Config/$name"; then
+        continue
+      fi
+      CONFIG_RESTORED=1
+    fi
+    cp -a "$f" "$DEST/Config/$name"
+    [[ "$name" == "efficientserver.json" ]] ||
+      echo "Preserved $name from the previous install."
+  done
+fi
+if [[ "$CONFIG_RESTORED" == 1 ]]; then
   echo "Preserved existing user config (differs from shipped default)."
 else
   echo "Using shipped default config."
 fi
+shopt -u nullglob
 INSTALL_OK=1
 echo "Installed -> $DEST"
 ls -la "$DEST" "$DEST/Config"

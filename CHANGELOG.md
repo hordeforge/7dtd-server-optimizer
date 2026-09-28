@@ -53,6 +53,16 @@ So `EfficientServer-0.1.0.zip` logging `mod=1.17.0` is correct, not drift.
   `probeAllow=`.
 
 ### Fixed
+- `make install` destroyed everything in the installed `Config/` except
+  `efficientserver.json`: the bench guard's `efficientserver.json.swap-bak` and
+  its quarantined `.stale` files are the only crash-recovery snapshot of a
+  config a killed run left half-swapped, and the upgrade wiped them (the
+  uninstall path already kept them, and docs/PRODUCTION.md claimed the same
+  RPO for a reinstall). The install now copies the whole `Config/` out before
+  the wipe and restores every file from it, keeping the shipped default only
+  when the installed JSON is byte-identical to it. Installed file modes are
+  normalized to 755/644, so `make install` and the release zip produce the same
+  tree.
 - The bench harnesses read the installed `efficientserver.json` as strict
   UTF-8, so a leading BOM (which the game's own reader has always tolerated)
   made every one of them fail: `recover()` quarantined a perfectly good backup
