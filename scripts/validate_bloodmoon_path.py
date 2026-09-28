@@ -63,15 +63,20 @@ class HealthSample(TypedDict):
     tickAvgMs_avg: float | None
     entityAlives: int
     players: object
+    # Health polls the window actually took; each series below may be thinner
+    # when its field came back missing, so this is the depth of the window, not
+    # the count behind either average.
     samples: int
 
 
 def sample_health(label: str, seconds: float = SAMPLE_S) -> HealthSample:
     frames, ticks = [], []
+    polls = 0
     # Monotonic window so a wall-clock step cannot truncate the sample period.
     t0 = time.monotonic()
     while time.monotonic() - t0 < seconds:
         h = B.health()
+        polls += 1
         if h.get("frameMs") is not None:
             frames.append(float(h["frameMs"]))
         if h.get("tickAvgMs") is not None:
@@ -84,7 +89,11 @@ def sample_health(label: str, seconds: float = SAMPLE_S) -> HealthSample:
         "tickAvgMs_avg": round(sum(ticks) / len(ticks), 3) if ticks else None,
         "entityAlives": B.alive(),
         "players": B.snap_players(),
-        "samples": max(len(frames), len(ticks)),
+        # The polls the window actually took, not max(len(frames), len(ticks)):
+        # the two filters are independent, so the max overstates the depth of
+        # whichever series was thinner, and an operator reads `samples` to judge
+        # whether a window was deep enough to trust.
+        "samples": polls,
     }
 
 

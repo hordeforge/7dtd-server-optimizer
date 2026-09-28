@@ -57,6 +57,24 @@ namespace EfficientServer.Patches
 
         static void Shed(TickGuardConfig cfg, double emaMs)
         {
+            // Scratch holds strong Entity references, and a shed is at least
+            // CooldownTicks apart, so it must be emptied on EVERY exit path, not
+            // just the one that despawns: the keep-floor branch below leaves the
+            // whole living-enemy list (up to MinEnemiesKept, 10000 at the config
+            // ceiling) pinned - and despawned enemies with it - until the next
+            // shed. Same contract as AnimatorEmergency.Enter's LiveRigs.
+            try
+            {
+                ShedOnce(cfg, emaMs);
+            }
+            finally
+            {
+                Scratch.Clear();
+            }
+        }
+
+        static void ShedOnce(TickGuardConfig cfg, double emaMs)
+        {
             // A suppressed shed is the one outcome an operator cannot infer from the
             // log: no shed line means either "never triggered" or "triggered and did
             // nothing", and those need different responses. Every Shed call is at
@@ -67,7 +85,6 @@ namespace EfficientServer.Patches
             List<EntityPlayer> players = world.Players.list;
             if (players.Count == 0) { Suppressed(cfg, emaMs, "no players online"); return; }
 
-            Scratch.Clear();
             int enemies = 0;
             for (int i = 0; i < entities.Count; i++)
             {
@@ -104,7 +121,6 @@ namespace EfficientServer.Patches
             EsLog.Emit(LogLevel.Warn, $"TickGuard: tick EMA {emaMs.ToString("F1", CultureInfo.InvariantCulture)}ms > "
                 + $"{cfg.ShedAboveMs.ToString(CultureInfo.InvariantCulture)}ms - shed {shed} "
                 + $"farthest enemies ({enemies} -> {enemies - shed}, lifetime {ShedTotal})");
-            Scratch.Clear();
         }
 
         // The trigger fired (tick over budget) but the shed was withheld. Same

@@ -103,8 +103,17 @@ namespace EfficientServer.Patches
             Level > 0 ? ThrottleLever(configured, ServerPerfConfig.GraphUpdateMax) : configured;
 
         /// <summary>The one baseline -&gt; doubled lever mapping, capped at the config ceiling.</summary>
+        /// <remarks>
+        /// The doubling is computed in <see cref="long"/>, not int: a plain
+        /// <c>configured * 2</c> wraps negative past 2^30, and a negative
+        /// double then loses to <c>Math.Max</c>, so the lever silently reads as
+        /// the operator's own value instead of the doubled one the contract
+        /// promises. Every caller passes a Normalize-clamped value (stride 4,
+        /// cadence 200) so the wrap is unreachable today, but this is a public
+        /// pure mapping with its own test, and the long form costs nothing.
+        /// </remarks>
         public static int ThrottleLever(int configured, int maxValue)
-            => Math.Min(maxValue, Math.Max(configured, configured * 2));
+            => (int)Math.Min((long)maxValue, Math.Max((long)configured, (long)configured * 2));
 
         /// <summary>
         /// Re-base after <see cref="ModApi.ReloadConfig"/> swapped the config

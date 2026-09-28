@@ -17,12 +17,20 @@ namespace EfficientServer.Patches
     [HarmonyPatch(typeof(GameManager), "UpdateTick")]
     public static class TargetFpsPatch
     {
-        static int _frames;
+        // Frames between re-checks (~10 s at the vanilla 20 fps, ~3 s at 60).
+        const uint FramesPerRecheck = 200;
+
+        // uint so the cadence survives the signed wrap: this counter is the only
+        // driver of the periodic re-apply, and a 60 fps server crosses 2^31
+        // frames in ~10 hours, after which a signed `_frames % 200` runs
+        // negative and the 200-frame spacing is scrambled for a window. Same
+        // wrap-safe cursor convention as TickClock.OwnsSlot.
+        static uint _frames;
 
         static void Postfix()
         {
             if (!ModApi.ShouldRun()) return;
-            if (++_frames % 200 != 0) return; // ~10 s at 20 fps, ~3 s at 60
+            if (++_frames % FramesPerRecheck != 0) return; // ~10 s at 20 fps, ~3 s at 60
             GameStartPatch.ApplyTargetFps();
         }
     }

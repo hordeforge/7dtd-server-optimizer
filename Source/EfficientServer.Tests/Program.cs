@@ -395,6 +395,16 @@ namespace EfficientServer.Tests
             Check(t.EffectiveGraphEvery(200) == 200, "graph cadence caps at 200");
             Check(GovernorTiers.ThrottleLever(1, 4) == 2, "ThrottleLever doubles");
             Check(GovernorTiers.ThrottleLever(0, 4) == 0, "ThrottleLever never lowers a 1..N cadence");
+            // Int-overflow boundary of the doubling: 1.5e9 * 2 wraps to
+            // -1294967296 in int arithmetic, and that negative double loses to
+            // Math.Max(configured, ...), so an int-computed lever would read
+            // back as 1500000000 - the operator's own value, unthrottled -
+            // under a 2e9 ceiling that allows the double. The long form
+            // doubles and caps as documented.
+            Check(GovernorTiers.ThrottleLever(1500000000, 2000000000) == 2000000000,
+                "ThrottleLever doubles past the int-overflow boundary instead of wrapping negative");
+            Check(GovernorTiers.ThrottleLever(int.MaxValue, 2000000000) == 2000000000,
+                "ThrottleLever caps int.MaxValue at the ceiling rather than wrapping negative");
 
             // Tier 2 and its periodic rig sweep.
             GovernorConfig em = GovCfg(true, 0);
