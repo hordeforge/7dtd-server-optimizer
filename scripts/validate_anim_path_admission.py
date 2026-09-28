@@ -32,10 +32,10 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import time
 from typing import TypedDict
 
+from bench_parse import parse_animstate
 from cli_common import preflight_usage, run_cli
 from es_cfg_guard import write_atomic
 
@@ -143,48 +143,6 @@ def _num(row: dict[str, object], key: str) -> float:
     """Numeric field of a parsed animstate row; 0.0 when absent or non-numeric."""
     v = row.get(key)
     return float(v) if isinstance(v, (int, float)) else 0.0
-
-
-def parse_animstate(text: str) -> list[dict[str, object]]:
-    """Parse `es animstate` lines like:
-      123 zombieBoe: en=True spd=1.00 rootMotion=True cull=CullCompletely ...
-      vel=0.120 dp=0.0000 ...
-    """
-    rows = []
-    for line in text.splitlines():
-        line = line.strip()
-        if "dp=" not in line or "cull=" not in line:
-            continue
-        m = re.search(
-            r"(\d+)\s+(\S+):.*?en=(\w+).*?cull=(\S+).*?vel=([0-9.]+).*?dp=([0-9.]+)",
-            line,
-        )
-        if not m:
-            # looser
-            m2 = re.search(r"cull=(\S+).*?vel=([0-9.]+).*?dp=([0-9.]+)", line)
-            if not m2:
-                continue
-            rows.append(
-                {
-                    "cull": m2.group(1),
-                    "vel": float(m2.group(2)),
-                    "dp": float(m2.group(3)),
-                    "raw": line[:200],
-                }
-            )
-            continue
-        rows.append(
-            {
-                "entityId": int(m.group(1)),
-                "name": m.group(2),
-                "en": m.group(3),
-                "cull": m.group(4),
-                "vel": float(m.group(5)),
-                "dp": float(m.group(6)),
-                "raw": line[:200],
-            }
-        )
-    return rows
 
 
 def animstate_snapshot() -> tuple[str, list[dict[str, object]]]:

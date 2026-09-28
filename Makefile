@@ -223,6 +223,7 @@ check-scripts: preflight-scripts scratch
 	python3 $(ROOT)/scripts/check_version.py
 	python3 $(ROOT)/scripts/check_version.py --selftest
 	python3 $(ROOT)/scripts/es_cfg_guard.py --selftest
+	python3 $(ROOT)/scripts/bench_parse.py --selftest
 	python3 $(ROOT)/scripts/coverage_badge.py --selftest
 	python3 $(ROOT)/scripts/backup_config.py --selftest
 

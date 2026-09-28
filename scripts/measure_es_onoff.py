@@ -31,12 +31,11 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import time
 from collections.abc import Iterable
 from pathlib import Path
-from typing import TypedDict
 
+from bench_parse import ApmSample, read_apm, windowed
 from cli_common import preflight_usage, run_cli
 from es_cfg_guard import CFG_ENCODING, ConfigSwap, write_atomic
 
@@ -129,159 +128,18 @@ def latest_server_log() -> Path | None:
     return cands[-1] if cands else None
 
 
-APM_LINE_RE = re.compile(
-    r"APM updates=(\d+) gmUpdateAvg=([0-9.]+)ms tickAvg=([0-9.]+)ms spikes=(\d+)"
-)
-
-# The bridge prints cumulative averages rounded to two decimals
-# (ToString("F2")), so every parsed value carries up to this much rounding
-# error. windowed() divides the weighted-sum delta by the WINDOW update count
-# while that error scales with TOTAL updates since boot, so the reconstruction
-# bound grows with server uptime: sub-0.1 ms on a fresh boot, but an attached
-# hours-old server (SKIP_SERVER_START=1) can push it well past the +/-0.5 ms
-# verdict band - enough to fabricate an ON_faster/ON_slower call from print
-# rounding alone. Verdicts must treat anything under the summed bounds as noise.
-HALF_QUANTUM_MS = 0.005
-
-# Counters parsed out of one [7dtd-server-apm] health line (cumulative since
-# server boot; see read_apm).
-class _ApmCounters(TypedDict):
-    updates: int
-    gmUpdateAvg: float
-    tickAvg: float
-    spikes: int
 
 
-# Incremental tail state per log path: byte offset, undecoded partial-line
-# carry, and the newest matching APM health line seen so far. The Unity log is
-# append-only and grows to hundreds of MB under blood-moon loads; rescanning
-# the whole file every poll second would churn page cache and inject disk I/O
-# noise into the exact frame-time numbers this harness measures.
-class _ApmTailState(TypedDict):
-    off: int
-    tail: bytes
-    last: _ApmCounters | None
+# The APM line parser, the incremental reader and the windowed-rate
+# reconstruction live in bench_parse: they parse the server log, which is text
+# this repo does not write, and keeping them here put them behind the
+# 7dtd-loadgen sibling import where no gate could reach them. The fuzz target
+# for both is `python3 scripts/bench_parse.py --selftest`.
 
 
-_APM_TAIL: dict[Path, _ApmTailState] = {}
-
-# Log paths whose stat() has already failed, so the warning is emitted once per
-# path instead of once per poll second.
-_APM_STAT_WARNED: set[Path] = set()
-
-
-def read_apm(logf: Path) -> _ApmCounters | None:
-    """Parse the most recent matching [7dtd-server-apm] health line from the server log.
-
-    Reads only bytes appended since the previous call (the log is append-only;
-    state resets if the file shrank or was replaced), so per-second polling
-    costs one small read instead of a full-file rescan. Returns cumulative
-    counters (updates, gmUpdateAvg, tickAvg, spikes); None before the first
-    matching line ever.
-    """
-    st = _APM_TAIL.get(logf)
-    try:
-        size = logf.stat().st_size
-    except OSError as e:
-        # The log is gone (server stopped, or rotated to another path). Say so
-        # once per path: the caller reads this return value as "no new data", so
-        # a vanished log must not look like a quiet server, and returning the
-        # last counters read silently would attribute them to a file that no
-        # longer exists. windowed() sees updates stop growing and drops the
-        # window, so the phase is recorded as absent rather than scored.
-        if logf not in _APM_STAT_WARNED:
-            _APM_STAT_WARNED.add(logf)
-            log(f"  APM log stat failed ({e}); no further samples from {logf}")
-        return st["last"] if st else None
-    if st is None or size < st["off"]:
-        st = {"off": 0, "tail": b"", "last": None}
-        _APM_TAIL[logf] = st
-    if size > st["off"]:
-        with logf.open("rb") as f:
-            f.seek(st["off"])
-            chunk = f.read(size - st["off"])
-        st["off"] = size
-        data = st["tail"] + chunk
-        # Decode only complete lines; keep the unterminated tail as raw bytes
-        # so a read boundary cannot split a line or a multibyte character.
-        nl = data.rfind(b"\n")
-        if nl >= 0:
-            text = data[:nl].decode("utf-8", errors="replace")
-            st["tail"] = data[nl + 1:]
-            for line in text.splitlines():
-                if "[7dtd-server-apm]" not in line:
-                    continue
-                m = APM_LINE_RE.search(line)
-                if m:
-                    st["last"] = {
-                        "updates": int(m.group(1)),
-                        "gmUpdateAvg": float(m.group(2)),
-                        "tickAvg": float(m.group(3)),
-                        "spikes": int(m.group(4)),
-                    }
-        else:
-            # No newline in this append: park the merged buffer (old carry
-            # plus new bytes) back as the tail, or the offset above would
-            # skip these bytes forever and truncate the line once it does
-            # complete in a later append.
-            st["tail"] = data
-    return st["last"]
-
-
-class _ApmWindow(TypedDict):
-    """Windowed rate derived from two cumulative _ApmCounters reads."""
-
-    gmUpdateAvg: float
-    gmUpdateAvg_err_ms: float
-    tickAvg: float
-    tickAvg_err_ms: float
-    spikes: int
-    window_updates: int
-
-
-class _ApmSample(_ApmWindow):
-    """A _ApmWindow stamped with the phase label it was sampled under."""
-
-    label: str
-
-
-def windowed(a: _ApmCounters, b: _ApmCounters) -> _ApmWindow | None:
-    """Windowed (instantaneous-ish) metrics from two cumulative APM reads.
-
-    gmUpdateAvg / tickAvg are cumulative since boot; the per-window value is
-    the delta of the weighted sums over the updates in between. Returns None
-    when the window covers no new updates (e.g. a quiet server).
-
-    *_err_ms is the worst-case reconstruction error from the bridge's
-    two-decimal formatting: half a quantum on each cumulative average,
-    amplified by (total updates / window updates). Any verdict must compare
-    deltas against the SUMMED error bounds of both phases, not raw digits.
-    """
-    du = b["updates"] - a["updates"]
-    if du <= 0:
-        return None
-
-    def recon(avg_a: float, avg_b: float) -> tuple[float, float]:
-        sa = a["updates"] * avg_a
-        sb = b["updates"] * avg_b
-        err = HALF_QUANTUM_MS * (a["updates"] + b["updates"]) / du
-        return round((sb - sa) / du, 3), err
-
-    gm, gm_err = recon(a["gmUpdateAvg"], b["gmUpdateAvg"])
-    tick, tick_err = recon(a["tickAvg"], b["tickAvg"])
-    return {
-        "gmUpdateAvg": gm,
-        "gmUpdateAvg_err_ms": round(gm_err, 3),
-        "tickAvg": tick,
-        "tickAvg_err_ms": round(tick_err, 3),
-        "spikes": b["spikes"],
-        "window_updates": du,
-    }
-
-
-def sample_apm(label: str, logf: Path, seconds: float = SAMPLE_S) -> _ApmSample | None:
+def sample_apm(label: str, logf: Path, seconds: float = SAMPLE_S) -> ApmSample | None:
     """Sample the windowed APM rate over a window; None if the bridge is silent."""
-    first = read_apm(logf)
+    first = read_apm(logf, warn=log)
     if first is None:
         return None
     # Monotonic window so a wall-clock step cannot truncate the sample period.
@@ -289,13 +147,13 @@ def sample_apm(label: str, logf: Path, seconds: float = SAMPLE_S) -> _ApmSample 
     last = first
     while time.monotonic() - t0 < seconds:
         time.sleep(1.0)
-        r = read_apm(logf)
+        r = read_apm(logf, warn=log)
         if r is not None and r["updates"] > last["updates"]:
             last = r
     win = windowed(first, last)
     if win is None:
         return None
-    return _ApmSample(label=label, **win)
+    return ApmSample(label=label, **win)
 
 
 def set_config_enabled(on: bool, live_reload: bool) -> None:
@@ -320,7 +178,7 @@ def main() -> int:
     # dict instead of reaching through report's object-valued slots. Values are
     # nullable on purpose: sample_apm returns None when no APM window was read,
     # and the report must record that absence rather than drop the phase.
-    phases: dict[str, _ApmSample | None] = {}
+    phases: dict[str, ApmSample | None] = {}
     report = {"players": PLAYERS, "zombies": ZOMBIES, "gamestage": GAMESTAGE, "phases": phases}
     bots = None
     code = 0
