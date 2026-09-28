@@ -13,6 +13,10 @@ src = ["scripts"]
 # - BLE (blind except): every hit is a teardown or quarantine boundary that
 #   must log-and-continue so a failed cleanup never masks the real result, the
 #   same rationale as S110 below. Select it once those handlers narrow.
+# - D (docstrings) / ANN (annotations): docstring coverage is a documentation
+#   convention, and ANN restates what mypy already enforces at
+#   disallow_untyped_defs. N (pep8-naming) has one standing hit, the
+#   deliberate `bloodmoon_profile as B` alias in harness_common.py.
 # The S (bandit) group is selected minus the two rules with standing,
 # documented findings on this tree:
 # - S110 (except-pass): teardown paths log-and-continue on purpose so a
@@ -47,13 +51,57 @@ select = [
     "TID",  # banned imports (relative-parent, crippled-encoding, etc.)
     "PGH",  # blanket noqa / type: ignore without a code
     "SLF",  # private member access
+    "EM",   # exception messages built inline (assign, then raise)
+    "ERA",  # commented-out code left in a script
+    "FLY",  # static join/format strings better as f-strings
+    "ICN",  # import alias hygiene (banned aliases, conventional names)
+    "TRY",  # try/except/finally structure (misplaced else, useless finally)
+    # Pylint, rule by rule rather than the whole PL band: the four rules left
+    # out below fire on this tree and none of them carries defect signal here.
+    # - PLR2004 (magic value) and PLR0912/PLR0915 (complexity) are readability
+    #   rules, and the constants in question are selftest literals and badge
+    #   thresholds spelled where they are read.
+    # - PLC0415 (import not at top level): every hit is a `import tempfile`
+    #   inside a --selftest, imported where it is used so the module stays
+    #   importable without touching tempfile machinery.
+    # - PLW2901 (loop variable overwritten): one hit, in a measurement loop
+    #   that deliberately rebinds the bound before its next use.
+    "PLC0206",  # dict iteration that only yields values
+    "PLC0414",  # useless import alias
+    "PLE1205",  # logging too many args / not enough args
+    "PLE1206",  # logging too few args
+    "PLR0402",  # manual from-import that should be an import statement
+    "PLR1711",  # useless return
+    "PLR1714",  # repeated equality comparison that should merge
+    "PLR1716",  # chained comparison simplified by bool()
+    "PLR1722",  # sys.exit / exit used instead of return
+    "PLR1730",  # if-statement min/max simplification
+    "PLR1736",  # unnecessary list index lookup
+    "PLW0108",  # unnecessary lambda
+    "PLW0120",  # useless else after return/raise/break/continue
+    "PLW0177",  # comparison to NaN with ==
+    "PLW0602",  # global variable never assigned
+    "PLW0603",  # global statement assigning a value
+    "PLW0604",  # global statement with no assignment
+    "PLW0642",  # self-assignment of a method's own parameter
+    "PLW1508",  # invalid envvar default that can never resolve
+    "PLW1641",  # __eq__ implemented without __hash__
+    "PLW2101",  # useless comparison between a value and itself
+    "PLW3301",  # nested class that could be at module level
 ]
 
-# Standing exceptions for the S band, each tied to a documented pattern
-# above. Revisit when the underlying code changes.
+# Standing exceptions, each tied to a documented pattern above. Revisit when
+# the underlying code changes.
 ignore = [
     "S110",
     "S314",
+    # TRY003 wants every exception message hoisted into a named exception
+    # class. These are five one-shot CLI failures (missing config file, no
+    # repository root, telnet never came up) that no caller catches and
+    # re-raises under a different type, so a class per message would add
+    # indirection without changing what a reader sees. The dynamic half of
+    # the message is still built into a local first (EM102, enforced above).
+    "TRY003",
 ]
 
 [lint.per-file-ignores]

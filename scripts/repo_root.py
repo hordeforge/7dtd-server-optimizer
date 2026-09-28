@@ -37,7 +37,8 @@ def repo_root(start: Path | None = None) -> Path:
     for candidate in (here, *here.parents):
         if all((candidate / marker).exists() for marker in MARKERS):
             return candidate
-    raise RuntimeError(f"no repository root at or above {here}; looked for {', '.join(MARKERS)}")
+    msg = f"no repository root at or above {here}; looked for {', '.join(MARKERS)}"
+    raise RuntimeError(msg)
 
 
 def _selftest() -> int:

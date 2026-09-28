@@ -279,7 +279,8 @@ class ConfigSwap:
         # Resolve any backup a killed earlier run left before snapshotting.
         self.recover()
         if not self.cfg.is_file():
-            raise FileNotFoundError(f"missing {self.cfg}")
+            msg = f"missing {self.cfg}"
+            raise FileNotFoundError(msg)
         _write_atomic(self.bak, self.cfg.read_bytes())
         self._begun = True
         self._log(f"config guard: snapshotted {self.cfg.name} -> {self.bak.name}")
@@ -346,7 +347,8 @@ def _selftest() -> int:
         """Narrow a top-level JSON object to one of its nested sections."""
         sub = doc[key]
         if not isinstance(sub, dict):
-            raise TypeError(f"config section {key!r} is not a JSON object")
+            msg = f"config section {key!r} is not a JSON object"
+            raise TypeError(msg)
         return sub
 
     keys = [

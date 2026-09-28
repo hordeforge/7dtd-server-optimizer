@@ -145,7 +145,8 @@ def ensure_server_ready(timeout_s: float = 180.0) -> None:
         time.sleep(3)
     # Name the window so a caller skimming a report can tell "server never came
     # up" from "came up late"; per-probe failures were logged above.
-    raise RuntimeError(f"telnet not ready after {timeout_s:.0f}s of probes")
+    msg = f"telnet not ready after {timeout_s:.0f}s of probes"
+    raise RuntimeError(msg)
 
 
 def _rewrite_installed_section(section: str, updates: dict[str, object]) -> None:
@@ -157,7 +158,8 @@ def _rewrite_installed_section(section: str, updates: dict[str, object]) -> None
     truncated JSON for the game's config reader or the next run's guard.
     """
     if not ES_CFG.is_file():
-        raise FileNotFoundError(f"missing {ES_CFG}")
+        msg = f"missing {ES_CFG}"
+        raise FileNotFoundError(msg)
     CFG_SWAP.begin()
     cfg = json.loads(ES_CFG.read_text(encoding=CFG_ENCODING))
     cfg.setdefault(section, {}).update(updates)

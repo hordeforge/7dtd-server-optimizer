@@ -14,10 +14,22 @@
          so the analyzer set would drift without any change here. -->
     <AnalysisLevel>8.0</AnalysisLevel>
     <!-- AnalysisMode stays at its default (rules whose severity is warning
-         or error only). A measured probe of AllEnabledByDefault fails on
-         ~160 pre-existing findings (CA1031 broad catches, CA1805 explicit
-         default initializers, CA5394 deserialization in the fuzz harness),
-         so enabling it here would turn every build red; tighten per-rule
-         once those are resolved instead. -->
+         or error only), which is the strictest mode this tree passes today.
+         Measured on SDK 8.0.424 over Source/EfficientServer.Tests, the only
+         project buildable without a game install (it compiles Config.cs,
+         TickClock.cs, TickIntervalEma.cs, GovernorTiers.cs, Program.cs and
+         Fuzz.cs), with TreatWarningsAsErrors off so every finding is counted:
+
+           AnalysisMode=Recommended  34 findings  CA1805 CA1310 CA1825
+           AnalysisMode=All         138 findings  those three plus CA5394,
+                                                 CA1307, CA1031, CA1303,
+                                                 CA1508, CA2000, CA1002
+
+         A game install would add the other 32 source files to the probe, so
+         the tree-wide count is higher than the one above; the conclusion does
+         not change, since Recommended is already red on the subset alone.
+         Per-rule is the way forward, not a mode bump: flip an individual rule
+         to warning-as-error in this file once the findings it reports are
+         gone, so each tightening is proven by the build that enforces it. -->
   </PropertyGroup>
 </Project>
