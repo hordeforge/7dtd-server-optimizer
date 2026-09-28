@@ -42,6 +42,7 @@ import stat
 import sys
 from collections.abc import Callable, Sequence
 from pathlib import Path
+from typing import NoReturn
 
 from cli_common import run_cli
 from selftest_support import Checks
@@ -140,8 +141,22 @@ def _write_atomic(path: Path, data: bytes) -> None:
         msg = f"every atomic-write temp name for {path} is taken; refusing to write"
         raise FileExistsError(msg)
     try:
-        with os.fdopen(fd, "wb") as handle:
-            handle.write(data)
+        # fdopen takes ownership of the descriptor only once it RETURNS: the
+        # FileIO object is what closes it, and it does not exist if the call
+        # raises. Unwinding from there leaves the raw descriptor open for the
+        # life of the process while the unlink below removes the name it was
+        # written under, so the inode survives with nothing left pointing at
+        # it. Close it here, then re-raise the original failure untouched.
+        try:
+            sink = os.fdopen(fd, "wb")
+        except BaseException:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+            raise
+        with sink:
+            sink.write(data)
         # Carry the live file's own permissions over, so an operator who
         # tightened them (or a umask that made the original 0600) does not get
         # a silently widened file; a target that does not exist yet keeps the
@@ -969,6 +984,37 @@ def _selftest() -> int:
         t.check("failed atomic write raises", replace_failed)
         t.check(
             "failed atomic write leaves no temp files",
+            [p.name for p in root.iterdir() if ".tmp" in p.name] == [],
+        )
+
+        # 8d. A write that fails while WRAPPING the descriptor must not strand
+        # the raw fd either. os.fdopen takes ownership only once it RETURNS, so
+        # an exception out of it leaves the descriptor open for the rest of the
+        # process while the unlink below removes the name it was opened under:
+        # an inode with no name and no way left to close it. Counted through
+        # /proc/self/fd, the same host-only walk harness_common uses.
+        real_fdopen = os.fdopen
+
+        def wrap_boom(*_args: object, **_kwargs: object) -> NoReturn:
+            msg = "descriptor wrap failed"
+            raise OSError(msg)
+
+        fds_open = len(os.listdir("/proc/self/fd"))
+        os.fdopen = wrap_boom
+        try:
+            write_atomic(root / "fdleak.json", '{"k": 4}\n')
+            wrap_failed = False
+        except OSError:
+            wrap_failed = True
+        finally:
+            os.fdopen = real_fdopen
+        t.check("a failed descriptor wrap raises", wrap_failed)
+        t.check(
+            "a failed descriptor wrap leaks no file descriptor",
+            len(os.listdir("/proc/self/fd")) <= fds_open,
+        )
+        t.check(
+            "a failed descriptor wrap leaves no temp files",
             [p.name for p in root.iterdir() if ".tmp" in p.name] == [],
         )
 
