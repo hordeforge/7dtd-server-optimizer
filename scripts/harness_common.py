@@ -13,6 +13,7 @@ is never an entry point itself.
 from __future__ import annotations
 
 import json
+import math
 import os
 import signal
 import subprocess
@@ -286,7 +287,11 @@ def join_cohort(players: int) -> tuple[subprocess.Popen[bytes] | None, int, str]
     returns the runner so its teardown can reap the partial cohort.
     """
     bots, joined = B.join_ramped(players)
-    if joined < max(1, int(players * JOIN_QUORUM_FRACTION)):
+    # ceil, not int: a half-quorum must round UP, so 15 of 31 (0.484, below the
+    # stated half) cannot pass. int() truncates toward zero and fails the gate
+    # open by one bot. The max(1, ...) guard against a vacuous pass on a tiny
+    # cohort is unchanged.
+    if joined < max(1, math.ceil(players * JOIN_QUORUM_FRACTION)):
         log(f"FAIL: only {joined}/{players} bots joined")
         return bots, joined, "FAIL"
     return bots, joined, "PASS"

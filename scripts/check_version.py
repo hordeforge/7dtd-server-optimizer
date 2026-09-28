@@ -79,12 +79,26 @@ def read_text(path: Path) -> str | None:
         return None
 
 
+def version_parsable(value: str) -> bool:
+    """True when `norm` can parse `value` without raising.
+
+    Both version regexes are `[0-9.]+`, which also matches a leading, trailing
+    or doubled dot. `norm` runs int() per component, so "1.17.0." raises
+    ValueError; main() has no handler, so a one-character typo in ModInfo.xml
+    would replace the whole report with a traceback. Reject the shape here and
+    let the missing value reach the FAIL path like any other.
+    """
+    return not (value.startswith(".") or value.endswith(".") or ".." in value)
+
+
 def modinfo_version(path: Path) -> str | None:
     text = read_text(path)
     if text is None:
         return None
     m = re.search(r'Version\s+value="([0-9.]+)"', text)
-    return m.group(1) if m else None
+    if m is None or not version_parsable(m.group(1)):
+        return None
+    return m.group(1)
 
 
 # Longest spelling the gates see: AssemblyVersion "X.Y.Z.W" (ModInfo is X.Y.Z).
@@ -266,10 +280,15 @@ def _results_history_fails(text: str, shipped: str) -> list[str]:
     )
     if m is None:
         return ["RESULTS.md has no `## 0. Version history` section"]
-    if f"{version[0]}.{version[1]}" not in m.group("body"):
+    minor = f"{version[0]}.{version[1]}"
+    # Boundary-anchored, not a bare substring: `in` on the rendered minor also
+    # matches a table carrying only `| 1.170.0 |` or `| 11.17.0 |`, so a history
+    # that stopped short of the shipped release stayed green. The lookarounds
+    # keep a digit or dot on either side from satisfying the match.
+    if not re.search(rf"(?<![0-9.]){re.escape(minor)}(?![0-9])", m.group("body")):
         return [
             (
-                f"RESULTS.md version history has no row for {version[0]}.{version[1]}"
+                f"RESULTS.md version history has no row for {minor}"
                 f" (shipped mod version is {shipped})"
             )
         ]
@@ -366,6 +385,23 @@ def _selftest() -> int:
             "modinfo_version returns None on an undecodable byte, not a raise",
             read_text(latin1) is None and modinfo_version(latin1) is None,
         )
+        # A trailing/leading/doubled dot passes the `[0-9.]+` Version regex but
+        # makes norm() raise ValueError, and main() has no handler: the typo
+        # this file exists to catch would replace the whole report with a
+        # traceback. The malformed value must read as absent instead.
+        for bad in ("1.17.0.", ".1.17.0", "1..17.0"):
+            bad_xml = Path(td) / "BadVersion.xml"
+            bad_xml.write_text(f'<xml>\n\t<Version value="{bad}" />\n</xml>\n', encoding="utf-8")
+            t.check(
+                f"modinfo_version rejects the malformed version {bad!r}, not a raise",
+                modinfo_version(bad_xml) is None,
+            )
+            try:
+                norm(bad)
+                raised = False
+            except ValueError:
+                raised = True
+            t.check(f"norm would raise on {bad!r} (the hazard being fenced)", raised)
 
     t.check("norm splits numeric parts", norm("1.17.0") == (1, 17, 0, 0))
     # The shipped pair: ModInfo "1.17.0" vs AssemblyVersion "1.17.0.0". The
@@ -542,6 +578,24 @@ def _selftest() -> int:
         "_results_history_fails ignores text outside the table",
         _results_history_fails(outside, "1.19.0") != [],
     )
+    # A substring test on the rendered minor also matches a table carrying only
+    # `1.190.0` or `11.19.0`, so a history that never listed the shipped
+    # release stayed green. The gate must be boundary-anchored on both sides.
+    for decoy in ("1.190.0", "11.19.0", "2.1.19.0"):
+        decoy_table = (
+            f"## 0. Version history\n\n| Version | Change |\n| --- | --- |\n| {decoy} | x |\n"
+        )
+        t.check(
+            f"_results_history_fails does not accept {decoy} as a row for 1.19",
+            any("no row" in f for f in _results_history_fails(decoy_table, "1.19.0")),
+        )
+    t.check(
+        "_results_history_fails accepts a real 1.19 row",
+        _results_history_fails(
+            "## 0. Version history\n\n| 1.19.0 | x |\n| 1.190.0 | y |\n", "1.19.0"
+        )
+        == [],
+    )
 
     # The supported-versions statement, on a synthetic SECURITY.md. Older mod
     # versions and a tag inside a zip name may appear there; the shipped one
@@ -615,7 +669,7 @@ def main() -> int:
 
     asm_src = read_or(ASSEMBLY)
     asm_m = re.search(r'AssemblyVersion\("([0-9.]+)"\)', asm_src) if asm_src is not None else None
-    asm = asm_m.group(1) if asm_m else None
+    asm = asm_m.group(1) if asm_m is not None and version_parsable(asm_m.group(1)) else None
 
     # trailing ".0" parts in the 4-part assembly version are cosmetic
     if mi and asm and norm(mi) != norm(asm):

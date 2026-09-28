@@ -87,10 +87,20 @@ def parse_cs_default(lit: str | None) -> object:
 
 
 def values_equal(cs_val: object, json_val: object) -> bool:
-    """Type-faithful comparison; floats tolerate float32-vs-decimal rounding."""
+    """Type-faithful comparison; floats tolerate float32-vs-decimal rounding.
+
+    Integers compare EXACTLY. A relative tolerance on two ints declares 1000000
+    and 1000001 equal (rel_tol 1e-6 closes the gap past 10^6), so a shipped
+    template that drifts from the code default by one would pass this gate, and
+    going through float() also rounds any int past 2^53. The tolerance only
+    exists for the float32-vs-decimal case, so it is applied only when at least
+    one side is actually a float.
+    """
     if isinstance(cs_val, bool) != isinstance(json_val, bool):
         return False
     if isinstance(cs_val, bool):
+        return cs_val == json_val
+    if isinstance(cs_val, int) and isinstance(json_val, int):
         return cs_val == json_val
     if isinstance(cs_val, (int, float)) and isinstance(json_val, (int, float)):
         return math.isclose(float(cs_val), float(json_val), rel_tol=1e-6, abs_tol=1e-12)
