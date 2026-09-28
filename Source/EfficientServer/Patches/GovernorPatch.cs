@@ -158,6 +158,19 @@ namespace EfficientServer.Patches
                     + "(governor disabled, or AnimatorEmergency off) - released rigs, "
                     + "levers read at configured values again");
             }
+            // A stray BENCH-PROBE emergency (`es animoff`; the probe never raises the
+            // tier) must not survive a reload that turns the mod or governor off: no
+            // postfix/tier machine remains to step down, so rigs would keep
+            // CullCompletely plus skipped managed updates forever, and Enabled=false
+            // promises inert/vanilla. Under an active governor the probe stays
+            // operator-owned (`es animon` exits it), matching the manual enter/exit
+            // contract.
+            if (!active && Tiers.Level == 0 && AnimatorEmergency.Active
+                && AnimatorEmergency.Exit())
+            {
+                EsLog.Emit(LogLevel.Info, "config reloaded: governor inactive (disabled or master off) - "
+                    + "released animator emergency left armed by the es animoff probe");
+            }
             if (!active)
                 EsLog.Emit(LogLevel.Info, "config reloaded: governor inactive (disabled or master off) - "
                     + "levers left at reloaded (baseline) values");

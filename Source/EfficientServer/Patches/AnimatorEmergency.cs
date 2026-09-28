@@ -142,13 +142,31 @@ namespace EfficientServer.Patches
                 + " saved mode(s) for despawned rigs (saved=" + SavedModes.Count + ")");
         }
 
-        public static void Exit()
+        /// <summary>
+        /// Release the emergency. Returns true when the rigs were actually
+        /// released (or there was nothing to release), false when the restore
+        /// could not run: with no world there is no rig set to restore, and
+        /// dropping the saved modes then would declare the emergency released
+        /// while every rig stays CullCompletely, with the state needed to fix it
+        /// already thrown away. So a no-world exit keeps the saved modes, stays
+        /// Active, and says so; the next Exit (a later `es animon`, a reload, the
+        /// next tier-2 cycle) completes the restore.
+        /// </summary>
+        public static bool Exit()
         {
-            if (!Active && SavedModes.Count == 0) return;
+            if (!Active && SavedModes.Count == 0) return true;
+            if (GameManager.Instance == null || GameManager.Instance.World == null)
+            {
+                EsLog.Emit(LogLevel.Warn, "Governor: animator emergency exit SKIPPED "
+                    + "(no world loaded) - " + SavedModes.Count + " saved culling mode(s) retained; "
+                    + "run 'es animon' once a world is loaded to release the rigs");
+                return false;
+            }
             int restored = RestoreAllEnemyAnimators();
             SavedModes.Clear();
             Active = false;
-            EsLog.Emit(LogLevel.Info, $"Governor: animator emergency EXIT - restored cullingMode on {restored} rigs");
+            EsLog.Emit(LogLevel.Info, "Governor: animator emergency EXIT - restored cullingMode on " + restored + " rigs");
+            return true;
         }
 
         /// <summary>

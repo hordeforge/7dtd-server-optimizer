@@ -64,8 +64,20 @@ def _canonical(doc: dict[str, object]) -> str:
 
 def _write_atomic(path: Path, data: bytes) -> None:
     tmp = path.with_name(path.name + f".tmp{os.getpid()}")
-    tmp.write_bytes(data)
-    os.replace(tmp, path)
+    try:
+        tmp.write_bytes(data)
+        os.replace(tmp, path)
+    except BaseException:
+        # The temp file is this call's only copy of the data until the rename
+        # lands, and a failed write (ENOSPC, EACCES on the target directory) or
+        # a failed replace (cross-device, target is a directory, read-only fs)
+        # leaves it stranded next to the live config for every later run to
+        # trip over. Drop it, then let the original error propagate unchanged.
+        try:
+            tmp.unlink()
+        except OSError:
+            pass
+        raise
 
 
 def write_atomic(path: Path, data: str) -> None:
@@ -392,6 +404,23 @@ def _selftest() -> int:
         )
         check(
             "atomic write leaves no temp files",
+            [p.name for p in root.iterdir() if ".tmp" in p.name] == [],
+        )
+
+        # 8b. A write that fails AFTER the temp file exists must not strand it:
+        # a directory at the target path makes os.replace fail (EISDIR) with the
+        # temp already on disk, and litter beside the live config survives every
+        # later run. The failure itself must still surface, not be swallowed.
+        wa_dir = root / "unreplaceable"
+        wa_dir.mkdir()
+        try:
+            write_atomic(wa_dir, '{"k": 3}\n')
+            replace_failed = False
+        except OSError:
+            replace_failed = True
+        check("failed atomic write raises", replace_failed)
+        check(
+            "failed atomic write leaves no temp files",
             [p.name for p in root.iterdir() if ".tmp" in p.name] == [],
         )
 

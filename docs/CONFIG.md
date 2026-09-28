@@ -473,12 +473,17 @@ tick EMA, the replication/graph cadences actually in force after the governor
 derives them, lifetime shed/drop counters from the silent hot-path gates);
 `es reload`
 re-reads `efficientserver.json` and applies it LIVE (all patches read the config
-object per call - no restart needed). Diagnostics (BENCH ONLY, gameplay breaks while active):
+object per call - no restart needed). A reload whose apply step fails prints
+`reload FAILED` naming the cause and then `es status`: the new file is live but
+the failed levers are not applied, and the full exception is on the mod's ERROR
+line in the server log. Diagnostics (BENCH ONLY, gameplay breaks while active):
 `es animoff` / `es animon` toggle all enemy animators' culling mode
 (used to measure the
 19.9 ms animator slice; skips corpses; restore is verified complete - live 2026-08-09 runs at 8p/32p/64p
 restored every rig with root motion intact, the old RESULTS 3s root-motion wedge
-is refuted by the current restore path); `es animstate` prints a per-zombie
+is refuted by the current restore path); an `es animon` issued with no world
+loaded cannot restore anything, so it reports the emergency as STILL ARMED and
+keeps the saved culling modes instead of dropping them, and `es animstate` prints a per-zombie
 animator truth table
 (enabled/speed/rootMotion/culling/params/velocity/deltaPosition/state) for
 debugging revival and movement issues; `es rigoff` / `es rigon` toggle the unguarded rig visual

@@ -134,6 +134,10 @@ class _ApmTailState(TypedDict):
 
 _APM_TAIL: dict[Path, _ApmTailState] = {}
 
+# Log paths whose stat() has already failed, so the warning is emitted once per
+# path instead of once per poll second.
+_APM_STAT_WARNED: set[Path] = set()
+
 
 def read_apm(logf: Path) -> _ApmCounters | None:
     """Parse the most recent matching [7dtd-server-apm] health line from the server log.
@@ -147,7 +151,16 @@ def read_apm(logf: Path) -> _ApmCounters | None:
     st = _APM_TAIL.get(logf)
     try:
         size = logf.stat().st_size
-    except OSError:
+    except OSError as e:
+        # The log is gone (server stopped, or rotated to another path). Say so
+        # once per path: the caller reads this return value as "no new data", so
+        # a vanished log must not look like a quiet server, and returning the
+        # last counters read silently would attribute them to a file that no
+        # longer exists. windowed() sees updates stop growing and drops the
+        # window, so the phase is recorded as absent rather than scored.
+        if logf not in _APM_STAT_WARNED:
+            _APM_STAT_WARNED.add(logf)
+            log(f"  APM log stat failed ({e}); no further samples from {logf}")
         return st["last"] if st else None
     if st is None or size < st["off"]:
         st = {"off": 0, "tail": b"", "last": None}

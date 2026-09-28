@@ -207,18 +207,36 @@ def teardown_bots(bots: subprocess.Popen[bytes] | None) -> None:
     like a clean end. Kick server-side first so connections drop even if the
     process misses the signal, then terminate (escalating to kill) the held
     process, then sweep stragglers orphaned by earlier killed runs.
+
+    Every step here is best-effort in the sense that a failure must not abort
+    the remaining steps, but NONE of it is silent: a cohort that outlives
+    teardown is exactly the failure the caller cannot see, so each step says
+    what it could not do and whether the process is still alive.
     """
     try:
         B.telnet(["kickall", "kick all"], settle=0.5)
-    except Exception:
-        pass
+    except Exception as e:
+        # No server, or telnet refused: connections are about to be cut by the
+        # signal path below, so this is informational, not a lost cleanup step.
+        log(f"  telnet kickall during teardown failed: {e}")
     if bots is not None:
         try:
             bots.terminate()
+        except OSError as e:
+            # Already gone, or never ours to signal: the sweep below decides.
+            log(f"  bot runner terminate failed: {e}")
+        try:
+            bots.wait(timeout=15)
+        except subprocess.TimeoutExpired:
+            log("  bot runner ignored SIGTERM after 15s; killing")
             try:
-                bots.wait(timeout=15)
-            except subprocess.TimeoutExpired:
                 bots.kill()
-        except Exception:
-            pass
+                # Reap the killed child. Without this the harness exits holding
+                # a zombie for the rest of the run, and a kill() that itself
+                # failed would leave the cohort alive with nothing to show it.
+                bots.wait(timeout=15)
+            except (OSError, subprocess.TimeoutExpired) as e:
+                log(f"  bot runner could not be killed: {e}")
+        if bots.poll() is None:
+            log(f"  WARNING: bot runner pid {bots.pid} survived teardown")
     kill_matching_processes(LOADGEN_CMDLINE_MARKER)

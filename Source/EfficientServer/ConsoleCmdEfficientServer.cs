@@ -32,8 +32,27 @@ namespace EfficientServer
                 case "reload":
                     // ReloadConfig re-bases the governor and re-applies the start-time
                     // knobs (mesh budgets, target fps, job workers, dedicated skips,
-                    // GC incremental) - single choke point.
-                    ModApi.ReloadConfig();
+                    // GC incremental) - single choke point. It rethrows when an apply
+                    // step fails, AFTER logging that the new config is live and some
+                    // levers are not. That is the right contract for the apply chain,
+                    // but at the console boundary the raw exception would land in the
+                    // game's own unprefixed command dump with no file named, so the
+                    // operator would have to go read the log. Translate it here:
+                    // name the config that was read, the cause, and the live state,
+                    // and skip the success echo (a "config reloaded" line printed
+                    // over a partial apply is the misleading outcome this guards).
+                    try
+                    {
+                        ModApi.ReloadConfig();
+                    }
+                    catch (Exception ex)
+                    {
+                        Output("reload FAILED [" + ex.GetType().Name + "]: " + ex.Message
+                            + " - the new config file is LIVE but some levers did not apply; "
+                            + "see the mod's ERROR line in the server log for the full cause");
+                        Status();
+                        break;
+                    }
                     SdtdConsole.Instance.Output(EsLog.LogPrefix + "config reloaded");
                     Status();
                     break;
@@ -141,10 +160,17 @@ namespace EfficientServer
             }
             else
             {
-                Patches.AnimatorEmergency.Exit();
-                Output(
-                    "animprobe: EXIT emergency; "
-                    + "check 'es animstate' for dp>0 on moving zombies");
+                // Exit reports whether the restore actually ran; with no world
+                // loaded it keeps the saved modes and stays armed, so do not
+                // print an exit that has not happened.
+                if (Patches.AnimatorEmergency.Exit())
+                    Output(
+                        "animprobe: EXIT emergency; "
+                        + "check 'es animstate' for dp>0 on moving zombies");
+                else
+                    Output(
+                        "animprobe: emergency STILL ARMED - no world loaded, so no rig "
+                        + "could be restored; rerun 'es animon' once the world is up");
             }
         }
 
