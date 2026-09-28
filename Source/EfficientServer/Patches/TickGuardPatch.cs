@@ -57,11 +57,15 @@ namespace EfficientServer.Patches
 
         static void Shed(TickGuardConfig cfg, double emaMs)
         {
+            // A suppressed shed is the one outcome an operator cannot infer from the
+            // log: no shed line means either "never triggered" or "triggered and did
+            // nothing", and those need different responses. Every Shed call is at
+            // least CooldownTicks apart, so one line per suppression is bounded.
             World world = GameManager.Instance != null ? GameManager.Instance.World : null;
-            if (world == null) return;
+            if (world == null) { Suppressed(cfg, emaMs, "no world loaded"); return; }
             List<Entity> entities = world.Entities.list;
             List<EntityPlayer> players = world.Players.list;
-            if (players.Count == 0) return;
+            if (players.Count == 0) { Suppressed(cfg, emaMs, "no players online"); return; }
 
             Scratch.Clear();
             int enemies = 0;
@@ -80,7 +84,11 @@ namespace EfficientServer.Patches
                 Scratch.Add((best, enemy));
             }
             if (enemies <= cfg.MinEnemiesKept)
+            {
+                Suppressed(cfg, emaMs, "living enemies " + enemies
+                    + " at or below keep floor " + cfg.MinEnemiesKept);
                 return;
+            }
 
             // Farthest-from-any-player first; never below the keep floor.
             Scratch.Sort((a, b) => b.distSq.CompareTo(a.distSq));
@@ -97,6 +105,17 @@ namespace EfficientServer.Patches
                 + $"{cfg.ShedAboveMs.ToString(CultureInfo.InvariantCulture)}ms - shed {shed} "
                 + $"farthest enemies ({enemies} -> {enemies - shed}, lifetime {ShedTotal})");
             Scratch.Clear();
+        }
+
+        // The trigger fired (tick over budget) but the shed was withheld. Same
+        // WARNING channel as a real shed: the server is still collapsing, which is
+        // the operator-visible fact; the reason says which knob to raise. Lifetime
+        // count is included so a log-only timeline can tell suppression from shed.
+        static void Suppressed(TickGuardConfig cfg, double emaMs, string reason)
+        {
+            EsLog.Emit(LogLevel.Warn, $"TickGuard: tick EMA {emaMs.ToString("F1", CultureInfo.InvariantCulture)}ms > "
+                + $"{cfg.ShedAboveMs.ToString(CultureInfo.InvariantCulture)}ms - shed SUPPRESSED "
+                + $"({reason}; lifetime {ShedTotal})");
         }
     }
 }

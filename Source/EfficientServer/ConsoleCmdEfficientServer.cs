@@ -319,9 +319,20 @@ namespace EfficientServer
         // stays console-only (no log echo).
         static void OutputRuntime()
         {
+            bool modActive = ModApi.ShouldRun();
+            ServerPerfConfig c = ModApi.Config;
+            // A governor that is off never advances its EMA, so the value stays at
+            // the 50 ms seed. Printing it would read as a healthy idle tick on a
+            // server that may be at 3 TPS; say n/a instead of a number nothing is
+            // measuring. The key stays space-free for the same reason as animstate's
+            // fields: console output is machine-scraped.
+            bool governorSampling = modActive && c != null && c.Governor != null && c.Governor.Enabled;
+            string tickEma = governorSampling
+                ? Patches.GovernorPatch.EmaMs.ToString("F1", CultureInfo.InvariantCulture)
+                : "n/a";
             SdtdConsole.Instance.Output(
-                $"{EsLog.LogPrefix}runtime: modActive={ModApi.ShouldRun()} "
-                + $"governorTier={Patches.GovernorPatch.Level} tickEmaMs={Patches.GovernorPatch.EmaMs.ToString("F1", CultureInfo.InvariantCulture)} "
+                $"{EsLog.LogPrefix}runtime: modActive={modActive} "
+                + $"governorTier={Patches.GovernorPatch.Level} tickEmaMs={tickEma} "
                 + $"animatorEmergency={Patches.AnimatorEmergency.Active} | "
                 + $"gcSafetyCollects={Patches.GcGuardPatch.SafetyCollects} "
                 + $"tickGuardShedTotal={Patches.TickGuardPatch.ShedTotal}");

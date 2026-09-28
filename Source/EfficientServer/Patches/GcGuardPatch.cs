@@ -27,6 +27,7 @@ namespace EfficientServer.Patches
         // calls MaybeCollect about once per ~120 s, so both the counter and the
         // per-fire log are bounded and cheap.
         static int _safetyCollects;
+        static bool _ceilingWarned;
         public static int SafetyCollects { get { return _safetyCollects; } }
 
         static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
@@ -70,17 +71,30 @@ namespace EfficientServer.Patches
             // is logged with heap and ceiling: recurring lines mean the ceiling
             // sits below the working set and must be raised.
             long ceilingMB = SafetyCeilingMB(cfg);
-            if (ceilingMB > 0)
+            if (ceilingMB <= 0)
             {
-                long heapBytes = GC.GetTotalMemory(false);
-                if (heapBytes > ceilingMB * 1024L * 1024L)
+                // Unresolvable ceiling (host RAM unreadable) means the guard is now a
+                // net with no floor: the forced collect is suppressed AND nothing
+                // replaces it, so a long-lived server can grow unbounded with no log
+                // to say so. Say it once - the caller cadence is the ~120 s vanilla
+                // timer, but a repeated identical line adds nothing.
+                if (!_ceilingWarned)
                 {
-                    _safetyCollects++;
-                    EsLog.Emit(LogLevel.Warn, "gc guard safety collect fired: heap "
-                        + (heapBytes / 1024L / 1024L) + " MB > ceiling " + ceilingMB
-                        + " MB (STW pause now; total fires " + _safetyCollects + ")");
-                    GC.Collect();
+                    _ceilingWarned = true;
+                    EsLog.Emit(LogLevel.Warn, "gc guard ceiling unresolved (host RAM unknown) - forced "
+                        + "GC.Collect() suppressed with NO heap ceiling; set Gc.SafetyCollectAboveMB "
+                        + "to restore the safety net");
                 }
+                return;
+            }
+            long heapBytes = GC.GetTotalMemory(false);
+            if (heapBytes > ceilingMB * 1024L * 1024L)
+            {
+                _safetyCollects++;
+                EsLog.Emit(LogLevel.Warn, "gc guard safety collect fired: heap "
+                    + (heapBytes / 1024L / 1024L) + " MB > ceiling " + ceilingMB
+                    + " MB (STW pause now; total fires " + _safetyCollects + ")");
+                GC.Collect();
             }
         }
 

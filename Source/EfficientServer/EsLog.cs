@@ -30,6 +30,9 @@ namespace EfficientServer
                 : (Action<string>)global::Log.Out;
             string line = LogPrefix + msg;
             try { sink(line); }
+            // The game Log static is the only sink that reaches the dedicated log
+            // file, and it is unavailable very early in init; a line the operator
+            // would need is worth more on stdout than the reason it failed here.
             catch { Console.WriteLine(line); }
         }
     }

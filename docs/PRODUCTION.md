@@ -92,11 +92,19 @@ scrubbed (cmdline/exe redacted, home path replaced).
 - Server melting, need vanilla NOW: set `"Enabled": false` + `es reload` (all levers
   inert, no restart), or remove `Mods/EfficientServer`.
 - Governor stuck throttled: check `es status` (the runtime line shows the current
-  tier and tick EMA directly, no log dive needed); the transitions themselves are
-  in the log. If the load is real, that is the system working. `Governor.Enabled=false`
-  + `es reload` to force vanilla behavior.
+  tier and tick EMA directly, no log dive needed; `tickEmaMs=n/a` means the
+  governor is not sampling, so no tick interval is being measured); the
+  transitions themselves are in the log. If the load is real, that is the system
+  working. `Governor.Enabled=false` + `es reload` to force vanilla behavior.
 - Horde thinner than expected: TickGuard is shedding (log says so per shed with
   counts; `es status` shows the lifetime total).
+- Server collapsing but the horde is NOT thinning: grep WARNING for
+  "TickGuard ... shed SUPPRESSED" - the trigger fired and was withheld, and the
+  line names why (no world, no players online, or the live enemy count is at or
+  below `TickGuard.MinEnemiesKept`). Raise the knob the line names.
+- Memory growing with no collect in sight: grep WARNING for "gc guard ceiling
+  unresolved" - the forced collect is suppressed and host RAM was unreadable, so
+  no ceiling replaced it. Set `Gc.SafetyCollectAboveMB` explicitly.
 - Mystery ~120 s hitches: grep WARNING for "gc guard safety collect fired" - the
   heap ceiling is below the working set and the safety net is collecting; raise
   `Gc.SafetyCollectAboveMB`.
