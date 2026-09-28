@@ -55,9 +55,15 @@ must preserve:
   governor transitions can interleave only at main-thread frame boundaries.
 - **Cross-thread reads are reference/int atomic only:** patches snapshot
   `ModApi.Config` per call; `ReloadConfig` swaps the whole object rather than
-  mutating fields, so readers see one consistent snapshot (no torn state).
-  State the governor derives from that object is re-based explicitly via
-  `GovernorPatch.OnConfigReloaded()` inside `ReloadConfig`.
+  mutating fields, so readers see one consistent snapshot (no torn state). The
+  swap is *published*, not merely stored: `ModApi.Config` and `ModApi.Active`
+  live behind `ConfigPublication`, whose `volatile` reference gives the write
+  release and the read acquire, so a reader that sees a config also sees a
+  fully built one (a plain static field would let the reference store overtake
+  the constructor's field stores). Nothing mutates a published object except
+  the governor's throttle levers, which are main-thread fields the receive
+  thread never reads. State the governor derives from that object is re-based
+  explicitly via `GovernorPatch.OnConfigReloaded()` inside `ReloadConfig`.
 - **Rule for new patches:** static mutable fields are only safe if the patched
   method is proven main-thread (trace callers in the game IL first); anything
   reached from A* workers, DynamicMesh threads, LiteNet reader/writer threads,
@@ -69,9 +75,9 @@ must preserve:
   transpiles the connection-request duplicate-IP scan, which LiteNetLib dispatches
   inline on the socket-receive thread (`UnsyncedEvents=true`). Its helper is
   stateless and touches shared state only through the sanctioned cross-thread read
-  set (`ModApi.Config` reference read, `ShouldRun`'s volatile publication) plus an
-  exception-free `ICollection.CopyTo` snapshot of `Clients.List`, so no lock is
-  needed and nothing main-owned is mutated. It fixes a stock race: the vanilla
+  set (`ModApi.Config` published reference read, `ShouldRun`'s volatile publication)
+  plus an exception-free `ICollection.CopyTo` snapshot of `Clients.List`, so no lock
+  is needed and nothing main-owned is mutated. It fixes a stock race: the vanilla
   code enumerates that live list on the receive thread while the main thread
   mutates it (network.md 4.0).
 

@@ -10,9 +10,19 @@ namespace EfficientServer
     public class ModApi : IModApi
     {
         public const string HarmonyId = "com.7dtd.efficientserver";
-        public static ServerPerfConfig Config { get; private set; } = new ServerPerfConfig();
+        // Config and Active are read from the LiteNetLib receive thread
+        // (ClientListSnapshotPatch), so both go out through ConfigPublication, whose
+        // volatile reference carries the release/acquire pair the cross-thread read
+        // needs. A plain auto-property here would leave a reader able to observe the
+        // new reference before the object's fields were visible.
+        public static ServerPerfConfig Config
+        {
+            get { return ConfigPublication.Current; }
+            private set { ConfigPublication.Current = value; }
+        }
         public static string ModPath { get; private set; } = "";
-        public static bool Active { get; private set; }
+        static volatile bool _active;
+        public static bool Active { get { return _active; } }
         static Harmony _harmony;
 
         public void InitMod(Mod _modInstance)
@@ -47,7 +57,7 @@ namespace EfficientServer
                     EsLog.Emit(LogLevel.Info, "disabled by config; patches are installed so reload can enable it");
                 }
 
-                Active = true;
+                _active = true;
                 _harmony = new Harmony(HarmonyId);
                 LogVersions();
                 // Only CLASS-ANNOTATED ([HarmonyPatch]) groups go through the class

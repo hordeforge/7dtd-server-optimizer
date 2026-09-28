@@ -274,6 +274,39 @@ namespace EfficientServer
         public bool AllowBenchGod { get; set; } = false;
     }
 
+    /// <summary>
+    /// Cross-thread publication point for the live <see cref="ServerPerfConfig"/>.
+    ///
+    /// The receive-thread surface (ClientListSnapshotPatch's duplicate-IP scan, which
+    /// LiteNetLib dispatches inline on the socket-receive thread) reads this while the
+    /// main thread swaps the whole object in ModApi.ReloadConfig. A reference write is
+    /// atomic, so a reader never sees a torn POINTER, but pointer atomicity does not
+    /// publish the object's CONTENTS: without a release barrier the store to the field
+    /// can be observed before the constructor's field stores of the object it points
+    /// at, and the reader then dereferences a config whose sections still hold their
+    /// previous values - a `Network` read one generation stale, or a section read as
+    /// null. The `volatile` qualifier makes the write release and the read acquire, so
+    /// a reader that observes a config also observes a fully built one. Nothing here
+    /// mutates a published object (the governor's in-place throttle levers are main-
+    /// thread fields the receive thread never reads), so the swap stays whole-object
+    /// and the read side stays lock-free.
+    /// </summary>
+    internal static class ConfigPublication
+    {
+        static volatile ServerPerfConfig _current = new ServerPerfConfig();
+
+        /// <summary>
+        /// The live config. Non-null from class initialization onward, so readers never
+        /// need a null guard to stay safe; a null here would mean publication was
+        /// reordered past construction, which is exactly what the qualifier prevents.
+        /// </summary>
+        public static ServerPerfConfig Current
+        {
+            get { return _current; }
+            set { _current = value; }
+        }
+    }
+
     public sealed class ServerPerfConfig
     {
         // Feature keys name one patch group to the init log and gate its activity.

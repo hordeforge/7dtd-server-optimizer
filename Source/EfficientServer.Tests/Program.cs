@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Reflection;
+using System.Threading;
 
 // Stub the only external symbols Config.cs touches (game-type-free), so the real
 // Config source compiles and runs under the plain .NET SDK. Warnings are recorded
@@ -159,6 +161,101 @@ namespace EfficientServer.Tests
             {
                 File.Delete(p);
             }
+        }
+
+        // ConfigPublication is the one piece of shared state the mod reads off the
+        // main thread: ClientListSnapshotPatch's duplicate-IP scan runs on LiteNetLib's
+        // socket-receive thread and dereferences the live config, while `es reload`
+        // swaps that object on the main thread. Two properties are pinned here.
+        //
+        // 1. The swap is PUBLISHED, not just stored. Reference writes are atomic, so a
+        //    reader can never see a torn pointer - which is exactly the guarantee a
+        //    plain static field gives, and exactly the guarantee that is NOT enough:
+        //    without a release barrier the reference store can be observed before the
+        //    constructor's field stores of the object it points at. The reflection pin
+        //    is the load-bearing one; a stress test cannot prove the barrier on a
+        //    strong-memory host, so it must not be the only witness.
+        // 2. A reader never observes a half-built config. The writer stamps a marker
+        //    INSIDE a nested section, so a section pointer observed before its contents
+        //    would surface as the default marker rather than the generation's.
+        static void CheckCrossThreadConfigPublication()
+        {
+            FieldInfo? backing = typeof(ConfigPublication)
+                .GetField("_current", BindingFlags.NonPublic | BindingFlags.Static);
+            // net8.0 dropped FieldInfo.IsVolatile, so read the required custom
+            // modifier the C# `volatile` qualifier emits instead.
+            bool volatileField = backing != null
+                && backing.GetRequiredCustomModifiers().Any(m => m.Name == "IsVolatile");
+            Check(volatileField,
+                "ConfigPublication backing field is volatile (release publish / acquire read)");
+
+            const int Generations = 20000;
+            const int Readers = 4;
+            bool[] readerOk = new bool[Readers];
+            long reads = 0;
+            var stop = new ManualResetEventSlim(false);
+
+            // Writer: publish a config whose nested Pathfinding section carries a
+            // marker unique to its generation, with Enabled flipped on alternate
+            // generations so a stale top-level field is distinguishable too.
+            var writer = new Thread(() =>
+            {
+                for (int gen = 0; gen < Generations; gen++)
+                {
+                    var cfg = new ServerPerfConfig();
+                    cfg.Pathfinding.PoolInitScanNodes = true;
+                    cfg.Pathfinding.MaxPathEnqueuesPerTick = gen + 1;
+                    cfg.Enabled = (gen & 1) == 0;
+                    ConfigPublication.Current = cfg;
+                }
+                stop.Set();
+            });
+
+            Thread[] readerThreads = new Thread[Readers];
+            for (int r = 0; r < Readers; r++)
+            {
+                int id = r;
+                readerThreads[r] = new Thread(() =>
+                {
+                    bool ok = true;
+                    long seen = 0;
+                    // Read until the writer has published its last generation, then
+                    // take one more sample so every reader is guaranteed to have run.
+                    while (!stop.IsSet)
+                    {
+                        ServerPerfConfig cfg = ConfigPublication.Current;
+                        if (cfg == null) { ok = false; break; }
+                        // A fully built config is never DefaultPathBesideAssembly's
+                        // placeholder: every section exists and the section field the
+                        // writer stamped is one the writer actually set.
+                        if (cfg.Pathfinding == null || cfg.Network == null || !cfg.Pathfinding.PoolInitScanNodes)
+                        { ok = false; break; }
+                        if (cfg.Pathfinding.MaxPathEnqueuesPerTick < 1
+                            || cfg.Pathfinding.MaxPathEnqueuesPerTick > Generations)
+                        { ok = false; break; }
+                        seen++;
+                    }
+                    readerOk[id] = ok;
+                    Interlocked.Add(ref reads, seen);
+                });
+                readerThreads[r].IsBackground = true;
+            }
+
+            writer.IsBackground = true;
+            writer.Start();
+            for (int r = 0; r < Readers; r++) readerThreads[r].Start();
+            writer.Join();
+            for (int r = 0; r < Readers; r++) readerThreads[r].Join();
+
+            Check(Interlocked.Read(ref reads) > 0,
+                "config publication: concurrent readers actually sampled the holder");
+            for (int r = 0; r < Readers; r++)
+                Check(readerOk[r],
+                    $"config publication: reader {r} never saw a null or half-built config");
+
+            // Leave the holder on built-in defaults so a later check cannot inherit
+            // this test's last generation.
+            ConfigPublication.Current = new ServerPerfConfig();
         }
 
         static int Main()
@@ -644,6 +741,7 @@ namespace EfficientServer.Tests
             // string-level fixture reaches (they all go through LoadTemp):
             CheckDefaultPathDiscovery();
             CheckUnreadableFileFailSoft();
+            CheckCrossThreadConfigPublication();
 
             // Fuzz: the config file is the mod's untrusted-input surface, so a
             // deterministic target hammers Load. Structure-aware mutations of the

@@ -35,9 +35,9 @@ namespace EfficientServer.Patches
     ///
     /// Thread-safety contract (ARCHITECTURE concurrency model): this helper executes
     /// on the receive thread and touches shared state only through the sanctioned
-    /// cross-thread read set - ModApi.Config reference reads, ShouldRun's volatile
-    /// publication, and the CopyTo snapshot. It holds no lock and mutates nothing
-    /// another thread can observe.
+    /// cross-thread read set - the published ModApi.Config reference, ShouldRun's
+    /// volatile publication, and the CopyTo snapshot. It holds no lock and mutates
+    /// nothing another thread can observe.
     ///
     /// Targets a method resolved BY NAME in Assembly-CSharp (the wrapper type is not
     /// referenced at compile time), so drift fails visibly: a moved type surfaces as
