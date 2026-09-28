@@ -34,6 +34,17 @@ ROOT="$(cd "$SCRIPTDIR/.." && pwd)"
 
 # Resolve dedicated server directory
 SRV="${SEVENDTD_DS_DIR:-${DS:-$HOME/.local/share/Steam/steamapps/common/7 Days to Die Dedicated Server}}"
+# `VAR= cmd` (exported but empty) must fail, not fall through to the stock
+# default above: an empty override is a misconfigured environment, and silently
+# launching a different install than the operator named is how the wrong server
+# gets touched. Same guard in install.sh and uninstall.sh.
+for _var in SEVENDTD_DS_DIR DS; do
+  if [[ -n "${!_var+x}" && -z "${!_var}" ]]; then
+    echo "ERROR: $_var is set but empty; pass a real install dir or unset it." >&2
+    exit 1
+  fi
+done
+unset _var
 # A bare --ds with no path must fail here, not fall through and pass "--ds"
 # to the server binary as a stray launch argument.
 if [[ "${1:-}" == "--ds" ]]; then

@@ -1,6 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+# Resolve and validate the install dir BEFORE the build: an empty override
+# must not spend a compile, and must not reach the rm -rf below.
+SRV="${SEVENDTD_DS_DIR:-$HOME/.local/share/Steam/steamapps/common/7 Days to Die Dedicated Server}"
+# Exported-but-empty must fail, not fall through to the stock default in the
+# expression above: the rm -rf below would then wipe a DIFFERENT install's mod
+# folder than the operator named. Same guard in uninstall.sh and run_server.sh.
+if [[ -n "${SEVENDTD_DS_DIR+x}" && -z "$SEVENDTD_DS_DIR" ]]; then
+  echo "ERROR: SEVENDTD_DS_DIR is set but empty; pass a real install dir or unset it." >&2
+  exit 1
+fi
+
 # Back up on disk, never the stock /tmp: it is tmpfs on most Linux hosts, and
 # after a failed install that copy is the only place the operator's tuning
 # still exists - it must survive a reboot. mktemp honors TMPDIR.
@@ -8,7 +19,6 @@ export TMPDIR="$ROOT/.scratch/tmp"
 mkdir -p "$TMPDIR"
 "$ROOT/scripts/build.sh"
 
-SRV="${SEVENDTD_DS_DIR:-$HOME/.local/share/Steam/steamapps/common/7 Days to Die Dedicated Server}"
 DEST="$SRV/Mods/EfficientServer"
 # Runtime-dependency preflight: the mod loads only through the stock
 # 0_TFP_Harmony loader (README "Requirements"), which must live in the TARGET

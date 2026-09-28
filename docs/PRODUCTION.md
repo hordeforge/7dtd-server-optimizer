@@ -90,7 +90,8 @@ scrubbed (cmdline/exe redacted, home path replaced).
 ## 6. Emergencies
 
 - Server melting, need vanilla NOW: set `"Enabled": false` + `es reload` (all levers
-  inert, no restart), or remove `Mods/EfficientServer`.
+  inert, no restart), or `make uninstall DS=...` (keeps the live config under
+  `<DS>/EfficientServer-uninstall-backup`).
 - Governor stuck throttled: check `es status` (the runtime line shows the current
   tier and tick EMA directly, no log dive needed; `tickEmaMs=n/a` means the
   governor is not sampling, so no tick interval is being measured); the
@@ -108,3 +109,63 @@ scrubbed (cmdline/exe redacted, home path replaced).
 - Mystery ~120 s hitches: grep WARNING for "gc guard safety collect fired" - the
   heap ceiling is below the working set and the safety net is collecting; raise
   `Gc.SafetyCollectAboveMB`.
+
+## 7. State, recovery, RPO/RTO
+
+### What state this mod owns
+
+The mod is a patch DLL: it keeps no database, no index, no queue. Everything it
+reads is regenerable from this repo, and everything it writes is the log. The
+state that is NOT regenerable is what an operator edits on the server host:
+
+| State | Where | Regenerable |
+|---|---|---|
+| Live config (tuning) | `<DS>/Mods/EfficientServer/Config/efficientserver.json` | No. The repo copy is the shipped default; the host copy holds the tuned values |
+| Guard backup | `.../Config/efficientserver.json.swap-bak` | No. Only exists mid-bench-run; crash recovery for a killed swap |
+| Installed DLL | `<DS>/Mods/EfficientServer/` | Yes: `make build && make install` |
+| Server logs | `server/logs/server_<UTC>.log` (default) | No, but expendable: restart writes a new one |
+| APM telemetry | `Mods/7dtd-server-apm-bridge/telemetry/` | Yes, within 30 s of the bridge running |
+| Server world / player data | `<DS>/GeneratedWorlds`, `serverconfig*.xml` | Not this mod's. The game's own saves, backed up by the host operator |
+
+### RPO and RTO
+
+- **RPO for the live config: 0 across a reinstall or an uninstall.** `install.sh`
+  and `uninstall.sh` both copy `<DS>/Mods/EfficientServer/Config/` out before
+  touching the mod folder, and `uninstall.sh` prints the restore command.
+  Against host loss, disk loss, or a deleted instance the RPO is unbounded:
+  nothing in this repo copies that file off the host. Copy it into version
+  control (or anywhere off-host) yourself if the tuning is worth more than a
+  re-derivation from `docs/CONFIG.md` plus the measured defaults.
+- **RTO for a config restore: under a minute** (one `cp` plus `es reload`; no
+  restart). **RTO for a full mod reinstall: one `make install`.** Neither path
+  needs a rebuild once `dist/` is present.
+- **World data RPO/RTO is the host operator's**, not this mod's. Nothing here
+  touches it.
+
+### Restore the live config
+
+```bash
+ls "$DS"/EfficientServer-uninstall-backup/          # UTC-stamped copies
+make install DS="/path/to/7 Days to Die Dedicated Server"
+cp -a "$DS"/EfficientServer-uninstall-backup/<stamp>/efficientserver.json \
+  "$DS/Mods/EfficientServer/Config/efficientserver.json"
+es reload
+```
+
+`SEVENDTD_UNINSTALL_BACKUP_DIR` moves the copies elsewhere (another disk, a
+synced directory); `SEVENDTD_UNINSTALL_PURGE=1` skips the copy and deletes the
+config with the mod, which is a deliberate act with no recovery path.
+
+Mid-bench-run crash (`efficientserver.json.swap-bak` present, live config holds
+the harness's toggled values): the next harness run finishes the interrupted
+restore automatically (`scripts/es_cfg_guard.py`). To inspect or replay it by
+hand, copy the `.swap-bak` over the live file. A `.swap-bak.stale` file means
+the live config moved on beyond the swap, so the guard left it alone; read it
+before deciding.
+
+### Backups that do not exist here
+
+There is no scheduled backup of the install tree, no off-host copy, and no
+restore drill for the mod install itself. The only automated recovery is the
+one just described. Do not treat a green `make install` as proof the config
+survives: nothing in this repo verifies the copy, it only makes it.

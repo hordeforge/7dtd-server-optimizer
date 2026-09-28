@@ -96,7 +96,9 @@ All optional; scripts fall back to defaults. The Makefile routes its documented
 
 | Variable | Read by | Default | Meaning |
 |---|---|---|---|
-| `SEVENDTD_DS_DIR` / make `DS=` | build.sh, install.sh, run_server.sh, make `uninstall`, harness scripts (`measure_es_onoff.py`, `validate_*`) | `~/.local/share/Steam/steamapps/common/7 Days to Die Dedicated Server` | Dedicated install: game DLL refs, mod install target, launch dir. Harnesses also accept `SEVENDTD_SERVER_DIR` (the 7dtd-loadgen sibling's spelling) |
+| `SEVENDTD_DS_DIR` / make `DS=` | build.sh, install.sh, uninstall.sh, run_server.sh, make `uninstall`, harness scripts (`measure_es_onoff.py`, `validate_*`) | `~/.local/share/Steam/steamapps/common/7 Days to Die Dedicated Server` | Dedicated install: game DLL refs, mod install target, launch dir. Harnesses also accept `SEVENDTD_SERVER_DIR` (the 7dtd-loadgen sibling's spelling) |
+| `SEVENDTD_UNINSTALL_BACKUP_DIR` | uninstall.sh | `<DS>/EfficientServer-uninstall-backup` | Where `make uninstall` copies the live `Config/` before deleting the mod. Outside `Mods/` so the game's mod scan never sees it; point it at another disk for host-loss cover |
+| `SEVENDTD_UNINSTALL_PURGE` | uninstall.sh | unset (config is preserved) | `1` deletes the installed config with the mod, no copy kept |
 | `SEVENDTD_GAME_DIR` | build.sh | client install path | Client fallback for game DLL refs |
 | `SEVENDTD_BUILD_BACKEND` | build.sh (`make build-mcs`) | auto (dotnet if SDK present) | `mcs` forces the Mono fallback compiler; `dotnet` forces the SDK path and fails hard without one |
 | `SEVENDTD_CONFIG` | run_server.sh | local `server/serverconfig.optimized.xml`, else tracked root `serverconfig.optimized.xml` | Dedicated server config XML |

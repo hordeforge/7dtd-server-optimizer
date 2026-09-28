@@ -54,7 +54,8 @@ help:
 	@echo "  make build             Compile dist/EfficientServer against game DLLs"
 	@echo "  make build-mcs         Same, forcing the Mono mcs fallback backend"
 	@echo "  make install           Build and copy into \$$DS/Mods/EfficientServer"
-	@echo "  make uninstall         Remove \$$DS/Mods/EfficientServer"
+	@echo "  make uninstall         Remove \$$DS/Mods/EfficientServer, keeping the"
+	@echo "                         live config under \$$DS/EfficientServer-uninstall-backup"
 	@echo "  make run               Launch the dedicated server with tuned env"
 	@echo "  make package           Build and zip dist/EfficientServer-<version>.zip"
 	@echo "  make verify-reproducible   Package twice, compare hashes (repro proof)"
@@ -140,16 +141,11 @@ coverage:
 	dotnet tool run dotnet-coverage -- collect -f cobertura -o "$(ROOT)/TestResults/coverage.cobertura.xml" -- dotnet run --project "$(ROOT)/Source/EfficientServer.Tests" -c Release --no-restore
 install:
 	$(ROOT)/scripts/install.sh
-# $(SEVENDTD_DS_DIR), not $(DS): an exported SEVENDTD_DS_DIR overrides ?=, so
-# $(DS) would still hold the stock default and this could delete from a
-# directory install.sh never touched. The variable equals DS when DS was used.
-# Empty guard: `DS= make uninstall` leaves both spellings defined-but-empty
-# (?= never fires on an existing empty variable), which would expand to
-# rm -rf "/Mods/EfficientServer" at the filesystem root instead of failing.
+# The install dir guard and the config-preserving copy live in uninstall.sh,
+# next to install.sh's own guard, so both halves of the same rm -rf are in one
+# place. SEVENDTD_UNINSTALL_PURGE=1 opts into deleting the config as well.
 uninstall:
-	@if [ -z "$(SEVENDTD_DS_DIR)" ]; then \
-	  echo "ERROR: uninstall got an empty install dir; pass DS=\"/path/to/7 Days to Die Dedicated Server\"." >&2; exit 1; fi
-	rm -rf "$(SEVENDTD_DS_DIR)/Mods/EfficientServer"
+	$(ROOT)/scripts/uninstall.sh
 run:
 	$(ROOT)/scripts/run_server.sh
 clean:
