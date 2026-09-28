@@ -91,18 +91,33 @@ cp -a "$ROOT/dist/EfficientServer" "$STAGE/"
 # Normalize all filesystem-dependent metadata before archiving.
 find "$STAGE" -type d -exec chmod 755 {} +
 find "$STAGE/EfficientServer" -type f -exec chmod 644 {} +
-find "$STAGE" -print0 | xargs -0 touch -d "@$EPOCH"
+# --no-run-if-empty: a bare `find | xargs touch` with no input leaves touch
+# with no operands, which exits nonzero and would abort an otherwise fine run.
+find "$STAGE" -print0 | xargs -0 --no-run-if-empty touch -d "@$EPOCH"
 
 # Zip to a sibling temp file and rename, so a failed or killed zip run can
 # neither publish a partial archive under the release name nor destroy the
 # previous good artifact before its replacement exists. zip does not store the
 # output path in the archive, so the bytes are identical to a direct build.
 ZIP_TMP="$OUT.tmp.$$"
+# Capture the entry list once and feed it to both the count check and zip, so
+# the two cannot disagree about what the archive should contain.
+ENTRIES="$STAGE/.entries"
 (
   cd "$STAGE"
   # File entries only (dirs are implicit on extract), sorted, no extra fields.
-  find EfficientServer -type f -print | LC_ALL=C sort | zip -q -X "$ZIP_TMP" -@
+  find EfficientServer -type f -print | LC_ALL=C sort | tee "$ENTRIES" | zip -q -X "$ZIP_TMP" -@
 )
+# pipefail covers a failing find/zip above, but a stage that legitimately
+# contains no files still yields a well-formed empty zip, which would publish
+# under the release name. The staged file count is the ground truth.
+EXPECTED="$(find "$STAGE/EfficientServer" -type f | wc -l)"
+ACTUAL="$(wc -l <"$ENTRIES")"
+if [[ "$EXPECTED" -ne "$ACTUAL" || "$ACTUAL" -eq 0 ]]; then
+  echo "ERROR: archive holds $ACTUAL entries, staged tree has $EXPECTED" >&2
+  exit 1
+fi
+rm -f "$ENTRIES"
 mv -f "$ZIP_TMP" "$OUT"
 ZIP_TMP=""
 echo "Packaged -> $OUT (entry mtime epoch $EPOCH)"

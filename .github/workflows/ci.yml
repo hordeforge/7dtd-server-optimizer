@@ -15,7 +15,10 @@ concurrency:
   cancel-in-progress: true
 jobs:
   optimizer:
-    runs-on: ubuntu-latest
+    # Pinned image, not ubuntu-latest: a floating runner changes shellcheck,
+    # the resolved glibc and the preinstalled tool set under the gate, so a
+    # green run today can go red with no change in this repository.
+    runs-on: ubuntu-24.04
     # A hung run must die instead of holding a runner for the 6h default.
     timeout-minutes: 15
     steps:
@@ -47,7 +50,10 @@ jobs:
   coverage-badge:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: optimizer
-    runs-on: ubuntu-latest
+    # Pinned image, not ubuntu-latest: a floating runner changes shellcheck,
+    # the resolved glibc and the preinstalled tool set under the gate, so a
+    # green run today can go red with no change in this repository.
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: write

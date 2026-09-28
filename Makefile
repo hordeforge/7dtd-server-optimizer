@@ -41,7 +41,15 @@ RUFF_VERSION := 0.16.4
 MYPY_VERSION := 2.1.0
 
 .PHONY: help build build-mcs test lint unit check-scripts preflight-lint preflight-unit \
-	preflight-scripts coverage install uninstall run clean package verify-reproducible
+	preflight-scripts scratch coverage install uninstall run clean package verify-reproducible
+# Every gate that can reach Python's tempfile, .NET's Path.GetTempPath or
+# mktemp depends on this. The directory must exist before those run: a
+# nonexistent TMPDIR is silently ignored by each of them, and Python's
+# tempfile.gettempdir() then falls back to the stock /tmp, undoing the
+# routing above. The subset targets ran without it, so `make unit` and
+# `make check-scripts` alone wrote their scratch into RAM.
+scratch:
+	@mkdir -p "$(TMPDIR)"
 help:
 	@echo "EfficientServer: Harmony optimization mod for 7 Days to Die dedicated servers"
 	@echo
@@ -132,18 +140,18 @@ preflight-unit:
 	  echo "  (auto-detected by this Makefile), or your distro's dotnet-sdk-8.0 package, and rerun make unit." >&2; exit 127; fi
 
 # -x follows sourced files so checks see through `. ./lib.sh` style sharing.
-lint: preflight-lint
+lint: preflight-lint scratch
 	shellcheck -x $(wildcard $(ROOT)/scripts/*.sh)
 	ruff check $(ROOT)/scripts
 	mypy $(ROOT)/scripts
 
 # Locked restore: fails when a PackageReference changed without regenerating
 # packages.lock.json, instead of silently floating to newer versions.
-unit: preflight-unit
+unit: preflight-unit scratch
 	dotnet restore --locked-mode $(ROOT)/Source/EfficientServer.Tests
 	dotnet run --project $(ROOT)/Source/EfficientServer.Tests -c Release --no-restore
 
-check-scripts: preflight-scripts
+check-scripts: preflight-scripts scratch
 # Stdlib-only syntax gate for the scripts these targets never execute
 # (validate_*.py / measure_es_onoff.py need a live server). Bytecode lands in
 # scripts/__pycache__, which is gitignored.
@@ -157,7 +165,6 @@ check-scripts: preflight-scripts
 	python3 $(ROOT)/scripts/coverage_badge.py --selftest
 
 test:
-	@mkdir -p "$(TMPDIR)"
 # Order matters and is the CI order: shell lints, then the .NET harness, then
 # the doc/version gates. A preflight failure in any of them stops the run
 # before the next tool is needed.
@@ -172,9 +179,9 @@ test:
 # The tool lives in .config/dotnet-tools.json (local manifest): such tools get
 # no PATH shim, so invoke as `dotnet dotnet-coverage ...` and let the host CLI
 # resolve them. Output format flag is 18.x spelling (-f/--output-format).
-coverage:
+coverage: scratch
 	dotnet tool restore
-	mkdir -p "$(ROOT)/TestResults" "$(TMPDIR)"
+	mkdir -p "$(ROOT)/TestResults"
 	# Same locked restore make test runs: the collect below passes --no-restore.
 	dotnet restore --locked-mode $(ROOT)/Source/EfficientServer.Tests
 	dotnet tool run dotnet-coverage -- collect -f cobertura -o "$(ROOT)/TestResults/coverage.cobertura.xml" -- dotnet run --project "$(ROOT)/Source/EfficientServer.Tests" -c Release --no-restore

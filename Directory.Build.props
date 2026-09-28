@@ -8,8 +8,11 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     <!-- Pinned so an SDK update cannot silently change the enabled analyzer
-         set; a bump must be reviewed like any dependency change. -->
-    <AnalysisLevel>latest</AnalysisLevel>
+         set; a bump must be reviewed like any dependency change. An explicit
+         8.0, not "latest": global.json's rollForward=latestPatch still admits
+         a newer 8.0.4xx, and AnalysisLevel=latest tracks whichever SDK resolved,
+         so the analyzer set would drift without any change here. -->
+    <AnalysisLevel>8.0</AnalysisLevel>
     <!-- AnalysisMode stays at its default (rules whose severity is warning
          or error only). A measured probe of AllEnabledByDefault fails on
          ~160 pre-existing findings (CA1031 broad catches, CA1805 explicit

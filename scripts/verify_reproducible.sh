@@ -11,6 +11,11 @@
 # The epoch is held constant across legs (it is an input by design); everything
 # else that must not matter is varied where possible. Needs a game install,
 # like make package; not wired into `make test`/CI for that reason.
+#
+# Scope: this proves reproducibility for the dotnet backend, the one that
+# ships. The mcs fallback stamps a random MVID that mcs 6.12 offers no flag to
+# suppress, so SEVENDTD_BUILD_BACKEND=mcs cannot pass leg 2; run it without
+# that variable set.
 set -euo pipefail
 export LC_ALL=C TZ=UTC
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"

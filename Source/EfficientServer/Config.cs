@@ -451,24 +451,28 @@ namespace EfficientServer
             foreach (JProperty prop in owner.Properties())
             {
                 string path = prefix.Length == 0 ? prop.Name : prefix + "." + prop.Name;
-                PropertyInfo target = default!; // null = no property binds, tested below
+                // Recurse straight from the matched candidate, and report an
+                // unbound key only after the loop ends with no match. The loop
+                // body never assigns null to target, which keeps this file
+                // compiling twice: scripts/build.sh's mcs fallback backend is
+                // held at -langversion:7.2, where the null-forgiving operator
+                // and `PropertyInfo?` are unavailable, and the test project
+                // compiles the same file with Nullable enabled, where a null
+                // would trip CS8600.
+                bool bound = false;
                 foreach (PropertyInfo candidate in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
                 {
-                    if (string.Equals(candidate.Name, prop.Name, StringComparison.OrdinalIgnoreCase))
-                    {
-                        target = candidate;
-                        break;
-                    }
+                    if (!string.Equals(candidate.Name, prop.Name, StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    bound = true;
+                    // JSON null (or any non-object) has nothing to walk into; the
+                    // deserializer handles those cases itself.
+                    if (prop.Value is JObject child && IsConfigSectionType(candidate.PropertyType))
+                        CollectUnknownKeys(path, child, candidate.PropertyType, unknown);
+                    break;
                 }
-                if (target == null)
-                {
+                if (!bound)
                     unknown.Add(path);
-                    continue;
-                }
-                // JSON null (or any non-object) has nothing to walk into; the
-                // deserializer handles those cases itself.
-                if (prop.Value is JObject child && IsConfigSectionType(target.PropertyType))
-                    CollectUnknownKeys(path, child, target.PropertyType, unknown);
             }
         }
 

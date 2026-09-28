@@ -62,6 +62,12 @@ SRC="$ROOT/Source/EfficientServer"
 
 # Shared by both backends so dist contents cannot drift between them.
 finish() {
+  # Fail here, not at the game's load attempt: package.sh zips this directory
+  # wholesale, so a mod folder with no DLL would ship as a silent no-op mod.
+  if [[ ! -s "$OUT/EfficientServer.dll" ]]; then
+    echo "ERROR: $OUT/EfficientServer.dll is missing or empty after the build" >&2
+    exit 1
+  fi
   cp "$SRC/ModInfo.xml" "$OUT/ModInfo.xml"
   cp "$ROOT/config/efficientserver.json" "$OUT/Config/efficientserver.json"
   # MIT requires the license text to accompany redistribution, and the zip and
@@ -76,6 +82,12 @@ finish() {
 # leftover .pdb from an older build) cannot leak into the packaged mod.
 rm -rf "$OUT"
 mkdir -p "$OUT/Config"
+# Same reasoning for the dotnet backend's intermediate dir, which is otherwise
+# left in the source tree. MSBuild's up-to-date check does not track
+# GameManagedDir/HarmonyPath, so a rebuild against a different game install
+# (or a Harmony update under the same path) can reuse an assembly resolved
+# against the previous one. The compile is seconds; correctness wins.
+rm -rf "${SRC:?}/obj" "${SRC:?}/bin"
 
 # Prefer official .NET SDK; SEVENDTD_BUILD_BACKEND=mcs verifies the fallback.
 BUILD_BACKEND="${SEVENDTD_BUILD_BACKEND:-auto}"
@@ -83,7 +95,8 @@ if [[ "$BUILD_BACKEND" != "mcs" ]] && command -v dotnet >/dev/null 2>&1 && dotne
   echo "Building with dotnet SDK against: $MANAGED"
   dotnet build "$SRC/EfficientServer.csproj" -c Release \
     -p:GameManagedDir="$MANAGED" -p:HarmonyPath="$HARMONY" \
-    -p:EfficientServerOutput="$OUT/"
+    -p:EfficientServerOutput="$OUT/" \
+    -p:ContinuousIntegrationBuild=true
   finish
   exit 0
 fi
@@ -118,7 +131,14 @@ refs=(
 # never compiled into the shipped DLL.
 mapfile -d '' sources < <(find "$SRC" -type d \( -name bin -o -name obj \) -prune -o \
   -type f -name '*.cs' -print0 | LC_ALL=C sort -z)
+# -pathmap maps the compile root to a fixed token so building from a different
+# directory cannot leak a path into the emitted metadata. A no-op while debug
+# info is off (no -debug below), kept so the guarantee survives one being added.
+# It does NOT make this backend reproducible: mcs 6.12 stamps a random MVID
+# and ignores -deterministic, so two mcs builds of one tree differ regardless.
+# Only the dotnet backend is byte-reproducible; see verify_reproducible.sh.
 mcs -nostdlib -sdk:4.7.2 -target:library -optimize+ -langversion:7.2 \
+  -pathmap:"$SRC=/es" \
   -out:"$OUT/EfficientServer.dll" \
   "${refs[@]}" \
   "${sources[@]}"
