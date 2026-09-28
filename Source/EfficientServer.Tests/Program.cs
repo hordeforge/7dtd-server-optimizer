@@ -262,6 +262,99 @@ namespace EfficientServer.Tests
             return null;
         }
 
+        // Same walk, for a path that names a directory rather than a file.
+        static string? FindRepoDir(params string[] relativeParts)
+        {
+            var dir = new DirectoryInfo(AppContext.BaseDirectory);
+            while (dir != null)
+            {
+                string candidate = Path.Combine(new[] { dir.FullName }.Concat(relativeParts).ToArray());
+                if (Directory.Exists(candidate)) return candidate;
+                dir = dir.Parent;
+            }
+            return null;
+        }
+
+        // The csproj's <Compile Include> list is the ONLY coupling between this
+        // harness and the mod, and it is hand-maintained: a new production file
+        // gets no coverage until its path is added, and nothing fails when it is
+        // forgotten. The convention that makes the gap checkable is the *Patch
+        // suffix: a `*Patch.cs` is a Harmony group and needs the game, a
+        // non-suffixed file is a support module that should be testable here.
+        // So assert the two sets partition: every non-suffixed production file is
+        // either compiled into this project or named in GameCoupled, with a
+        // reason. Adding a support module now fails the run instead of shipping
+        // untested. Self-skipping outside the source tree, like the checks above.
+        static void CheckHarnessCoverageMap()
+        {
+            var dir = new DirectoryInfo(FindRepoDir("Source", "EfficientServer") ?? "");
+            if (!dir.Exists)
+            {
+                Console.WriteLine("SKIP: harness coverage map (no source tree above this binary)");
+                return;
+            }
+            string[] compiled;
+            var csproj = FindRepoFile("Source", "EfficientServer.Tests", "EfficientServer.Tests.csproj");
+            if (csproj == null)
+            {
+                Check(false, "the test csproj is reachable, so the coverage map can be checked");
+                return;
+            }
+            compiled = Regex.Matches(File.ReadAllText(csproj, Encoding.UTF8),
+                    @"<Compile\s+Include=""(?<p>[^""]+)""")
+                .Cast<Match>()
+                .Select(m => m.Groups["p"].Value.Replace('\\', '/'))
+                .ToArray();
+
+            var support = new SortedSet<string>(StringComparer.Ordinal);
+            foreach (FileInfo file in dir.GetFiles("*.cs", SearchOption.AllDirectories))
+            {
+                // obj/ and bin/ carry the SDK's generated sources, not ours.
+                string rel = file.FullName.Substring(dir.FullName.Length).TrimStart('/', '\\').Replace('\\', '/');
+                if (rel.StartsWith("obj/", StringComparison.Ordinal)
+                    || rel.StartsWith("bin/", StringComparison.Ordinal)) continue;
+                if (rel.EndsWith("Patch.cs", StringComparison.Ordinal)) continue;
+                support.Add(rel);
+            }
+            Check(support.Count > 0, "the support-module scan found the non-Patch production files");
+
+            var accounted = new HashSet<string>(StringComparer.Ordinal);
+            foreach (string entry in compiled)
+            {
+                string rel = entry.StartsWith("../EfficientServer/", StringComparison.Ordinal)
+                    ? entry.Substring("../EfficientServer/".Length)
+                    : entry;
+                Check(support.Contains(rel), "csproj compiles a support module that still exists: " + rel);
+                accounted.Add(rel);
+            }
+            foreach (string rel in support)
+            {
+                if (accounted.Contains(rel)) continue;
+                Check(GameCoupled.ContainsKey(rel),
+                    "support module is covered or declared game-coupled: " + rel
+                    + (GameCoupled.ContainsKey(rel) ? "" : " (add its <Compile Include>, or a GameCoupled entry with a reason)"));
+            }
+            foreach (string rel in GameCoupled.Keys.OrderBy(n => n, StringComparer.Ordinal))
+                Check(support.Contains(rel), "GameCoupled entry names a file that still exists: " + rel);
+        }
+
+        // Production files the harness deliberately does NOT compile, each with
+        // why. A support module missing from this table and from the csproj is
+        // the failure CheckHarnessCoverageMap exists to catch, so an entry is only
+        // correct while the reason is true.
+        static readonly Dictionary<string, string> GameCoupled = new Dictionary<string, string>
+        {
+            ["AssemblyInfo.cs"] = "assembly attributes, no types to exercise",
+            ["BoehmNative.cs"] = "P/Invoke into monobdwgc; nothing host-independent to assert",
+            ["ConsoleCmdEfficientServer.cs"] = "game console types (ConsoleCmdAbstract, SdtdConsole)",
+            ["EsLog.cs"] = "calls the game's global::Log; mirrored by EsLogStub.cs and fidelity-pinned instead",
+            ["GcIncremental.cs"] = "drives GameManager's GC mode",
+            ["ModApi.cs"] = "IModApi, GameManager and Harmony wiring",
+            ["Patches/AiAlertGate.cs"] = "reads entity AI state through game types",
+            ["Patches/AnimatorEmergency.cs"] = "sweeps Animator rigs on a live world",
+            ["Patches/RigVisualProbe.cs"] = "sweeps rig Behaviours on a live world",
+        };
+
         // The EsLog stub above REPLACES the mod's real logging class, so every
         // "a warning was (not) emitted" assertion in this suite is only as
         // truthful as the mirror. Nothing in the build links the two, so pin the
@@ -1914,6 +2007,7 @@ namespace EfficientServer.Tests
             // Discovery + IO-failure branches of the load path itself, which no
             // string-level fixture reaches (they all go through LoadTemp):
             CheckLogStubFidelity();
+            CheckHarnessCoverageMap();
             CheckDefaultPathDiscovery();
             CheckUnreadableFileFailSoft();
             CheckCrossThreadConfigPublication();

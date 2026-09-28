@@ -251,118 +251,25 @@ namespace EfficientServer
             }
         }
 
-        static readonly HashSet<string> RigTypes = new HashSet<string> {
-            "EyeLidController", "CharacterGazeController", "FeatherFlutter",
-            "LightLODHeld", "DroneRunningLight", "DroneBeamParticle",
-        };
-        // Components this probe disabled and has not yet restored, across ALL
-        // `es rigoff` calls since the last `es rigon`. Cumulative by design: a
-        // repeated rigoff must not drop the first batch from tracking, or `es
-        // rigon` would restore only the newest sweep and leave every earlier
-        // component disabled until restart. Destroyed rigs are pruned each
-        // sweep (PruneDestroyedTracked), so the bound is "live components",
-        // not lifetime spawns.
-        static readonly List<Behaviour> _rigDisabled = new List<Behaviour>();
-        // Membership mirror of _rigDisabled, so the rigoff sweep tests "already
-        // tracked" in O(1) instead of a linear List.Contains per candidate. The
-        // sweep walks every Behaviour on every entity's rig, so the linear form
-        // was O(components x already-disabled): a repeated rigoff over a large
-        // horde re-tests the whole tracked set for every component it visits.
-        // Kept in lockstep by Add/Restore-and-clear below; PruneDestroyedTracked
-        // removes from both. UnityEngine.Object overrides Equals, so the set uses
-        // the same destroyed-object semantics as List.Contains.
-        static readonly HashSet<Behaviour> _rigDisabledSet = new HashSet<Behaviour>();
-
-        // Unity's overloaded null comparison: a destroyed component reads == null
-        // even though the reference is non-null.
-        static bool IsDestroyed(Behaviour b) { return b == null; }
-
-        // Tracked components whose entity died or despawned while disabled can
-        // never be restored (only an unusable Unity wrapper remains), so keep
-        // sweeping them would grow one entry per spawn/despawn for the whole
-        // bench session. Drop them at every rigoff, the same prune-per-sweep
-        // contract as AnimatorEmergency.PruneDespawnedSavedModes: alive entries
-        // stay tracked, so a repeated rigoff still converges additive and one
-        // rigon undoes everything still alive.
-        static void PruneDestroyedTracked()
-        {
-            int removed = 0;
-            for (int i = _rigDisabled.Count - 1; i >= 0; i--)
-            {
-                if (IsDestroyed(_rigDisabled[i]))
-                {
-                    _rigDisabled.RemoveAt(i);
-                    removed++;
-                }
-            }
-            // The mirror is pruned by PREDICATE, never by Remove(destroyedRef): the
-            // set compares keys through UnityEngine.Object.Equals, which reports
-            // false for a destroyed instance against anything, so a key-based
-            // removal could never match and the set would keep one dead entry per
-            // despawned rig.
-            if (removed > 0) _rigDisabledSet.RemoveWhere(IsDestroyed);
-            if (removed > 0)
-                EsLog.Emit(LogLevel.Info, "rigprobe: pruned " + removed + " tracked component(s) whose "
-                    + "rig despawned (tracked=" + _rigDisabled.Count + ")");
-        }
-
         static void RigProbe(string sub)
         {
-            // DIAGNOSTIC probe #2 (RE sweep 3n): unguarded visual MonoBehaviours
-            // on entity rigs - eyelid blink, gaze, feather flutter, held-light
-            // raycast, drone lights. Disable/enable by type name to size their
-            // per-frame cost without new assembly references. Visual-only per RE
-            // (RagdollWhenHit deliberately excluded: touches physics).
-            // Arm gate first, for the same reason as AnimProbe: a refusal is a
-            // config decision and must be audited whether or not a world is up.
+            // The sweep and its tracking live in Patches.RigVisualProbe, the same
+            // arrangement Patches.AnimatorEmergency has for the other fidelity
+            // probe. What stays here is the command: the arm gate (a config
+            // decision, audited whether or not a world is up) and the echo.
             if (sub == "rigoff" && !ArmProbe("rigoff")) return;
             World world = GameManager.Instance != null ? GameManager.Instance.World : null;
             if (world == null) { SdtdConsole.Instance.Output(EsLog.LogPrefix + "no world"); return; }
             if (sub == "rigoff")
             {
-                // Additive sweep: only still-enabled, not-yet-tracked components
-                // are disabled and appended, so rigoff N times converges to the
-                // same state as rigoff once and one rigon undoes it all.
-                PruneDestroyedTracked();
-                int disabled = 0;
-                List<Entity> entities = world.Entities.list;
-                for (int i = 0; i < entities.Count; i++)
-                {
-                    Behaviour[] behaviours = entities[i].GetComponentsInChildren<Behaviour>(true);
-                    for (int b = 0; b < behaviours.Length; b++)
-                    {
-                        if (behaviours[b] == null || !behaviours[b].enabled) continue;
-                        if (!RigTypes.Contains(behaviours[b].GetType().Name)) continue;
-                        if (_rigDisabledSet.Contains(behaviours[b])) continue;
-                        behaviours[b].enabled = false;
-                        _rigDisabled.Add(behaviours[b]);
-                        _rigDisabledSet.Add(behaviours[b]);
-                        disabled++;
-                    }
-                }
+                int disabled = Patches.RigVisualProbe.Enter(world);
                 Output(
-                    $"rigprobe: DISABLED {disabled} rig components ({_rigDisabled.Count} tracked; bench only)");
+                    $"rigprobe: DISABLED {disabled} rig components ({Patches.RigVisualProbe.Tracked} tracked; bench only)");
             }
             else
             {
-                int restored = RestoreRigProbe();
-                Output($"rigprobe: restored {restored} components");
+                Output($"rigprobe: restored {Patches.RigVisualProbe.Exit()} components");
             }
-        }
-
-        // Re-enable every tracked rig component and forget the tracking.
-        // Returns the number actually re-enabled (destroyed wrappers are skipped
-        // and still dropped, so the table cannot accumulate dead entries).
-        // A call with nothing tracked is a no-op, which is what makes a second
-        // `es rigon` and the config-driven release below the same operation.
-        static int RestoreRigProbe()
-        {
-            int restored = 0;
-            for (int i = 0; i < _rigDisabled.Count; i++)
-                if (_rigDisabled[i] != null) { _rigDisabled[i].enabled = true; restored++; }
-            _rigDisabled.Clear();
-            _rigDisabledSet.Clear();
-            return restored;
         }
 
         /// <summary>
@@ -381,9 +288,9 @@ namespace EfficientServer
         {
             int released = 0;
             if (Patches.AnimatorEmergency.Active && Patches.AnimatorEmergency.Exit()) released++;
-            if (_rigDisabled.Count > 0)
+            if (Patches.RigVisualProbe.Tracked > 0)
             {
-                RestoreRigProbe();
+                Patches.RigVisualProbe.Exit();
                 released++;
             }
             return released;
