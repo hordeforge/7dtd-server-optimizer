@@ -1,3 +1,18 @@
+// Goal: pin the shipped behavior of the game-type-free config surface
+// (ServerPerfConfig load / normalize / gate) plus the two pure seams the hot
+// patches read, TickIntervalEma and TickClock. These are the parts of the mod
+// that run before the game is loaded, so they are the parts a server operator
+// hits first and the only ones testable without a dedicated install.
+//
+// Method: every check is a fixture built from a documented expected value, not
+// from a previous run - clamp endpoints, sibling-linked invariants, fail-soft
+// IO branches, decision-table rows. Where a behavior is an invariant rather
+// than a constant (band nesting, hysteresis, tick-slot coverage) the assertion
+// states the property directly. Anything that cannot be built on this host
+// (POSIX mode bits, BOM-less encodings) prints SKIP instead of passing
+// silently, so an unexercised branch never reads as a covered one.
+// Companions: Fuzz.cs drives the same loader from hostile input.
+
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -81,6 +96,20 @@ namespace EfficientServer.Tests
             return LoadTemp(json);
         }
 
+        // "Config load failed [<CLR type name>], using defaults: <message>". Only
+        // the type name is asserted, not the OS-specific message text, so the
+        // check pins the shape operators grep for without pinning errno text.
+        static bool NamesExceptionType(string warning)
+        {
+            const string prefix = "Config load failed [";
+            const string suffix = "], using defaults: ";
+            if (!warning.StartsWith(prefix, StringComparison.Ordinal)) return false;
+            int close = warning.IndexOf(suffix, prefix.Length, StringComparison.Ordinal);
+            if (close < 0) return false;
+            string type = warning.Substring(prefix.Length, close - prefix.Length);
+            return type.EndsWith("Exception", StringComparison.Ordinal) && type.Length > "Exception".Length;
+        }
+
         // Discovery precedence of DefaultPathBesideAssembly: the packaged
         // Config/efficientserver.json must win over a legacy sibling file, and
         // with neither present the sibling path is returned so Load takes the
@@ -106,14 +135,21 @@ namespace EfficientServer.Tests
 
                 Directory.CreateDirectory(subDir);
                 weMadeSubDir = true;
-                File.WriteAllText(subPath, "{}");
-                File.WriteAllText(sibPath, "{}");
+                // Distinct values on each candidate: asserting the returned path
+                // alone would pass even if the precedence decision were never
+                // consulted, so probe the CONTENT that actually wins too.
+                File.WriteAllText(subPath, "{\"Server\":{\"TargetFps\":111}}");
+                File.WriteAllText(sibPath, "{\"Server\":{\"TargetFps\":112}}");
                 Check(ServerPerfConfig.DefaultPathBesideAssembly() == subPath,
                     "DefaultPathBesideAssembly: Config/efficientserver.json preferred over sibling");
+                Check(ServerPerfConfig.Load(ServerPerfConfig.DefaultPathBesideAssembly()).Server.TargetFps == 111,
+                    "DefaultPathBesideAssembly: the Config/ copy's values are the ones loaded");
                 File.Delete(subPath);
 
                 Check(ServerPerfConfig.DefaultPathBesideAssembly() == sibPath,
                     "DefaultPathBesideAssembly: sibling file picked up once Config/ copy is gone");
+                Check(ServerPerfConfig.Load(ServerPerfConfig.DefaultPathBesideAssembly()).Server.TargetFps == 112,
+                    "DefaultPathBesideAssembly: the sibling's values are the ones loaded");
                 File.Delete(sibPath);
 
                 var fresh = ServerPerfConfig.Load(ServerPerfConfig.DefaultPathBesideAssembly());
@@ -136,10 +172,15 @@ namespace EfficientServer.Tests
         // naming the failure), never escape as an exception out of dedicated
         // start. Self-skipping: on hosts that do not enforce the mode bits
         // (Windows) or accounts above them (root) the fixture stays readable,
-        // and the arrangement simply cannot be built there.
+        // and the arrangement simply cannot be built there. A skip still prints,
+        // so a run that asserted nothing here does not read as a covered branch.
         static void CheckUnreadableFileFailSoft()
         {
-            if (!OperatingSystem.IsLinux() && !OperatingSystem.IsMacOS()) return;
+            if (!OperatingSystem.IsLinux() && !OperatingSystem.IsMacOS())
+            {
+                Console.WriteLine("SKIP: unreadable-config-file branch (no POSIX mode bits on this OS)");
+                return;
+            }
             string p = WriteTemp("{\"Enabled\":false}");
             try
             {
@@ -156,8 +197,16 @@ namespace EfficientServer.Tests
                         var cfg = ServerPerfConfig.Load(p);
                         Check(cfg != null && cfg.Enabled,
                             "unreadable config file -> defaults (fail-soft like parse errors)");
-                        Check(EsLog.Warnings.Count == 1 && EsLog.Warnings[0].StartsWith("Config load failed ["),
+                        // The bracketed token is the exception type name the operator
+                        // greps for; require a plausible CLR type name in it, so a
+                        // message that dropped the type fails here instead of
+                        // passing on the prefix alone.
+                        Check(EsLog.Warnings.Count == 1 && NamesExceptionType(EsLog.Warnings[0]),
                             "unreadable config file -> one WARNING naming the exception type");
+                    }
+                    else
+                    {
+                        Console.WriteLine("SKIP: unreadable-config-file branch (mode bits not enforced for this account)");
                     }
                 }
                 finally
@@ -358,6 +407,25 @@ namespace EfficientServer.Tests
 
         static int Main()
         {
+            try
+            {
+                return RunChecks();
+            }
+            catch (Exception ex)
+            {
+                // A fixture that throws is a failure, not a crash: the run still
+                // exits non-zero, but it reports the same FAIL/count shape as any
+                // other red run instead of dumping a stack trace and skipping
+                // every check that never got reached.
+                Console.WriteLine("FAIL: harness aborted before the remaining checks: "
+                    + ex.GetType().Name + ": " + ex.Message);
+                Console.WriteLine("FAILED: " + (_failures + 1) + " check(s)");
+                return 1;
+            }
+        }
+
+        static int RunChecks()
+        {
             // Defaults.
             var d = new ServerPerfConfig();
             Check(d.Pathfinding.GraphUpdateEveryTicks == 4, "default GraphUpdateEveryTicks=4");
@@ -441,7 +509,7 @@ namespace EfficientServer.Tests
             Check(bad != null && bad.Enabled, "malformed json -> defaults");
             // The failure must surface on the WARNING channel (operators grep the
             // dedicated log for WARNING/ERROR; info-level config failures vanish).
-            Check(EsLog.Warnings.Count == 1 && EsLog.Warnings[0].StartsWith("Config load failed ["),
+            Check(EsLog.Warnings.Count == 1 && NamesExceptionType(EsLog.Warnings[0]),
                 "malformed json -> one WARNING naming the exception type");
 
             // Non-object value for a section key: deserialization throws ->
@@ -975,6 +1043,57 @@ namespace EfficientServer.Tests
             var dropOnly = LoadTemp("{\"Pathfinding\":{\"DropPathWhenFarDistSq\":2500}}");
             Check(dropOnly.FeatureActive("PathAdmission"),
                 "DropPathWhenFarDistSq 2500 with cap 0 -> PathAdmission active");
+
+            // Every FeatureActive arm null-guards its section, because ModApi calls it
+            // on a runtime config the loader can hand over with any section null
+            // (an explicit {"AiLod":null} in the operator file, or a section added
+            // without a backfill line). The guards are what keeps a null section a
+            // disabled patch group instead of an NRE during mod init, and no fixture
+            // above reaches them: KeyBenchGod is the only section-independent arm.
+            // The key list is read by reflection so a newly added constant cannot
+            // skip this sweep, and pinned by name so a rename or a dropped constant
+            // cannot silently shrink it either.
+            var featureKeys = typeof(ServerPerfConfig)
+                .GetFields(BindingFlags.Public | BindingFlags.Static)
+                .Where(f => f.IsLiteral && !f.IsInitOnly && f.FieldType == typeof(string)
+                    && f.Name.StartsWith("Key", StringComparison.Ordinal))
+                .Select(f => f.GetRawConstantValue())
+                .OfType<string>()
+                .OrderBy(k => k, StringComparer.Ordinal)
+                .ToList();
+            var expectedKeys = new[]
+            {
+                "AiLod", "AnimatorLod", "BenchGod", "ChunkSendThrottle", "ClientListSnapshot",
+                "CrowdCollisionLod", "EntityDistributionStride", "ExplosionParticles", "FastSend",
+                "Gc", "Governor", "GraphThrottle", "InitScanPool", "MoveThreshold", "PathAdmission",
+                "TargetFps", "TickGuard",
+            };
+            Check(featureKeys.SequenceEqual(expectedKeys),
+                "feature-key vocabulary pinned: " + string.Join(",", featureKeys));
+            // The null fixture must really be null, or the sweep below would pass
+            // on a default config and prove nothing.
+            var nullSections = new ServerPerfConfig
+            {
+                AiLod = null!, SkipOnDedicated = null!, DynamicMesh = null!, Gc = null!,
+                Pathfinding = null!, Network = null!, WorldTransfer = null!, Server = null!,
+                AnimatorLod = null!, CrowdCollisionLod = null!, Governor = null!,
+                TickGuard = null!, Diagnostics = null!,
+            };
+            Check(nullSections.AiLod == null && nullSections.Governor == null
+                && nullSections.Diagnostics == null,
+                "null-section fixture really holds null sections");
+            foreach (string key in featureKeys)
+            {
+                if (key == ServerPerfConfig.KeyBenchGod)
+                {
+                    Check(nullSections.FeatureActive(key, true),
+                        "null sections: BenchGod still reads the console flag (section-independent)");
+                    Check(!nullSections.FeatureActive(key, false),
+                        "null sections: BenchGod with the console flag off -> inactive");
+                    continue;
+                }
+                Check(!nullSections.FeatureActive(key), "null section: " + key + " -> fail closed");
+            }
 
             // Normalize bounds for the remaining knob groups, each with its own
             // range (floors differ: buffer 0, region-ms/syncs/stride 1). Exact
