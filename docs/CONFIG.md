@@ -380,8 +380,10 @@ OverBudget 30 / Healthy 27.
 
 ### `AnimatorEmergency` (false) / `EmergencyOverMs` (80, floor OverBudget+5)
 Tier 2 (opt-in, gameplay-affecting): when tier-1 throttling has not recovered the
-tick and the EMA is past `EmergencyOverMs`, disable ALL zombie animators - measured
-**~40% of the saturated 64-player frame** (fence check, RESULTS 3o). Combat timing
+tick and the EMA is past `EmergencyOverMs`, cull ALL zombie animators
+(`Animator.cullingMode = CullCompletely`, `enabled` left true) - the animator
+burden is measured at **~40% of the saturated 64-player frame** (fence check,
+RESULTS 3o). Combat timing
 degrades (timer-only attack cadence, no stagger, supplementary movement path) but
 nothing despawns and clients see no visual difference (zombie animation is
 client-local). Steps back down one tier at a time.

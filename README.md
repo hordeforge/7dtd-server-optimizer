@@ -69,7 +69,8 @@ CI runs `make test` on every PR and on pushes to main.
   zombies at 64 players (+58%).**
 - **TickGuard** (opt-in): last-resort shedding of the farthest zombies - a 522-zombie
   overload (3.5x the ceiling) recovered from 167 to 56 ms/frame autonomously.
-- **Governor tier 2 (opt-in):** during extreme overload, zombie animators off =
+- **Governor tier 2 (opt-in):** during extreme overload, zombie animators culled
+  (`cullingMode = CullCompletely`) =
   **~40% of the saturated 64-player frame** recovered (the frame is half main-thread
   job-fence waiting; animation jobs are the dominant fence source). Client-invisible;
   combat timing degrades; nothing despawns.

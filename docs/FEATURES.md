@@ -346,10 +346,15 @@ the hysteresis ordering (`HealthyMs` stays below `OverBudgetMs`), not the 50 ms
 figure (see [CONFIG](CONFIG.md)).
 
 **Tier 2 (v1.16.0, `Governor.AnimatorEmergency`, default off):** when throttling has
-not recovered the tick and the EMA exceeds `EmergencyOverMs` (80), disable ALL
-zombie animators - measured **~40% of the saturated 64-player frame** (147 -> 85 ms,
-the fence check: the animator burden at 64p is mostly main-thread JOB-FENCE waiting,
-which triples per zombie vs 24p). Combat timing degrades (timer-only attack cadence,
+not recovered the tick and the EMA exceeds `EmergencyOverMs` (80), cull ALL zombie
+animators (`Animator.cullingMode = CullCompletely`, `enabled` left true - see the
+v1.17.0 mechanism below; the original `enabled=false` form is refuted, RESULTS 3s).
+The animator burden is measured at **~40% of the saturated 64-player frame** (the
+fence check: at 64p it is mostly main-thread JOB-FENCE waiting, which triples per
+zombie vs 24p); the 147 -> 85 ms figure behind that share was measured on the
+refuted `enabled=false` form, and the CullCompletely rewrite's live re-measurement
+is 117.61 -> 99.53 ms at tick-bound 64p (RESULTS 'Live animator-emergency +
+path-admission validation'). Combat timing degrades (timer-only attack cadence,
 no stagger); nothing despawns, clients see no visual change. Steps down one tier at
 a time. Live-validated: full autonomous chain THROTTLED -> ANIMATOR EMERGENCY ->
 step-down + EXIT. See [`RESULTS.md`](RESULTS.md) §3i, §3o.

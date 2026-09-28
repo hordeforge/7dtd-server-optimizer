@@ -1,8 +1,11 @@
 # Plan: Animator CullCompletely emergency + path admission
 
-**Status:** built; light + stress gates PASS; human combat soak open  
-**Date:** 2026-07-28  
+**Status:** shipped in v1.17.0; light + stress gates PASS; human combat soak open
+(the open item that keeps `Governor.AnimatorEmergency` default-off)
+**Date:** 2026-07-28 (updated 2026-08-09 with the harness re-runs)
 **Targets:** EfficientServer (Harmony, net48)
+**Outcome ledger:** [`../RESULTS.md`](../RESULTS.md) §3t and
+'Live animator-emergency + path-admission validation'
 
 ## A. Animator emergency exit (CullCompletely)
 

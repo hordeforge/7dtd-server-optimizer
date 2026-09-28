@@ -290,7 +290,7 @@ Priority = (expected capacity or smoothness gain) x (evidence readiness) /
 |---:|---|---|---|---|
 | **1** | **Animator `CullCompletely` emergency** | **Built v1.17.0** (default-off) | Enter/exit + es animoff use CullCompletely | Human combat soak still required (dp check + A/B done 2026-08-09) |
 | **2** | **Path admission (A2)** under synthetic BM | **Built; measured 2026-08-07 default-off** | BM-ish 24p: cap=32+drop@50m **worsened** late ticks / UpdateTick; loadgen still 24/24 | Keep off; only revisit with path-queue telemetry + true BM director |
-| **3** | **Ops pack as first-class** | Docs + launch | ViewDistance, MaxSpawnedZombies, `GC_FREE_SPACE_DIVISOR`, `MONO_ENV_OPTIONS=-O=all` already validated | Publish recommended serverconfig matrix |
+| **3** | **Ops pack as first-class** | **Published**: [`serverconfig.optimized.xml`](../serverconfig.optimized.xml) + the matrix in [`PRODUCTION.md`](PRODUCTION.md) / [`HOST_TUNING.md`](HOST_TUNING.md) | ViewDistance, MaxSpawnedZombies, `GC_FREE_SPACE_DIVISOR`, `MONO_ENV_OPTIONS=-O=all` already validated | Keep the shipped values in step with measured ceilings |
 | **4** | **Chunk blob cache design** | Design + optional patch | Ownership closed (Setup on sim from SendChunks/RebuildTerrain); multi-observer join still pays N× encode | Byte-identical packages; invalidation on block edit / TE / density |
 | **5** | **Spatial interest + closest-player grid** | Large project | Only structural fix for 450-500p cliff | Client never missing in-range entities; removal correctness |
 | **6** | **ItemStack.Clone micro-patches (optional)** | Tiny patches only | **Triage closed** (162 sites; skip XUi; TE/inventory/net mass) | Inventory/loot soak; no dupe/desync; no global Prefix |
@@ -339,7 +339,7 @@ These are **not** "continue annotating all catalogued types". They are perf-spec
 | 1 | `ASPPathFinderThread` FindPaths drain: re-pin literal **8** + priority order | Still open (admission design polish) |
 | 2 | `Chunk.write` dirty/version stamp for blob-cache invalidation | Still open (design input for rank 4) |
 | 3 | `ItemStack.Clone` call-site triage (Xref + buckets) | **Closed 2026-08-06** in research items.md |
-| 4 | Animator spawn path (`cullingMode` / `applyRootMotion` on create) | Still open (supports CullCompletely + spawn hook) |
+| 4 | Animator spawn path (`cullingMode` / `applyRootMotion` on create) | **Closed 2026-08-23** without a spawn hook: `GovernorPatch` re-runs `AnimatorEmergency.Enter` as a periodic tier-2 sweep (§4.6) |
 | 5 | Interest removal package when player leaves entity set | Still open (spatial grid) |
 | 6 | Chunk encode ownership (who calls Setup / SendChunks) | **Closed 2026-08-06** in research world-chunks |
 
@@ -352,7 +352,7 @@ non-IL residual (Unity order, native LiteNet, Boehm internals).
 
 | Goal | Do this |
 |---|---|
-| Better BM at 64p | Keep governor + stride; finish animator CullCompletely; path admission if path backlog shows in APM |
+| Better BM at 64p | Keep governor + stride; the CullCompletely emergency and path admission are both built (default-off) and gated on the human combat soak / path-queue telemetry |
 | Better 128-500p | View distance + FastSend (done); only then spatial interest project |
 | Fewer hitches | Alloc upstream at **TE/inventory** Clone sites (not XUi); P4 opt-in long soak; GC headroom env |
 | Join less laggy | Chunk gen/load on sim, not P6 send cap; blob cache design (ownership known) |
@@ -360,8 +360,9 @@ non-IL residual (Unity order, native LiteNet, Boehm internals).
 
 **Bottom line:** stock + APM research already named the walls and exhausted safe
 Harmony headroom. Further research should be **lever-shaped** (section 5-7), not
-coverage-shaped. The optimizer's next product work is **animator emergency exit**
-and **path admission under BM**, with ops config as the free capacity dial.
+coverage-shaped. The optimizer's next product work is the unbuilt rows of section 5
+(spatial interest grid, chunk blob cache), with ops config as the free capacity
+dial; ranks 1 and 2 are built and wait on validation, not on design.
 
 ---
 

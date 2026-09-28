@@ -939,12 +939,13 @@ left - the cost is combat-fidelity-bound.
 1. **Spatial interest grid** - the highest ceiling: collapses the O(N^2.26/2.27)
    player-axis walls (450-500p death-spiral) toward linear. New subsystem; rewires
    `NetEntityDistribution` all-pairs interest + `GetClosestPlayer`; desync risk.
-2. **P4 `InitScan` array reuse** - kills the #1 large-alloc (megapause feeder), but the
-   alloc is inside the external `AstarPathfindingProject.dll` `<ScanInternal>d__21`
-   **iterator state machine** - a transpiler there is fragile; `LevelGridNode` is a
-   class so the per-node churn needs object reuse too.
-3. **Off-sim `Chunk.write` encode** - the chunk pipeline is 56-60% of tick, but moving
+2. **Off-sim `Chunk.write` encode** - the chunk pipeline is 56-60% of tick, but moving
    the 601-IL encode off the sim thread races world state.
+
+**P4 `InitScan` array reuse left this list on 2026-07-20:** it shipped that day as
+`InitScanPoolPatch` (v1.8.0, `Pathfinding.PoolInitScanNodes`, unsafe, default off)
+and is fully fidelity-validated (§3c, §3d): the alloc is eliminated, with no
+tick-time win.
 
 **Honest status:** the safe implementable win (#1) is shipped + validated. The rest
 are project-scale with real corruption/desync risk; the responsible path is one
