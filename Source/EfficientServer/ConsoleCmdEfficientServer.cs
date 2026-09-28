@@ -173,9 +173,9 @@ namespace EfficientServer
             // the audited refusal rather than a bare "no world" console line.
             if (sub == "animoff" && !ArmProbe("animoff")) return;
             World world = GameManager.Instance != null ? GameManager.Instance.World : null;
-            if (world == null) { SdtdConsole.Instance.Output(EsLog.LogPrefix + "no world"); return; }
             if (sub == "animoff")
             {
+                if (world == null) { SdtdConsole.Instance.Output(EsLog.LogPrefix + "no world"); return; }
                 Patches.AnimatorEmergency.Enter();
                 Output(
                     "animprobe: ENTER CullCompletely emergency "
@@ -185,7 +185,12 @@ namespace EfficientServer
             {
                 // Exit reports whether the restore actually ran; with no world
                 // loaded it keeps the saved modes and stays armed, so do not
-                // print an exit that has not happened.
+                // print an exit that has not happened. The world guard is NOT
+                // hoisted above this branch: it returned "no world" through the
+                // console-only sink, so an `es animon` issued between worlds (or
+                // before the first load) never reported the armed emergency the
+                // WARNING below exists for, and left the operator with a bare
+                // line that reads like a world problem, not a live cull.
                 if (Patches.AnimatorEmergency.Exit())
                     Output(
                         "animprobe: EXIT emergency; "

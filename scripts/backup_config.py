@@ -245,11 +245,13 @@ def serverconfig_files(server_root: Path) -> list[Path]:
 
 
 def template_keys(template: Path = TEMPLATE_JSON) -> frozenset[str]:
-    """Top-level keys the shipped template declares; a snapshot may not add more.
+    """Top-level keys the shipped template declares; a snapshot is reported against it.
 
     The mod's loader ignores unknown keys silently, so a typo'd key is a knob
     that quietly never applies. check_config_doc.py proves the template itself;
-    this only bounds a snapshot against it.
+    this only names, in `verify`, what a snapshot carries that the template does
+    not. A stray key is a note and not a failure: it neither blocks a restore
+    nor makes the snapshot unverifiable.
 
     One read per call, and the caller decides how many it makes: a loop over
     snapshots hoists this out rather than re-reading the same file per snapshot.
@@ -539,9 +541,9 @@ def prune(dest: Path, keep: int) -> list[Path]:
 def verify(dest: Path) -> list[str]:
     """Read every snapshot the way a restore would; return one string per failure.
 
-    Checks the bytes against the manifest sha256, then parses the file and bounds
-    its keys against the shipped template; each recorded serverconfig XML is
-    checked the same way. An empty or missing dest is reported as a failure:
+    Checks the bytes against the manifest sha256, then parses the file and notes
+    any key the shipped template does not declare; each recorded serverconfig XML
+    is checked the same way. An empty or missing dest is reported as a failure:
     "no backup exists" must never read as "backups are healthy".
     """
     dirs = snapshot_dirs(dest)
@@ -588,7 +590,20 @@ def verify(dest: Path) -> list[str]:
             continue
         stray = unknown_keys(doc, known)
         if stray:
-            problems.append(f"{d.name}: keys not in the shipped template: {sorted(stray)}")
+            # A NOTE, not a problem. The mod ignores a key the shipped template
+            # does not declare, and the bytes are preserved and hashed either
+            # way, so a snapshot carrying one still restores exactly what was
+            # live. Reporting it here made the warning snapshot() prints ("they
+            # are preserved verbatim") a lie: the same condition failed the
+            # read-back, snapshot() deleted what it had just published, and the
+            # run exited nonzero. On a host whose config carries one
+            # operator-added knob that is permanent, and --verify, documented to
+            # run on a schedule, would report the whole set unhealthy forever.
+            print(
+                f"NOTE: {d.name}: keys not in the shipped template: {sorted(stray)}"
+                " (preserved verbatim; the mod ignores them)",
+                file=sys.stderr,
+            )
         problems.extend(_verify_serverconfigs(d, manifest))
     return problems
 
@@ -705,6 +720,18 @@ def restore(
         raise BackupError(msg)
     if item == ALL_ITEMS:
         return _restore_all(src, to, force=force)
+    # --item names one file beside the config inside the snapshot, so it takes
+    # the same bare-name rule as the stamp above. Joined unchecked,
+    # `--item ../elsewhere/x.json` passed `(src / item).is_file()` and was
+    # copied: verification keys on the snapshot's own files, and a traversing
+    # item names one no check ever looked at, yet the printed `cp` handed the
+    # operator an install command for it.
+    if item != Path(item).name or item in ("", ".", ".."):
+        msg = (
+            f"'{item}' is not a file name inside a snapshot; --item takes a bare"
+            f" name under {src} (one of: {', '.join(_snapshot_files(src)) or 'none'})"
+        )
+        raise BackupError(msg)
     if not (src / item).is_file():
         available = ", ".join(_snapshot_files(src)) or "none"
         msg = f"snapshot '{stamp}' has no file '{item}' (have: {available})"
@@ -858,7 +885,27 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
 
 
 def default_server_root() -> Path:
-    return Path(os.environ.get("SEVENDTD_DS_DIR") or os.environ.get("DS") or "").expanduser()
+    """The dedicated install root to snapshot, or a BackupError naming why not.
+
+    An EXPORTED-BUT-EMPTY value is refused, not treated as unset: the same guard
+    install.sh, uninstall.sh, run_server.sh and harness_common carry, because
+    this tool copies an install the operator named and a mistyped
+    ``SEVENDTD_DS_DIR=`` that fell through to another candidate would back up the
+    wrong tree.
+    """
+    for var in ("SEVENDTD_DS_DIR", "DS"):
+        if var in os.environ and not os.environ[var].strip():
+            msg = f"{var} is set but empty; pass a real install dir or unset it"
+            raise BackupError(msg)
+    raw = os.environ.get("SEVENDTD_DS_DIR") or os.environ.get("DS") or ""
+    # The emptiness test is on the raw value, never on the Path: Path("") renders
+    # as ".", so a truthiness test on the rendered root could never see it and
+    # the caller's "no server install root" guard was unreachable, leaving an
+    # unnamed run to snapshot whatever the working directory happens to be.
+    if not raw.strip():
+        msg = "no server install root: set SEVENDTD_DS_DIR (or DS) to the dedicated install"
+        raise BackupError(msg)
+    return Path(raw).expanduser()
 
 
 def _run(argv: list[str]) -> int:
@@ -905,9 +952,6 @@ def _dispatch(args: argparse.Namespace) -> int:
             print("  restart the server   # the game reads serverconfig.xml at boot")
         return 0
     server_root = default_server_root()
-    if not str(server_root):
-        msg = "no server install root: set SEVENDTD_DS_DIR (or DS) to the dedicated install"
-        raise BackupError(msg)
     target, _ = snapshot(server_root, dest, keep=args.keep)
     print(f"Snapshot -> {target}")
     covered = _snapshot_files(target)
