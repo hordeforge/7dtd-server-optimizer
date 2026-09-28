@@ -322,11 +322,13 @@ namespace EfficientServer.Tests
         }
 
         // Dotted leaf paths derived from the config schema itself, so newly added
-        // knobs join the fuzz corpus automatically instead of drifting stale.
+        // knobs join the fuzz corpus automatically instead of drifting stale. The
+        // binding surface is ServerPerfConfig.ConfigProperties, the same one the
+        // loader walks, so the static load state can never be mistaken for a knob.
         static List<string[]> ReflectedLeaves()
         {
             var leaves = new List<string[]>();
-            foreach (var top in typeof(ServerPerfConfig).GetProperties())
+            foreach (var top in ServerPerfConfig.ConfigProperties)
             {
                 if (top.PropertyType == typeof(bool) || top.PropertyType == typeof(int))
                 {
@@ -347,7 +349,7 @@ namespace EfficientServer.Tests
         static List<string> ReflectedSections()
         {
             var names = new List<string>();
-            foreach (var top in typeof(ServerPerfConfig).GetProperties())
+            foreach (var top in ServerPerfConfig.ConfigProperties)
                 if (top.PropertyType.IsClass
                     && top.PropertyType.Namespace == typeof(ServerPerfConfig).Namespace)
                     names.Add(top.Name);

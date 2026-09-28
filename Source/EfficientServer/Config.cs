@@ -436,6 +436,13 @@ namespace EfficientServer
         static bool IsConfigSectionType(Type t) =>
             t.IsClass && t != typeof(string) && t.Namespace == typeof(ServerPerfConfig).Namespace;
 
+        // The properties a config document binds: PUBLIC INSTANCE only. The static
+        // surface (Current, Load, LastLoadFailed) is load state and behavior, not a
+        // knob, and no serialized defaults object carries it. One definition, so the
+        // loader's walkers and the fuzz's reflection cannot drift apart on it.
+        internal static IEnumerable<PropertyInfo> ConfigProperties =>
+            typeof(ServerPerfConfig).GetProperties(BindingFlags.Public | BindingFlags.Instance);
+
         /// <summary>
         /// JSON null for a section binds as a null reference; rebuild every such
         /// knob group from its built-in default so no downstream code can hit a
@@ -445,8 +452,7 @@ namespace EfficientServer
         /// </summary>
         static void BackfillNullSections(ServerPerfConfig c)
         {
-            foreach (PropertyInfo prop in typeof(ServerPerfConfig)
-                .GetProperties(BindingFlags.Public | BindingFlags.Instance))
+            foreach (PropertyInfo prop in ConfigProperties)
             {
                 if (!IsConfigSectionType(prop.PropertyType)) continue;
                 if (prop.GetValue(c) != null) continue;
@@ -490,6 +496,8 @@ namespace EfficientServer
                 // compiles the same file with Nullable enabled, where a null
                 // would trip CS8600.
                 bool bound = false;
+                // `type` is always a section here: the top call passes
+                // ServerPerfConfig, every recursive one a matched section property.
                 foreach (PropertyInfo candidate in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
                 {
                     if (!string.Equals(candidate.Name, prop.Name, StringComparison.OrdinalIgnoreCase))
