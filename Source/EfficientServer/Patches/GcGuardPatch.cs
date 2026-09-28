@@ -108,7 +108,11 @@ namespace EfficientServer.Patches
             if (frac <= 0f || float.IsNaN(frac)) frac = 0.5f;
             if (frac > 0.95f) frac = 0.95f;
             int hostMB = UnityEngine.SystemInfo.systemMemorySize; // host physical RAM in MB
-            return hostMB > 0 ? (long)(hostMB * frac) : 0L;
+            // The product in double: `hostMB * frac` in binary float rounds
+            // before the truncating cast (a 64 GB host times 0.95 is not
+            // representable), so the ceiling came out a fraction of an MB below
+            // the fraction of RAM the operator asked for.
+            return hostMB > 0 ? (long)(hostMB * (double)frac) : 0L;
         }
     }
 }

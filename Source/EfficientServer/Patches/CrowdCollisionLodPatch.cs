@@ -34,9 +34,20 @@ namespace EfficientServer.Patches
     {
         const int AliveEntityLayerBit = 1 << 15;
 
+        // "The prefix stripped nothing" sentinel for Harmony's __state. It must be
+        // a value no SAVED mask can equal, or the finalizer skips the restore and
+        // the stripped layer bit leaks for the life of the process. A Unity
+        // "Everything" LayerMask is -1 (0xFFFFFFFF, bit 15 set), so the obvious -1
+        // sentinel was exactly one: any motor configured to collide with every
+        // layer saved __state = -1 and read back as "nothing stripped". int.MinValue
+        // has bit 15 CLEAR, and a mask is only ever saved after the
+        // `(mask & AliveEntityLayerBit) != 0` check below, so the two sets are
+        // provably disjoint.
+        const int NoStrip = int.MinValue;
+
         static void Prefix(Entity __instance, out int __state)
         {
-            __state = -1;
+            __state = NoStrip;
             CrowdCollisionLodConfig cfg = ModApi.Config != null ? ModApi.Config.CrowdCollisionLod : null;
             if (!ModApi.ShouldRun() || cfg == null || !cfg.Enabled)
                 return;
@@ -72,7 +83,7 @@ namespace EfficientServer.Patches
 
         static void Finalizer(Entity __instance, int __state)
         {
-            if (__state < 0)
+            if (__state == NoStrip)
                 return;
             var cck = __instance.m_characterController as CharacterControllerKinematic;
             KinematicCharacterMotor motor = cck != null ? cck.motor : null;

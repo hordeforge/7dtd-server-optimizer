@@ -20,11 +20,12 @@ namespace EfficientServer.Patches
         // Frames between re-checks (~10 s at the vanilla 20 fps, ~3 s at 60).
         const uint FramesPerRecheck = 200;
 
-        // uint so the cadence survives the signed wrap: this counter is the only
-        // driver of the periodic re-apply, and a 60 fps server crosses 2^31
-        // frames in ~10 hours, after which a signed `_frames % 200` runs
-        // negative and the 200-frame spacing is scrambled for a window. Same
-        // wrap-safe cursor convention as TickClock.OwnsSlot.
+        // uint so the counter is a pure repeating sequence: this counter is the
+        // only driver of the periodic re-apply, and a 60 fps server crosses 2^32
+        // frames in ~2 years, after which a signed counter would go negative and
+        // a `% 200` cursor on it would phase-flip. The modulo result itself is
+        // already wrap-invariant, so the type is belt-and-braces rather than the
+        // load-bearing part. Same cursor convention as TickClock.OwnsSlot.
         static uint _frames;
 
         static void Postfix()

@@ -61,8 +61,24 @@ def modinfo_version(path: Path) -> str | None:
     return m.group(1) if m else None
 
 
+# Longest spelling the gates see: AssemblyVersion "X.Y.Z.W" (ModInfo is X.Y.Z).
+_VERSION_PARTS = 4
+
+
 def norm(v: str) -> tuple[int, ...]:
-    return tuple(int(x) for x in v.split("."))
+    """Version as a fixed-width component tuple, so a short form compares equal
+    to its padded one.
+
+    Bare `tuple(int(x) for x in v.split("."))` made `1.20` and `1.20.0` DIFFERENT
+    versions: `(1, 20) < (1, 20, 0)`, so the release-list gate accepted a
+    changelog carrying both, and `norm(mi) != norm(asm)[: len(norm(mi))]`
+    truncated the assembly version instead of padding it, reading a real
+    `1.17.0.5` assembly as the `1.17.0` manifest. Padding every version to the
+    four components the longest spelling uses (ModInfo X.Y.Z, AssemblyVersion
+    X.Y.Z.W) makes the trailing zeros cosmetic on both sides.
+    """
+    parts = [int(x) for x in v.split(".")]
+    return tuple(parts + [0] * (_VERSION_PARTS - len(parts)))
 
 
 # `## [1.19.0] - 2026-09-20` is a released section; `## [Unreleased]` is the
@@ -227,16 +243,21 @@ def _selftest() -> int:
             modinfo_version(no_version) is None,
         )
 
-    t.check("norm splits numeric parts", norm("1.17.0") == (1, 17, 0))
+    t.check("norm splits numeric parts", norm("1.17.0") == (1, 17, 0, 0))
     # The shipped pair: ModInfo "1.17.0" vs AssemblyVersion "1.17.0.0". The
-    # comparison in main() truncates the assembly tuple to the ModInfo length;
-    # pin both the equal and the drifted outcome of exactly that expression.
+    # trailing ".0" is cosmetic, and a 4th component that is NOT zero is a real
+    # drift, not something truncation hides.
     mi_v, asm_v = "1.17.0", "1.17.0.0"
-    t.check("norm treats trailing .0 as cosmetic", norm(mi_v) == norm(asm_v)[: len(norm(mi_v))])
+    t.check("norm treats trailing .0 as cosmetic", norm(mi_v) == norm(asm_v))
+    t.check(
+        "norm exposes a real fourth-component mismatch",
+        norm(mi_v) != norm("1.17.0.5"),
+    )
+    t.check("norm pads a short version to a comparable width", norm("1.20") == norm("1.20.0"))
     other_mi, other_asm = "1.18.0", "1.17.0.0"
     t.check(
         "norm exposes a real version mismatch",
-        norm(other_mi) != norm(other_asm)[: len(norm(other_mi))],
+        norm(other_mi) != norm(other_asm),
     )
 
     # The release-list gate, on synthetic changelogs: the repo gate above only
@@ -274,6 +295,13 @@ def _selftest() -> int:
     t.check(
         "_changelog_fails rejects a repeated release section",
         any("repeats" in f for f in _changelog_fails(repeated, "1.19.0")),
+    )
+    # Same release, two spellings: `1.20` and `1.20.0` are one version, so the
+    # list repeats itself and the newer one is not strictly above the older.
+    respelled = "## [1.20.0] - 2026-09-20\n\nx\n\n## [1.20] - 2026-09-19\n\nx\n"
+    t.check(
+        "_changelog_fails rejects a release section repeated under another spelling",
+        any("repeats" in f for f in _changelog_fails(respelled, "1.20.0")),
     )
     ascending = "## [1.18.0] - 2026-09-11\n\nx\n\n## [1.19.0] - 2026-09-20\n\nx\n"
     t.check(
@@ -385,7 +413,7 @@ def main() -> int:
 
     if mi and asm:
         # trailing ".0" parts in the 4-part assembly version are cosmetic
-        if norm(mi) != norm(asm)[: len(norm(mi))]:
+        if norm(mi) != norm(asm):
             fails.append(f"ModInfo {mi} != AssemblyInfo {asm}")
     if di and mi and norm(di) != norm(mi):
         fails.append(f"dist ModInfo {di} != source ModInfo {mi}")

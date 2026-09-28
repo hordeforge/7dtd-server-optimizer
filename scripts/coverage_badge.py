@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import sys
 import xml.etree.ElementTree as ET
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from pathlib import Path
 
 from selftest_support import Checks
@@ -61,6 +62,20 @@ def badge(pct: int, fill: str) -> str:
     )
 
 
+def percent(line_rate: str) -> int:
+    """The badge percentage for a cobertura `line-rate`.
+
+    Decimal, not float: `round(0.895 * 100)` in binary floating point is
+    round(89.49999999999999) = 89, so a report of exactly 89.5% rendered one
+    point low and dropped the badge from the green band into orange. Decimal
+    reads the decimal literal the report already is, and ROUND_HALF_UP settles
+    the tie deterministically instead of leaving it to binary representation.
+    """
+    return int(
+        (Decimal(line_rate) * 100).quantize(Decimal(1), rounding=ROUND_HALF_UP)
+    )
+
+
 def main(argv: list[str]) -> int:
     if len(argv) != 3:
         print(
@@ -82,14 +97,14 @@ def main(argv: list[str]) -> int:
         )
         return 1
     try:
-        pct = round(float(root.get("line-rate", "0")) * 100)
-    except ValueError as ex:
+        pct = percent(root.get("line-rate", "0"))
+    except InvalidOperation:
         # A non-numeric line-rate ("" or an empty element attribute) must not
         # render as a 0% red shield: that is a silent, wrong badge, the exact
         # failure this script exists to prevent.
         print(
             f"FAIL: {argv[1]} has a non-numeric line-rate "
-            f"({root.get('line-rate')!r}): {ex}",
+            f"({root.get('line-rate', '0')!r})",
             file=sys.stderr,
         )
         return 1
@@ -139,6 +154,20 @@ def _selftest() -> int:
     t.check("badge paints the value rect with the fill colour", 'fill="#97ca00"' in svg)
     t.check("badge uses the fixed 64+36 layout", 'width="100" height="20"' in svg)
 
+    # Percentage conversion, including the ties a binary float got wrong:
+    # float(0.895) * 100 is 89.49999999999999, so the old float path rounded a
+    # report of exactly 89.5% down to 89 and out of the green band.
+    for rate, want_pct, label in (
+        ("0.9234", 92, "ordinary rate rounds to nearest"),
+        ("0.895", 90, "exact 89.5 tie rounds up, not down to 89"),
+        ("0.705", 71, "exact 70.5 tie rounds up"),
+        ("0.9", 90, "90% stays in the green band"),
+        ("0.89999", 90, "just under 90% rounds into the band"),
+        ("1", 100, "full coverage"),
+        ("0", 0, "zero coverage"),
+    ):
+        t.check(f"percent: {label}", percent(rate) == want_pct)
+
     with tempfile.TemporaryDirectory(prefix="es-badge-test.") as td:
         out = Path(td) / "badge.svg"
         report = Path(td) / "coverage.cobertura.xml"
@@ -148,13 +177,19 @@ def _selftest() -> int:
         )
         rc = main([sys.argv[0], str(report), str(out)])
         text = out.read_text(encoding="utf-8")
-        # round(0.9234 * 100) == 92 -> green band (>= 90).
+        # percent(0.9234) == 92 -> green band (>= 90).
         t.check("main exits 0 on a well-formed report", rc == 0)
         t.check("main renders the rounded percentage", 'coverage: 92%' in text)
         t.check(
             "main picks the band colour for 92",
             'fill="#4c1"' in text,
         )
+        # A non-numeric line-rate must fail loudly, not render a badge from
+        # whatever the conversion produced.
+        junk = Path(td) / "junk.cobertura.xml"
+        junk.write_text('<coverage line-rate="n/a"></coverage>', encoding="utf-8")
+        rc_junk = main([sys.argv[0], str(junk), str(out)])
+        t.check("main rejects a non-numeric line-rate", rc_junk == 1)
         # A report without line-rate must read as 0% red, not crash or lie.
         bare = Path(td) / "bare.cobertura.xml"
         bare.write_text("<coverage></coverage>", encoding="utf-8")
