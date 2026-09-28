@@ -21,6 +21,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using EfficientServer.Patches;
 
@@ -107,16 +108,58 @@ namespace EfficientServer.Tests
         // only resolves from one build layout. Returns null when the harness
         // runs outside the source tree (a bare published copy of this binary),
         // and the caller SKIPs instead of passing on an absent file.
-        static string? ConfigTemplatePath()
+        static string? ConfigTemplatePath() => FindRepoFile("config", "efficientserver.json");
+
+        // Project-root-relative lookup by walking up from this binary, so a
+        // check against a shipped file resolves from any build layout and from
+        // a worktree, and reports "absent" (null) instead of throwing when the
+        // harness runs outside the source tree.
+        static string? FindRepoFile(params string[] relativeParts)
         {
             var dir = new DirectoryInfo(AppContext.BaseDirectory);
             while (dir != null)
             {
-                string candidate = Path.Combine(dir.FullName, "config", "efficientserver.json");
+                string candidate = Path.Combine(new[] { dir.FullName }.Concat(relativeParts).ToArray());
                 if (File.Exists(candidate)) return candidate;
                 dir = dir.Parent;
             }
             return null;
+        }
+
+        // The EsLog stub above REPLACES the mod's real logging class, so every
+        // "a warning was (not) emitted" assertion in this suite is only as
+        // truthful as the mirror. Nothing in the build links the two, so pin the
+        // contract they must agree on by reading the real source: the severity
+        // members the stub switches on, and the Emit signature Config.cs calls.
+        // A rename or a reshaped signature then fails here instead of leaving
+        // this project compiling against a shape the net48 build no longer has
+        // (or, worse, compiling while the checks silently watch a different
+        // channel set). Self-skipping outside the source tree.
+        static void CheckLogStubFidelity()
+        {
+            string? real = FindRepoFile("Source", "EfficientServer", "EsLog.cs");
+            if (real == null)
+            {
+                Console.WriteLine("SKIP: EsLog stub fidelity (no source tree above this binary)");
+                return;
+            }
+            string src = File.ReadAllText(real, Encoding.UTF8);
+
+            Match enumMatch = Regex.Match(src, @"enum\s+LogLevel\s*\{(?<body>[^}]*)\}");
+            Check(enumMatch.Success, "real EsLog.cs still declares enum LogLevel");
+            if (enumMatch.Success)
+            {
+                // Members may carry an explicit value or an attribute; the name is
+                // the part the stub's switch has to know about.
+                var realMembers = Regex.Matches(enumMatch.Groups["body"].Value, @"[A-Za-z_][A-Za-z0-9_]*")
+                    .Cast<Match>().Select(m => m.Value).OrderBy(n => n, StringComparer.Ordinal).ToList();
+                var stubMembers = Enum.GetNames(typeof(LogLevel)).OrderBy(n => n, StringComparer.Ordinal).ToList();
+                Check(realMembers.SequenceEqual(stubMembers),
+                    "EsLog stub declares the same LogLevel members as the real class (stub: "
+                    + string.Join(",", stubMembers) + "; real: " + string.Join(",", realMembers) + ")");
+            }
+            Check(Regex.IsMatch(src, @"static\s+void\s+Emit\s*\(\s*LogLevel\s+\w+\s*,\s*string\s+\w+\s*\)"),
+                "real EsLog.Emit keeps the (LogLevel, string) signature Config.cs calls");
         }
 
         // A JSON document naming EVERY public property of ServerPerfConfig and of
@@ -304,7 +347,7 @@ namespace EfficientServer.Tests
             const int Generations = 20000;
             const int Readers = 4;
             bool[] readerOk = new bool[Readers];
-            long reads = 0;
+            long[] readerReads = new long[Readers];
 
             // Seed the holder with a writer-shaped generation before any thread
             // runs. ConfigPublication's static initializer publishes built-in
@@ -318,12 +361,21 @@ namespace EfficientServer.Tests
             seed.Enabled = true;
             ConfigPublication.Current = seed;
             var stop = new ManualResetEventSlim(false);
+            // Every reader parks here before the writer starts, and the writer
+            // waits for all of them. Without the barrier a writer that finishes
+            // its 20000 stores before a reader thread is ever scheduled leaves
+            // that reader seeing stop already set, sampling nothing, and failing
+            // the "readers actually sampled" check below on a fast or loaded
+            // host. Each reader has signalled, so each reader is guaranteed at
+            // least one sample no matter how the host schedules them.
+            var readersParked = new CountdownEvent(Readers);
 
             // Writer: publish a config whose nested Pathfinding section carries a
             // marker unique to its generation, with Enabled flipped on alternate
             // generations so a stale top-level field is distinguishable too.
             var writer = new Thread(() =>
             {
+                readersParked.Wait();
                 for (int gen = 0; gen < Generations; gen++)
                 {
                     var cfg = new ServerPerfConfig();
@@ -343,6 +395,9 @@ namespace EfficientServer.Tests
                 {
                     bool ok = true;
                     long seen = 0;
+                    // Parked before the first sample so the writer cannot finish
+                    // before this reader has looked at the holder even once.
+                    readersParked.Signal();
                     // Read until the writer has published its last generation, then
                     // take one more sample so every reader is guaranteed to have run.
                     while (!stop.IsSet)
@@ -360,7 +415,7 @@ namespace EfficientServer.Tests
                         seen++;
                     }
                     readerOk[id] = ok;
-                    Interlocked.Add(ref reads, seen);
+                    readerReads[id] = seen;
                 });
                 readerThreads[r].IsBackground = true;
             }
@@ -371,8 +426,15 @@ namespace EfficientServer.Tests
             writer.Join();
             for (int r = 0; r < Readers; r++) readerThreads[r].Join();
 
-            Check(Interlocked.Read(ref reads) > 0,
-                "config publication: concurrent readers actually sampled the holder");
+            // Per reader, not summed: an aggregate "somebody sampled" passes even
+            // when three of the four reader threads were never scheduled before
+            // the writer finished, which is exactly the scheduling the barrier
+            // above removes.
+            for (int r = 0; r < Readers; r++)
+                Check(readerReads[r] > 0,
+                    "config publication: reader " + r + " actually sampled the holder");
+            Check(readerReads.Sum() > 0,
+                "config publication: readers sampled a published generation, not just the seed");
             for (int r = 0; r < Readers; r++)
                 Check(readerOk[r],
                     $"config publication: reader {r} never saw a null or half-built config");
@@ -443,6 +505,15 @@ namespace EfficientServer.Tests
                 "ThrottleLever doubles past the int-overflow boundary instead of wrapping negative");
             Check(GovernorTiers.ThrottleLever(int.MaxValue, 2000000000) == 2000000000,
                 "ThrottleLever caps int.MaxValue at the ceiling rather than wrapping negative");
+            // The lever ceilings ARE the Normalize ceilings, by contract ("so the
+            // two sites cannot drift"). Pin the shared constants against the same
+            // endpoints the clamp fixtures above load, so a constant edited on one
+            // side alone fails here.
+            Check(ServerPerfConfig.EntityStrideMax == 4 && ServerPerfConfig.GraphUpdateMax == 200,
+                "throttle ceilings match the Normalize endpoints (stride 4, graph cadence 200)");
+            Check(t.EffectiveEntityStride(1) <= ServerPerfConfig.EntityStrideMax
+                && t.EffectiveGraphEvery(1) <= ServerPerfConfig.GraphUpdateMax,
+                "no throttled lever exceeds its shared ceiling constant");
 
             // Tier 2 and its periodic rig sweep.
             GovernorConfig em = GovCfg(true, 0);
@@ -480,6 +551,14 @@ namespace EfficientServer.Tests
             Check(r2.ApplyReloadedConfig(GovCfg(false, 0), true) && r2.Level == 1,
                 "AnimatorEmergency off mid-emergency releases the rigs but keeps throttling");
             Check(r2.EffectiveEntityStride(1) == 2, "tier 1 throttles stay in force after that step-down");
+            // Governor switched off entirely while standing in tier 1: nothing to
+            // release (no rigs are held below tier 2), so the stand-down reports
+            // false but MUST still drop the tier, or the throttles outlive the
+            // config that asked for them.
+            Check(!r2.ApplyReloadedConfig(em2, false) && r2.Level == 0,
+                "a governor disabled from tier 1 stands down without claiming a rig release");
+            Check(r2.EffectiveEntityStride(1) == 1 && r2.EffectiveGraphEvery(200) == 200,
+                "both levers read as configured after a tier-1 stand-down");
 
             // World change: every window and the tier describe the world that just
             // unloaded, so the machine re-bases instead of carrying them over. A
@@ -918,6 +997,14 @@ namespace EfficientServer.Tests
                 if (EfficientServer.Patches.TickClock.OwnsCurrentSlot(0, 4) != expected) cycleHeld = false;
             }
             Check(cycleHeld, "tick clock Advance/OwnsCurrentSlot track consecutive ticks from the zero seed");
+            // Liveness is a latch: a later Advance must never clear it, or a
+            // consumer that gates on Alive would fall back to vanilla mid-run
+            // while the clock keeps ticking.
+            for (int t = 13; t <= 256; t++) EfficientServer.Patches.TickClock.Advance();
+            Check(EfficientServer.Patches.TickClock.Alive,
+                "tick clock liveness stays latched across further advances");
+            Check(EfficientServer.Patches.TickClock.Ticks == 256,
+                "every advance steps the counter exactly once (no skipped or doubled ticks)");
             // Signed-wrap boundary via the uint cast: with id=2 and stride=3 the
             // sums 2+(int.MaxValue-1), 2+int.MaxValue, 2+int.MinValue cross zero as
             // unsigned values 2147483648..50, whose residues mod 3 are 2, 0, 1 -
@@ -1048,6 +1135,7 @@ namespace EfficientServer.Tests
 
             // Discovery + IO-failure branches of the load path itself, which no
             // string-level fixture reaches (they all go through LoadTemp):
+            CheckLogStubFidelity();
             CheckDefaultPathDiscovery();
             CheckUnreadableFileFailSoft();
             CheckCrossThreadConfigPublication();
