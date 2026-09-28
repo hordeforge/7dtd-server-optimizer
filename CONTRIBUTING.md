@@ -44,6 +44,23 @@ make test                                  # before opening the PR; same gates a
 Run `make test` itself before pushing: it is the only thing that proves the
 three agree with each other.
 
+### One check at a time
+
+`make unit` runs the whole C# harness. While chasing a single failure, select
+the check by its name instead. The pattern is a case-insensitive `*` glob
+against the check's own description, so a word selects every check mentioning
+it and a pair of stars narrows a family. Quote it, or the shell eats the stars.
+
+```bash
+make unit-list                          # every check name, one per line
+make unit FILTER='*endpoints*'          # only the matching checks
+make unit FILTER=Governor               # unquoted is fine: no wildcard
+```
+
+A pattern that matches nothing exits 1 and says so, instead of reporting a
+clean run. `make unit-list` always exits 0 and asserts nothing. Neither is used
+by `make test` or CI, which still run the full suite.
+
 For game-facing changes, rebuild against your dedicated install and follow the
 evidence loop in [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md): one feature
 group at a time, baseline loadgen/APM capture, change, re-measure, gameplay

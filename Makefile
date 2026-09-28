@@ -46,7 +46,7 @@ RUFF_VERSION := 0.16.4
 # diverges between versions, so the type gate must be identical on both sides.
 MYPY_VERSION := 2.1.0
 
-.PHONY: help build build-mcs test lint unit check-scripts preflight-lint preflight-unit \
+.PHONY: help build build-mcs test lint unit unit-list check-scripts preflight-lint preflight-unit \
 	preflight-scripts scratch coverage install uninstall run clean package verify-reproducible \
 	backup-config
 # Every gate that can reach Python's tempfile, .NET's Path.GetTempPath or
@@ -70,6 +70,10 @@ help:
 	@echo "  make unit              Config.Load/Normalize harness (Source/EfficientServer.Tests)"
 	@echo "  make check-scripts     Python gates: config doc/version, repo_root,"
 	@echo "                         cfg guard and coverage badge (needs python3 only)"
+	@echo
+	@echo "  Single check in the unit harness (quote a '*' so the shell keeps it):"
+	@echo "  make unit FILTER='Governor*'   Only matching checks; no match exits 1"
+	@echo "  make unit-list                  List the check names a FILTER can match"
 	@echo
 	@echo "  make clean             Remove dist/ and bin/obj build outputs"
 	@echo "  make coverage          Run the unit suite under dotnet-coverage into"
@@ -158,9 +162,23 @@ lint: preflight-lint scratch
 
 # Locked restore: fails when a PackageReference changed without regenerating
 # packages.lock.json, instead of silently floating to newer versions.
+#
+# FILTER selects one check while debugging: `make unit FILTER=Governor*`
+# (quote it if the shell would glob) runs only the checks whose description
+# matches. A filter that matches nothing exits 1 rather than reporting a clean
+# run. `make test` and CI never set it, so the gate still runs everything.
+UNIT_ARGS := $(if $(FILTER),-- --filter "$(FILTER)",)
 unit: preflight-unit scratch
 	dotnet restore --locked-mode $(ROOT)/Source/EfficientServer.Tests
-	dotnet run --project $(ROOT)/Source/EfficientServer.Tests -c Release --no-restore
+	dotnet run --project $(ROOT)/Source/EfficientServer.Tests -c Release --no-restore $(UNIT_ARGS)
+
+# Check names, one per line, for picking a FILTER. Runs the suite to reach the
+# checks, so it costs a unit run, but it asserts nothing and always exits 0.
+# The recipe is silenced (unlike the other targets) because the whole point is
+# a pipeable name list: `make unit-list | grep Governor`.
+unit-list: preflight-unit scratch
+	@dotnet restore --locked-mode $(ROOT)/Source/EfficientServer.Tests >/dev/null
+	@dotnet run --project $(ROOT)/Source/EfficientServer.Tests -c Release --no-restore -- --list $(if $(FILTER),--filter "$(FILTER)",)
 
 check-scripts: preflight-scripts scratch
 # Stdlib-only syntax gate for the scripts these targets never execute

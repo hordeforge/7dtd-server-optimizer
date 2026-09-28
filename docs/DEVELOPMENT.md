@@ -78,6 +78,8 @@ Change **one group at a time**, then re-measure.
    also runs in CI on every PR and on pushes to main (.github/workflows/ci.yml)
    Narrower loop while editing: make lint (scripts), make unit (the C# harness),
    make check-scripts (doc/version gates). 'make test' is those three in order.
+   One harness check at a time: make unit FILTER='<glob>' (names from
+   make unit-list).
 1. Baseline: 7dtd-loadgen workload + 7dtd-server-apm capture
 2. Edit one feature group (config and/or patch code)
 3. Rebuild and install against current dedicated Managed

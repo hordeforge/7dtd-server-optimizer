@@ -31,11 +31,113 @@ namespace EfficientServer.Tests
     {
         static int _failures;
 
+        // Selection for the edit-test loop. A check whose description does not
+        // match _matcher is neither judged nor counted, so one fixture can be
+        // rerun while debugging without the rest of the suite's noise.
+        // _selected counts the checks a filter kept: zero means the
+        // contributor typed a pattern that matches nothing, which must be a
+        // red run, not a silent pass. _list prints descriptions instead of
+        // judging them, and is how the names to filter on are discovered.
+        static CheckPattern? _matcher;
+        static bool _list;
+        static int _selected;
+
+        // Case-insensitive '*' glob over a check description. A plain word
+        // ('Governor') selects every check mentioning it, a trailing '*'
+        // ('*endpoints*') narrows a family, and quoting in the shell keeps the
+        // stars away from the globber.
+        sealed class CheckPattern
+        {
+            readonly string _pattern;
+
+            public CheckPattern(string pattern) { _pattern = pattern.ToLowerInvariant(); }
+
+            public bool IsMatch(string what) => Glob(_pattern, 0, what.ToLowerInvariant(), 0);
+
+            // Two-pointer backtracking: linear in practice, and no recursion, so
+            // a '*' run at the tail cannot blow the stack on a long description.
+            static bool Glob(string pat, int p, string text, int t)
+            {
+                while (p < pat.Length)
+                {
+                    if (pat[p] == '*')
+                    {
+                        // '**' is the same as '*'; collapsing keeps the
+                        // backtracking loop from re-entering per star.
+                        while (p < pat.Length && pat[p] == '*') p++;
+                        if (p == pat.Length) return true;
+                        for (int i = t; i <= text.Length; i++)
+                        {
+                            if (Glob(pat, p, text, i)) return true;
+                        }
+                        return false;
+                    }
+                    if (t >= text.Length || text[t] != pat[p]) return false;
+                    p++; t++;
+                }
+                return t == text.Length;
+            }
+        }
+
         // The whole harness in one call: RunChecks is the ordered list of
         // fixtures, the catch turns a throwing fixture into a red run rather
         // than a stack trace that skips every check after it. Kept at the top
         // so a first read of this file starts where execution does.
-        static int Main()
+        //
+        // args: --filter <pattern> runs only the checks whose description
+        // matches it; --list prints every matching description and asserts
+        // nothing. Both exist so a contributor can narrow the suite to the
+        // check they are editing (`make unit FILTER=...`).
+        static int Main(string[] args)
+        {
+            string? filter = null;
+            for (int i = 0; i < args.Length; i++)
+            {
+                string arg = args[i];
+                if (arg == "--list")
+                {
+                    _list = true;
+                }
+                else if (arg == "--filter")
+                {
+                    if (i + 1 >= args.Length)
+                    {
+                        Console.WriteLine("ERROR: --filter needs a pattern, e.g. --filter 'Governor*'");
+                        Console.WriteLine("  List the check names with: make unit-list");
+                        return 2;
+                    }
+                    filter = args[++i];
+                }
+                else if (arg.StartsWith("--filter=", StringComparison.Ordinal))
+                {
+                    filter = arg.Substring("--filter=".Length);
+                }
+                else
+                {
+                    Console.WriteLine("ERROR: unknown argument '" + arg + "'.");
+                    Console.WriteLine("  Usage: EfficientServer.Tests [--filter <pattern>] [--list]");
+                    return 2;
+                }
+            }
+            if (!string.IsNullOrEmpty(filter))
+            {
+                _matcher = new CheckPattern(filter);
+            }
+
+            int exit = RunOrReport();
+            if (exit == 0 && !_list && _matcher != null && _selected == 0)
+            {
+                // A filter that matches nothing is a mistyped pattern, not a
+                // clean run: saying so beats an exit-0 that looks like the
+                // check just passed.
+                Console.WriteLine("ERROR: no check matches --filter '" + filter + "'.");
+                Console.WriteLine("  List the check names with: make unit-list, or drop the filter to run all of them.");
+                return 1;
+            }
+            return exit;
+        }
+
+        static int RunOrReport()
         {
             try
             {
@@ -56,9 +158,42 @@ namespace EfficientServer.Tests
 
         static void Check(bool cond, string what)
         {
+            if (_matcher != null && !_matcher.IsMatch(what)) return;
+            _selected++;
+            if (_list)
+            {
+                Console.WriteLine(Printable(what));
+                return;
+            }
             if (cond) return;
             _failures++;
-            Console.WriteLine("FAIL: " + what);
+            Console.WriteLine("FAIL: " + Printable(what));
+        }
+
+        // Fuzz descriptions embed the hostile bytes that produced them, so a
+        // failing case can carry a NUL or a lone surrogate into the output. Raw,
+        // that turns the run's stdout into a binary stream: grep stops printing
+        // matches, `make unit-list | less` renders mojibake, and the FAIL line
+        // cannot be pasted into a ticket. Print the control characters as
+        // \uXXXX; the bytes themselves are still in the fuzz corpus, only the
+        // report is escaped. Filtering still matches the raw description.
+        static string Printable(string what)
+        {
+            bool clean = true;
+            foreach (char c in what)
+            {
+                if (char.IsControl(c) || char.IsSurrogate(c)) { clean = false; break; }
+            }
+            if (clean) return what;
+            var buf = new StringBuilder(what.Length + 8);
+            foreach (char c in what)
+            {
+                if (char.IsControl(c) || char.IsSurrogate(c))
+                    buf.Append("\\u").Append(((int)c).ToString("X4", CultureInfo.InvariantCulture));
+                else
+                    buf.Append(c);
+            }
+            return buf.ToString();
         }
 
         // Scratch JSON blob, removed before returning: Load reads it
@@ -1566,12 +1701,27 @@ namespace EfficientServer.Tests
 
             CheckGovernorTiers();
 
-            if (_failures == 0)
+            if (_list)
             {
-                Console.WriteLine("PASS: all Config Load/Normalize checks");
+                Console.WriteLine($"listed {_selected} check name(s); nothing was asserted");
                 return 0;
             }
-            Console.WriteLine($"FAILED: {_failures} check(s)");
+            if (_failures == 0)
+            {
+                // A filter that selected nothing leaves the summary to Main,
+                // which turns the empty selection into a named error instead
+                // of a PASS line nobody can act on.
+                if (_matcher == null || _selected > 0)
+                {
+                    Console.WriteLine(_matcher != null
+                        ? $"PASS: {_selected} selected check(s)"
+                        : "PASS: all Config Load/Normalize checks");
+                }
+                return 0;
+            }
+            Console.WriteLine(_matcher != null
+                ? $"FAILED: {_failures} of {_selected} selected check(s)"
+                : $"FAILED: {_failures} check(s)");
             return 1;
         }
     }
