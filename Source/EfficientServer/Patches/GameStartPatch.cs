@@ -15,6 +15,11 @@ namespace EfficientServer.Patches
         {
             try
             {
+                // First: a world just loaded, so nothing the governor derived from
+                // the previous world's ticks (its tier, and a standing tier-2
+                // animator emergency over rigs that no longer exist) may carry
+                // into this one.
+                GovernorPatch.OnWorldChanged();
                 DynamicMeshBudgetPatch.ApplyBudgets();
                 DedicatedSkipPatch.ApplyOptional();
                 GcIncremental.Apply();

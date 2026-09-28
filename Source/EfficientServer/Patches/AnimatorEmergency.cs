@@ -171,6 +171,38 @@ namespace EfficientServer.Patches
         }
 
         /// <summary>
+        /// Drop a standing emergency because the world changed, WITHOUT restoring.
+        /// The rigs every saved mode belongs to were unloaded with the previous
+        /// world, so there is nothing left to put back and the <see cref="SavedModes"/>
+        /// table is pure garbage from here on. It holds a reference to every rig it
+        /// ever saved, and the only thing that prunes it is the sweep inside
+        /// <see cref="Enter"/>, so an emergency still armed when the governor was
+        /// then disabled would keep that table (and the dead rigs) for the rest of
+        /// the process: <see cref="Exit"/> deliberately keeps both when there is no
+        /// world to restore into, and no sweep runs to retire them.
+        ///
+        /// The flag is the worse half of what goes stale here: <c>AnimatorLodPatch</c>
+        /// reads <see cref="Active"/> and skips every living enemy's managed
+        /// Update/LateUpdate, so leaving it set means a world that was never put
+        /// into the emergency has its enemy animator state frozen with no path back
+        /// to baseline. A fresh world's rigs are still at their stock culling mode,
+        /// which is exactly what a restore would have left behind.
+        /// </summary>
+        public static void ForgetWorld()
+        {
+            bool wasActive = Active;
+            int dropped = SavedModes.Count;
+            SavedModes.Clear();
+            LiveRigs.Clear();
+            StaleIds.Clear();
+            Active = false;
+            if (wasActive || dropped > 0)
+                EsLog.Emit(LogLevel.Info, "animator emergency dropped for the new world (was "
+                    + (wasActive ? "ENTERED" : "inert") + ", " + dropped
+                    + " saved mode(s) belonged to the unloaded world and were not restored)");
+        }
+
+        /// <summary>
         /// Restore every live enemy animator's saved (or healthy default)
         /// culling mode. Does not toggle enabled, does not Rebind.
         /// </summary>

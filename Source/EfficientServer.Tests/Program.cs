@@ -486,6 +486,21 @@ namespace EfficientServer.Tests
             Check(r2.ApplyReloadedConfig(GovCfg(false, 0), true) && r2.Level == 1,
                 "AnimatorEmergency off mid-emergency releases the rigs but keeps throttling");
             Check(r2.EffectiveEntityStride(1) == 2, "tier 1 throttles stay in force after that step-down");
+
+            // World change: every window and the tier describe the world that just
+            // unloaded, so the machine re-bases instead of carrying them over. A
+            // fresh world that really is over budget re-escalates on its own ticks.
+            var w = new GovernorTiers();
+            Drive(w, em2, Over, 10);
+            Check(w.Level == 2, "world-change setup: standing in the emergency tier");
+            w.ResetForNewWorld();
+            Check(w.Level == 0 && w.EffectiveEntityStride(1) == 1,
+                "a new world re-bases the governor to the configured baseline");
+            Check(!w.SweepDue, "a new world asks for no rig sweep on its first tick");
+            Check(Drive(w, em2, Over, 4) == 0 && w.Level == 0,
+                "the previous world's over-budget window does not re-escalate the new one");
+            Check(w.Advance(em2, Over) && w.Level == 1,
+                "the new world escalates on its own over-budget ticks");
         }
 
         static int Main()

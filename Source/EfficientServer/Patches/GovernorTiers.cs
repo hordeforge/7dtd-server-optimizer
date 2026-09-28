@@ -144,5 +144,26 @@ namespace EfficientServer.Patches
             }
             return false;
         }
+
+        /// <summary>
+        /// Re-base after a WORLD CHANGE (a new world, not a new config). Every
+        /// window here describes tick history from the world that just went away,
+        /// for the same reason <see cref="ApplyReloadedConfig"/> drops them: the
+        /// intervals that escalated the tier are not this world's intervals, and a
+        /// world-load spike carried in from the old world's history would escalate
+        /// a machine that is only now seeing this world. Tier 2 exists to justify
+        /// the rigs, and <c>AnimatorEmergency.ForgetWorld</c> drops those with the
+        /// old world, so the tier cannot be left standing over nothing: back to
+        /// baseline, and the normal windows re-escalate from here if this world
+        /// really is over budget.
+        /// </summary>
+        public void ResetForNewWorld()
+        {
+            Level = 0;
+            SweepDue = false;
+            _overTicks = 0;
+            _healthyTicks = 0;
+            _cooldown = 0;
+        }
     }
 }

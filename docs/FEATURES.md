@@ -370,6 +370,14 @@ leaving rigs culled with no recovery path, and turning `Governor.AnimatorEmergen
 off mid-emergency steps down to tier 1 and restores the rigs immediately (the flag
 is opt-in; reload applies live).
 
+A NEW world settles the governor the same way (`GovernorPatch.OnWorldChanged`,
+called from the `GameStartDone` hook): the tier and its over/healthy windows
+describe the world that just unloaded, and a standing tier-2 emergency names rigs
+this world never had. The saved culling modes are dropped with the old world
+rather than restored (there is nothing to restore into) and the emergency flag
+goes with them, so a fresh world is never frozen into an emergency it was never
+put into. The new world re-escalates on its own ticks if it is over budget.
+
 **Stays default-off** (policy, bench lever): uses `Animator.cullingMode =
 CullCompletely` (keeps `enabled=true`, so the old enabled-toggle root-motion
 wedge does not apply - live 2026-08-09 runs at 8p/32p/64p restored every rig

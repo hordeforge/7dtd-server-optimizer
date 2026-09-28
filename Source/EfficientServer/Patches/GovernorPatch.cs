@@ -135,6 +135,27 @@ namespace EfficientServer.Patches
         static string Ms(double value) => value.ToString("F1", CultureInfo.InvariantCulture);
 
         /// <summary>
+        /// Re-base the governor when a NEW world loads (called from the
+        /// <c>GameStartDone</c> hook). The tier and its windows are derived from
+        /// tick history of the world that just unloaded, and a standing tier-2
+        /// emergency is the one piece of governor state that outlives a world: its
+        /// saved modes name rigs the new world never had, and its Active flag would
+        /// freeze managed animator updates for enemies that were never culled. Both
+        /// are dropped instead of carried over, and the new world re-escalates on
+        /// its own ticks if it turns out to be over budget.
+        /// Main-thread only (the lifecycle hook fires on the same thread as the
+        /// UpdateTick postfix).
+        /// </summary>
+        public static void OnWorldChanged()
+        {
+            if (Tiers.Level == 0 && !AnimatorEmergency.Active) return;
+            Tiers.ResetForNewWorld();
+            EsLog.Emit(LogLevel.Info, "new world: governor re-based to baseline "
+                + "(tier, windows and any standing animator emergency belonged to the previous world)");
+            AnimatorEmergency.ForgetWorld();
+        }
+
+        /// <summary>
         /// Re-base the governor after <see cref="ModApi.ReloadConfig"/> swaps the
         /// config object. The levers need no re-applying (they are derived from the
         /// new object on every read); what a reload must settle is the TIER, so a
