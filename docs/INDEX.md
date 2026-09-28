@@ -30,7 +30,7 @@ toolchain, and the measured-impact summary.
 | [V310_APM_BASELINE.md](V310_APM_BASELINE.md) | V3.1.0 APM / loadgen evidence baseline |
 | [PRODUCTION.md](PRODUCTION.md) | Deployment and operations runbook |
 | [plans/animator-cull-and-path-admission.md](plans/animator-cull-and-path-admission.md) | Build plan + live gates: animator CullCompletely emergency, path admission |
-| [evidence/](evidence/) | Stored A/B compare logs referenced by [V310_APM_BASELINE](V310_APM_BASELINE.md) |
+| [evidence/](evidence/) | Stored APM session-compare output: `compare_20260807_path_off_vs_on.txt` is linked from [V310_APM_BASELINE](V310_APM_BASELINE.md); `compare_20260806_es_off_vs_on.txt` (whole-mod off/on) is the raw artifact for the same campaign |
 | [THREAT_MODEL.md](THREAT_MODEL.md) | Attack surface, trust boundaries, threats, mitigations |
 
 ## Evidence sources (private workspace)

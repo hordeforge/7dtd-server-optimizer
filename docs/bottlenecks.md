@@ -22,11 +22,13 @@ high finding: **a missing spatial index, or a serial main-thread stage.**
 ## 1. Worst offenders (set the tick ceiling)
 
 1. **`NetEntityDistribution.OnUpdateEntities`** (IL=322) - CONFIRMED, **O(N^2.26)/call
-   by players**. All-pairs interest management with no spatial partition: an
-   `enemy x players` view-cone loop (distSq + `Vector3.Angle`), a `players^2`
-   distance loop, and a `players x tracked-entities` pass (`updatePlayerList` /
+   by players**. Inherent replication to genuinely-nearby players, with no
+   spatial partition to prune it: an `enemy x players` view-cone loop (distSq +
+   `Vector3.Angle`), a `players^2` distance loop, and a
+   `players x tracked-entities` pass (`updatePlayerList` /
    `updatePlayerEntity`). One of the two near-quadratic sections behind the
-   450-500 player cliff.
+   450-500 player cliff. See the §5 correction: interest is already distance-gated,
+   so a grid cannot cull it.
 2. **`ConnectionManager.Update`** (IL=215) - CONFIRMED, **O(N^2.27)/call by
    players**, sub-linear by entities. Serial single-thread pump: `ProcessPackages
    x2 channels x clients` + `FlushClientSendQueues` + a periodic O(N) ClientInfo
@@ -46,7 +48,8 @@ high finding: **a missing spatial index, or a serial main-thread stage.**
    array on every grid move. The single largest feeder of the Boehm megapause.
 6. **Boehm `GC_gcollect`** (whole-heap STW) - CONFIRMED, downstream symptom.
    Non-compacting conservative mark freezes the 20 TPS loop; measured **479 ms
-   megapause** on a ~5.6 GB live heap growing ~10 MB/s. Only cutting allocation
+   megapause** on a GC-disabled ~6.9 GB heap (a forced probe; see the note
+   below). At runtime the live heap is ~5.6 GB growing ~10 MB/s. Only cutting allocation
    helps (cadence tuning is a wash: 15.16 / 14.84 / 14.52 MB/s across forced /
    guard / incremental).
 
@@ -110,7 +113,7 @@ Ranked within each by severity, then scaling badness (super-linear worst).
 
 | Symbol (IL / exponent) | Kind · sev | Scales with | Mechanism | Lever | Verdict |
 |---|---|---|---|---|---|
-| `NetEntityDistribution.OnUpdateEntities` (322; O(N^2.26)/call players) | superlinear · high | players x entities; players^2 | all-pairs distSq + `Vector3.Angle` view-cone, no spatial partition | spatial interest grid (exp ~2.26 -> ~1); network LOD stopgap | CONFIRMED |
+| `NetEntityDistribution.OnUpdateEntities` (322; O(N^2.26)/call players) | superlinear · high | players x entities; players^2 | all-pairs distSq + `Vector3.Angle` view-cone over players that already passed the distance gate | vanilla `ServerMaxAllowedViewDistance` (config); network LOD stopgap. Spatial grid **REFUTED** 2026-07-20 (§5) | CONFIRMED |
 | `ConnectionManager.Update` (215; O(N^2.27)/call players) | serial · high | players | serial Clients loop: `ProcessPackages x2` + flush + periodic O(N) broadcast | round-robin connection budget; dict-ize the broadcast scan | CONFIRMED |
 | `SendToPlayers` -> `ConnectionManager.SendPackage` (42->100) | data-structure · high | entities x players x clients | single-target send linear-scans whole `Clients` list by entityId | use existing `entityIdMap`/`ForEntityId` O(1); or enqueue direct | CONFIRMED |
 | `PooledBinaryWriter.Write` (per-conn `taskSerialize`; ~15 MB/s@128p) | allocation · high | players x entities | same `NetPackage` re-serialized into each connection; player-independent packages produce identical bytes N times | serialize-once: encode once/tick, memcpy per connection; keep RelPosAndRot per-player | CONFIRMED |
@@ -134,7 +137,7 @@ Ranked within each by severity, then scaling badness (super-linear worst).
 | `AstarManager.UpdateGraphs` (185; total O(N^1.43) players) | superlinear · high | players x nav-graphs | per-player `Merge`, `mergedLocations x graphList` scan, grid moves -> scans | P1 throttle (shipped, -28.5%); P5 merge clustering | CONFIRMED |
 | `AstarVoxelGrid.InitScan` (3 -> Scan; #1 large & churn) | allocation · high | players (grid-move freq) | `newarr` node array every scan though grid dims fixed; per-cell raycasts | P4/Lever A reuse-in-place node buffer (scan exclusion via AstarPath work-item lock) | CONFIRMED |
 | `ASPPathFinderThread FindPaths.MoveNext` (87; drain 8/frame) | serial · medium | fixed 8/frame vs queue depth | main-thread coroutine draining 8 `GetPathTo`/frame; throughput fixed | admission + priority/coalesce on enqueue; do NOT add unbounded workers | CONFIRMED |
-| `EntityAlive.FindPath`->`PathFinderThread.FindPath` (49/17) | data-structure · low | requesting entities | no admission gate (only Y-clamp); always enqueue + `new PathInfoSingleTarget`; per-id dict coalesces | admission (cap/priority/drop-far) at enqueue | CONFIRMED (low tick-budget; cost is alloc + refresh latency) |
+| `EntityAlive.FindPath`->`PathFinderThread.FindPath` (49/17) | data-structure · low | requesting entities | no admission gate (only Y-clamp); always enqueue + `new PathInfoSingleTarget`; per-id dict coalesces | admission (cap/priority/drop-far) at enqueue (cap/drop-far half shipped v1.17.0, default-off; `ASPPathFinder` reuse still open) | CONFIRMED (low tick-budget; cost is alloc + refresh latency) |
 | `ASPPathNavigate.CreatePath`->`new ASPPathFinder` (38) | allocation · low | path builds/tick | `newobj ASPPathFinder` per build before `Calculate` | reuse per-navigator `ASPPathFinder` | CONFIRMED (small Gen0, dwarfed by InitScan) |
 | `UpdateGraphPos`/`FindClosestGraph`/`FindMoveIndex` (60/67/22) | data-structure · low | players x graphs | linear `graphList`/`moveList` scans; rescan gated on distSq dead-zone 100 | P2 dead-zone (shipped, [100,10000]) | PLAUSIBLE (per-call O(N^0.27); real driver is downstream InitScan) |
 
@@ -360,11 +363,11 @@ Ranked by perf-win / code-size. "Shipped" = already in EfficientServer.
 
 **Tier 4 - biggest impact, most code:**
 
-10. **Shared spatial interest grid** - a uniform grid keyed on chunk cell, reused by
-    `NetEntityDistribution` interest (collapses the **O(N^2.26)** wall), AI
-    `GetClosestPlayer` (A4), and the `SendPackage` map (#1). Collapses both
-    quadratic walls toward linear - the highest *absolute* ceiling raise, but a new
-    subsystem to build and validate.
+10. **Shared spatial interest grid** - **REFUTED for the replication wall**
+    (2026-07-20, see §5 and NETWORK_OPTIMIZATION): interest is already
+    distance-gated, so a grid cannot cull genuinely-nearby players, and only
+    vanilla `ServerMaxAllowedViewDistance` moves that wall. What survives is the
+    AI `GetClosestPlayer` (A4) reuse, which is a per-entity cost, not a player wall.
 
 **The one-line answer:** the tiny-lever tier is spent - #1, #2, #3, #4 and the
 P2 dead-zone (#7) all shipped, and #5 was refuted by RE. The best

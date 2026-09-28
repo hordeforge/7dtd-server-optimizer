@@ -490,15 +490,15 @@ Forensic ~500-player capture: `session_20260717_0301*`.
 
 ```text
 0. DONE 2026-07-16: attribution campaign (see 4b): chunk pipeline dominates
-1. Chunk streaming budget/scope (B4): first, per measured evidence
+1. Chunk streaming budget/scope (B4): late, not first. The 56-60% figure is the pre-stride/pre-governor measurement; the final attribution put chunk send at 5% (bottlenecks 4b)
 2. DONE 2026-07-16 (exp7 combat-bait): entity tick chain 58%; whole-chain AI LOD (A1/A3) over path admission
-3. Path admission (A2): after combat evidence
+3. DONE v1.17.0: path admission (A2) - `PathAdmissionPatch`, both knobs default 0 (no win at any tested load)
 4. Closest-player cache TTL (A4)
 5. Falling-block optional (A5): demolition evidence says cost is chunk resend
 6. Spawn walk scope (A6)
 7. Deco/splash dedicated skip (B6/B7): measured tiny on dedicated; low prio
 8. Vehicle/drone idle skip (B10)
-9. Guard dedicated GC.Collect (A7)
+9. DONE 2026-07-18: guard dedicated GC.Collect (A7) - `GcGuardPatch`, `Gc.SkipForcedCollect` default true
 10. Net package rate LOD (B3) - high risk, last
 ```
 
@@ -530,7 +530,7 @@ here in the same change that adds it there.
 EntityAlive.FindPath(Vector3, float, bool, EAIBase)  [built: PathAdmissionPatch, default-off]
 PathFinderThread.FindPath (virt; Instance is ASPPathFinderThread)  [not built]
 World.AddFallingBlock(Vector3i, bool)  [not built]
-World.EntityActivityUpdate  [built: AiLodPatch, postfix re-bands aiActiveScale]
+World.EntityActivityUpdate  [built: AiLodPatch postfix - LOD bands (re-bands aiActiveScale) + cloth/jiggle suppression]
 SpawnManagerBiomes.SpawnUpdate  [not built]
 DecoManager.UpdateTick  [not built]
 WaterSplashCubes.Update  [built: DedicatedSkipPatch]
@@ -611,8 +611,8 @@ findings). New levers not already graded above, by impact-per-line:
 | **`ConnectionManager.SendPackage` entityId-map lookup (`FastSendPatch`, v1.6.0)** | **A - SHIPPED + VALIDATED** | done (prefix, `Network.FastSingleTargetSend`) | removes the O(clients) linear `Clients` scan for pure single-target sends via the existing `ForEntityId` map. A/B: correct (60/60, 120/120 stable), ms_per_tick **-1.8%@60p -> -4.2%@128p**, `ConnectionManager.Update` -5.2%@128p; scales toward the 450-500p death-spiral |
 | ~~`PooledExpandableMemoryStream` presize + retain~~ | **downgraded** | n/a | RE correction: `Reset()`=`SetLength(0)` already retains the buffer; not a realloc problem. Serialization churn is a *count* problem -> serialize-once ([`allocation-reuse.md`](allocation-reuse.md)) |
 | Path admission cap + `ASPPathFinder` reuse | cap/drop **shipped v1.17.0 (`PathAdmissionPatch`), no win at any tested load - knobs stay 0/0**; `ASPPathFinder` per-build alloc reuse still open | small | bounds path-request spikes + per-build alloc at `EntityAlive.FindPath` enqueue |
-| Off-sim `Chunk.write` encode / cached chunk blobs | B | moderate (threading) | chunk pipeline is 56-60% of tick; biggest single CPU reclaim |
-| Shared spatial interest grid (chunk-cell uniform grid) | B/C | large (new subsystem) | collapses the O(N^2.26)/O(N^2.27) player walls + E x P products toward linear; reused by `NetEntityDistribution` interest, `GetClosestPlayer` (A4), and the `SendPackage` map |
+| Off-sim `Chunk.write` encode / cached chunk blobs | B | moderate (threading) | chunk send is 5% of the final attributed tick (bottlenecks 4b); the big shares are entity tick 63% and replication 30% |
+| Shared spatial interest grid (chunk-cell uniform grid) | **REFUTED 2026-07-20** for the replication wall (bottlenecks 5, NETWORK_OPTIMIZATION); only the `GetClosestPlayer` (A4) reuse survives | C | large (new subsystem): interest is already distance-gated, so a grid cannot cull genuinely-nearby players, and only vanilla `ServerMaxAllowedViewDistance` moves that wall |
 
 Structural conclusion of the audit: nearly every high-severity bottleneck is **a
 missing spatial index or a serial main-thread stage**. Spatial bucketing + off-thread

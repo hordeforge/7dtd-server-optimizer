@@ -21,16 +21,19 @@ namespace EfficientServer
         public const string LogPrefix = "[EfficientServer] ";
 
         // Recoverable problems an operator must notice when grepping the log for
-        // WARNING (config corrections, elided optional targets, failed applies that
-        // fell back to vanilla) route to Warn; failures that leave a patch group
-        // INACTIVE or the mod partially broken route to Error. The game's Log
+        // WARNING (config corrections, failed applies that fell back to
+        // vanilla) route to Warn; failures that leave the mod partially broken
+        // route to Error. A patch group that cannot find its target is Warn,
+        // not Error: the mod keeps running on vanilla, and the init sequence
+        // emits one such line per unmatchable group, so Error would bury the
+        // rest of the startup log under expected notices. The game's Log
         // static writes to the dedicated log file and console; if it is unavailable
         // (very early init, odd host), fall back to stdout rather than losing the line.
         // Bound once: a method-group conversion to Action<string> allocates a new
         // delegate on every evaluation, and Emit is called from per-tick and
-        // per-entity paths (a disabled governor still logs its transitions at tick
-        // rate, and the skip patches run inside the tick loop), so resolving the
-        // sink per call put one short-lived delegate in every log line's path.
+        // per-entity paths (TickGuardPatch's per-tick shed gate, the
+        // ClientListSnapshotPatch receive thread), so resolving the sink per
+        // call put one short-lived delegate in every log line's path.
         static readonly Action<string> InfoSink = global::Log.Out;
         static readonly Action<string> WarnSink = global::Log.Warning;
         static readonly Action<string> ErrorSink = global::Log.Error;

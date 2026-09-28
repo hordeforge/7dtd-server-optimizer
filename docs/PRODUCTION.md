@@ -118,9 +118,10 @@ scrubbed (cmdline/exe redacted, home path replaced).
 2. Boot once on a copy/staging save; grep the log for `MISSING TARGET` and
    `patch ... failed`. Every lever fails VISIBLY (a moved IL target logs MISSING and
    deactivates that lever only - the rest keep working).
-3. The two external-DLL transpilers (`InitScanPoolPatch` on AstarPathfindingProject,
-   `ChunkSendThrottlePatch` batch constant) are the most drift-prone; both throw ->
-   MISSING rather than corrupt.
+3. The two IL-constant transpilers (`InitScanPoolPatch` on the external
+   AstarPathfindingProject iterator, `ChunkSendThrottlePatch` on the chunk-send
+   batch cap in Assembly-CSharp) are the most drift-prone; both throw -> MISSING
+   rather than corrupt.
 
 ## 6. Emergencies
 
@@ -183,8 +184,8 @@ state that is NOT regenerable is what an operator edits on the server host:
 - **RPO for the live config: 0 across a reinstall or an uninstall.** `install.sh`
   holds the installed `Config/efficientserver.json` in a temp file across the
   `rm -rf` and restores it on success (kept, with its path printed, if the
-  install fails); `uninstall.sh` copies the whole `Config/` directory to a
-  timestamped backup and prints the restore command.
+  install fails); `uninstall.sh` copies every file under the installed `Config/`
+  into a timestamped directory and prints the restore command.
 - **RPO against host loss, disk loss, or a deleted instance: whatever your
   snapshot cadence is, plus one interval, and only if you take one.** Every copy
   this repo makes lives inside the install tree, so the disaster that takes the

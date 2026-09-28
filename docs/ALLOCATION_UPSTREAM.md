@@ -41,9 +41,9 @@ attacks the top allocators named by the corrected APM attribution
 | Rank | Site | Subsystem | What allocates | Lever |
 |---|---|---|---|---|
 | 1 | `AstarVoxelGrid.InitScan` | pathfinding | nav-graph node array, rebuilt per grid move | **A (P4 pooling)** |
-| 2 | `TerrainSubMesh.Add` | dynamic mesh | sub-mesh vertex/index buffers | C |
-| 3 | `PooledBinaryWriter.Write` | network | per-player entity package serialization | ~~B (L1 serialize-once)~~ refuted, see §3 |
-| 4 | `ItemStack.Clone` | inventory | defensive item copies | C |
+| 2 | `ItemStack.Clone` | inventory | defensive item copies | C |
+| 3 | `TerrainSubMesh.Add` | dynamic mesh | sub-mesh vertex/index buffers | C |
+| 4 | `PooledBinaryWriter.Write` | network | per-player entity package serialization | ~~B (L1 serialize-once)~~ refuted, see §3 |
 | 5 | `ChunkBlockChannel.Write` | chunk send | chunk block serialization buffers | C (overlaps B) |
 
 `InitScan` is both the #1 large-allocation spike **and** the #1 steady-churn
@@ -120,7 +120,7 @@ most feeds the megapause), node-object reuse only if churn still dominates after
 
 ---
 
-## 3. Lever B - Network serialize-once (L1). Attacks #3.
+## 3. Lever B - Network serialize-once (L1). Attacks #4.
 
 ### Source (RE, `network.md` §4b)
 `NetEntityDistributionEntry.updatePlayerEntity` builds and
@@ -188,9 +188,11 @@ grid was later refuted as a lever for that wall
   (presize-and-retain, ArrayPool, Clear-and-reuse, Span/stackalloc, thread-local
   scratch) and the Boehm "trade RAM for fewer collections" knobs are in
   [`allocation-reuse.md`](allocation-reuse.md).
-  Key finding there: the game already pools the writer/stream *objects*, so the
-  remaining churn is the expandable buffer **reallocating** on growth - the fix is
-  presize + retain at max capacity (free with 128 GB RAM), not new pooling.
+  Key finding there: the game already pools the writer/stream *objects*, and the
+  pooled buffer is retained (`Reset()` = `SetLength(0)`), so it does NOT realloc on
+  growth - the reallocating allocator is `InitScan` (see allocation-reuse.md §1).
+  The serialization residual is a *count* problem (per-connection re-encode in the
+  writer threads), not a buffer-retention one.
 - **Measurement (mandatory per lever):** corrected APM alloc attribution
   (`top_alloc_sites` / `top_churn_sites`, ranked by bytes) + `gross MB/s` +
   `ms_per_tick`, before/after, matched load. A **no-GC diagnostic window**

@@ -120,7 +120,7 @@ and repeated allocation on the off-main threads.
 
 | Allocator | Technique | Where |
 |---|---|---|
-| `PooledExpandableMemoryStream` byte[] (network serialize) | **a** presize + retain | ALLOCATION_UPSTREAM Lever B / this doc |
+| `PooledExpandableMemoryStream` byte[] (network serialize) | residual only, presize + retain | §1 correction: the buffer is already retained, so this is a small win at most; the real fix is cutting the serialization COUNT (ALLOCATION_UPSTREAM Lever B, refuted) |
 | `AstarVoxelGrid.InitScan` node array | **a/b** per-grid reusable buffer / ArrayPool | ALLOCATION_UPSTREAM Lever A (P4) |
 | `TerrainSubMesh.Add` | **b** pooled mesh buffers | ALLOCATION_UPSTREAM Lever C |
 | `ItemStack.Clone` | **c** pool / elide (correctness-sensitive) | ALLOCATION_UPSTREAM Lever C |

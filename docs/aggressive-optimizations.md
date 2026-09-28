@@ -33,7 +33,8 @@ IceCoffee's `Parallel.ForEach` on `EAITaskList` was abandoned for exactly this.
 
 ## 1. Entity tick (~32 s at 334 zombies) - the biggest cost
 
-Close-combat AI; safe LOD/stride proven not to help (fidelity-bound).
+Close-combat AI; the whole-chain far skip of `updateTasks` ships (fidelity-gated),
+while the mid-band stride A/B was inconclusive and ships default-off.
 
 - **Parallelize `TickEntities` across cores.** *Gain: large* (the #1 section is
   single-thread). *Risk: race (high).* Each `TickEntity -> OnUpdateEntity ->
@@ -110,7 +111,8 @@ smoke test showed `rerouted 1 LevelGridNode newarr` -> patched
 `Pathfinding.PoolInitScanNodes`. `ReuseOrAlloc(count, graph)` reuses `graph.nodes`
 via `Array.Clear` when `Length == count`, else falls back to `newarr`. The
 external-DLL types (`LayerGridGraph`, `LevelGridNode`, `.nodes`) are all public, so
-no reflection is needed. **A/B (§3c):** eliminates the `InitScan` alloc cleanly, no
+the node buffer is read directly; reflection is only used to locate the
+compiler-generated iterator and its `<>4__this` field. **A/B (§3c):** eliminates the `InitScan` alloc cleanly, no
 benchable steady-state win (array large but infrequent). **25-min fidelity soak (§3d):**
 zero pathfinding exceptions at a 10 GB heap, no leak, `alive` stable - the unsafe lever
 is **safe under sustained load**, cleared for opt-in use. Still no *proven* perf win
@@ -120,7 +122,7 @@ detail in [`../../7dtd-server-optimizer/docs/RESULTS.md`](RESULTS.md)
 
 ---
 
-## 4. Chunk pipeline (56-60% of tick) - the biggest CPU share
+## 4. Chunk pipeline (5% of the final attributed tick)
 
 `SendChunksToClients -> NetPackageChunk.Setup -> Chunk.write` (601 IL) runs
 **synchronously on the sim thread**.
@@ -134,7 +136,9 @@ detail in [`../../7dtd-server-optimizer/docs/RESULTS.md`](RESULTS.md)
   Risk: corruption* - cache invalidation on every block/TileEntity/light change;
   a missed invalidation = players see stale terrain (desync).
 
-**Verdict:** the highest-CPU target, but both forms need a chunk snapshot/version
+**Verdict:** the 56-60% share is the pre-stride/pre-governor measurement; the final
+attribution (bottlenecks 4b) puts the entity tick at 63% and replication at 30%,
+chunk send at 5%. Both forms here still need a chunk snapshot/version
 discipline the stock code does not provide - substantial and race/invalidation-prone.
 
 ---
@@ -148,8 +152,9 @@ discipline the stock code does not provide - substantial and race/invalidation-p
   large heap, one big collect. *Gain: negative* (479 ms freeze at 7 GB; scales with
   heap). *Risk: stability* (multi-second STW = client timeouts). Diagnostic only.
 - **RAM-headroom (`GC_FREE_SPACE_DIVISOR`).** EAC-safe env; fewer collections for
-  more RAM. **This is the one being A/B-tested - it is *safe*, listed here only for
-  contrast** (it does not corrupt or desync; worst case is more RSS).
+  more RAM. **VALIDATED 2026-07-20 and shipped as the `run_server.sh` default**
+  (`GC_FREE_SPACE_DIVISOR=1`); it is *safe*, listed here only for contrast (it does
+  not corrupt or desync; worst case is more RSS).
 - **Unsafe pooling of game objects** (ItemStack, packages). *Risk: corruption/double-
   free* - the pooled object's lifetime is owned by game code; reusing it early
   aliases live state.
@@ -184,7 +189,7 @@ is invariant across GC configs). The safe RAM knob is the only free win here.
 For a **stock server via Harmony**, ranked by (gain / risk):
 1. **Config knobs** (view distance, spawn caps, `settargetfps`) - safe, gameplay
    tradeoff, no code. The real remaining lever.
-2. **RAM-headroom GC env** - safe, EAC-safe, RAM tradeoff (testing).
+2. **RAM-headroom GC env** - safe, EAC-safe, RAM tradeoff (validated 2026-07-20, shipped default).
 3. **P4 `InitScan` array-reuse** - the most defensible *unsafe* lever (bounded,
    concurrency-proven; external-iterator-fragile). Gated + fidelity-tested.
 4. **Off-sim chunk encode / blob cache** - biggest CPU, needs snapshot discipline.

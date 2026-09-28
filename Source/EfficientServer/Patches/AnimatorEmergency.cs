@@ -6,9 +6,11 @@ namespace EfficientServer.Patches
     /// <summary>
     /// Emergency animator cost cut, driven by the governor's second escalation
     /// tier (or `es animoff` bench probe). Measured basis (RESULTS 3o + fence
-    /// check): at 64 players + ~400 endgame zombies the animator path is ~60 ms
-    /// of a ~147 ms saturated frame (~40%). Disabling evaluation recovered
-    /// ~147 -> ~85 ms.
+    /// check): at 64 players + ~430 endgame zombies the animator path is ~60 ms
+    /// of the saturated frame: 119 -> 81 ms with animators off, ~40% recovered.
+    /// The 147 -> 85 ms figure RESULTS quotes for this lever was measured on the
+    /// refuted enabled=false form; the CullCompletely re-measurement under stress
+    /// is 117.61 -> 99.53 ms (-15.4%).
     ///
     /// Mechanism (v1.17.0+): set <see cref="Animator.cullingMode"/> to
     /// <see cref="AnimatorCullingMode.CullCompletely"/> while leaving
@@ -23,9 +25,11 @@ namespace EfficientServer.Patches
     /// uses the supplementary displacement path). Clients still animate locally.
     /// <see cref="GovernorConfig.AnimatorEmergency"/> stays default-false even
     /// though the CullCompletely exit path was live-cleared (2026-08-09 runs
-    /// restored moving rigs with <c>dp &gt; 0</c>, and the tick-bound stress run
-    /// measured -15.4% frame with a complete restore, RESULTS 3t): residual dp=0
-    /// walkers keep it opt-in (RESULTS 3t, CONFIG.md).
+    /// restored moving rigs with <c>dp &gt; 0</c> (RESULTS 3t), and the
+    /// tick-bound stress run measured -15.4% frame with a complete restore
+    /// (RESULTS, "Live animator-emergency + path-admission validation",
+    /// 2026-08-09)): residual dp=0 walkers keep it opt-in (RESULTS 3t,
+    /// CONFIG.md).
     ///
     /// Internal like the other support modules (<see cref="AiAlertGate"/>,
     /// <see cref="TickClock"/>): runtime state with

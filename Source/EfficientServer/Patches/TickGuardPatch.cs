@@ -16,7 +16,8 @@ namespace EfficientServer.Patches
     /// of range.
     ///
     /// This trades gameplay (a thinner horde) for a running server: measured, the
-    /// alternative at 2x the capacity ceiling is ~3 TPS for everyone. Every shed is
+    /// alternative at 3.5x the capacity ceiling (48 players, ~522 zombies) is
+    /// ~3 TPS for everyone (RESULTS 3j). Every shed is
     /// logged with the EMA and count. Players in combat notice the farthest zombies
     /// vanishing before the closest ones - the least-visible possible cut.
     /// </summary>

@@ -45,7 +45,7 @@ only the one your edit touches; each needs just its own tools.
 |---|---|---|---|
 | `make lint` | `scripts/*.sh` and `scripts/*.py` | seconds | shellcheck, ruff, mypy |
 | `make unit` | `Config.Load/Normalize` and the game-type-free C# modules | ~1 min (builds) | .NET SDK |
-| `make check-scripts` | config doc/version consistency, `repo_root`, cfg guard, coverage badge | ~2s | python3 |
+| `make check-scripts` | config doc/version consistency, `repo_root`, cfg guard, APM/animstate parsers, config backup, coverage badge | ~2s | python3 |
 
 ```bash
 $EDITOR Source/EfficientServer/Config.cs   # then: make unit
@@ -91,9 +91,11 @@ acceptance (`docs/FEATURES.md` fidelity checks).
 | `dotnet restore --locked-mode` | `make unit` (both package graphs) | you changed a `PackageReference` without regenerating the lockfile | run plain `dotnet restore Source/EfficientServer.Tests` or `dotnet restore Source/EfficientServer` and commit the regenerated `packages.lock.json` with the csproj change |
 | config harness (`Source/EfficientServer.Tests`) | `make unit` | a `Config.cs` behavior change broke a pinned check | change the code or update the check together; never delete a check to pass |
 | `scripts/check_config_doc.py` (+ `--selftest`) | `make check-scripts` | a `ServerPerfConfig` field exists but is not documented in `docs/CONFIG.md`, `config/efficientserver.json` has keys absent from `Config.cs`, shipped values drift from code defaults, or the gate's own parsing broke | document the field (mechanism, gameplay impact, measured gain), fix the key typo, or fix the script; its selftest is the spec |
-| `scripts/check_version.py` (+ `--selftest`) | `make check-scripts` | versions disagree across `ModInfo.xml` / `AssemblyInfo.cs`, docs claim a version newer than shipped, the changelog lacks the shipped version, or the gate's own parsing broke | bump `Source/EfficientServer/ModInfo.xml` and `AssemblyInfo.cs` together and add the matching `CHANGELOG.md` entry in the same change, or fix the script; its selftest is the spec |
+| `scripts/check_version.py` (+ `--selftest`) | `make check-scripts` | versions disagree across `ModInfo.xml` / `AssemblyInfo.cs`, docs claim a version newer than shipped, the changelog lacks the shipped version, the `docs/RESULTS.md` version history stops short of it, `SECURITY.md` does not name it as supported, or the gate's own parsing broke | bump `Source/EfficientServer/ModInfo.xml` and `AssemblyInfo.cs` together and add the matching `CHANGELOG.md` entry in the same change, or fix the script; its selftest is the spec |
 | `scripts/repo_root.py --selftest` | `make check-scripts` | the repository-root marker walk the other scripts resolve their paths with broke | fix the script, or add the moved/renamed marker to `MARKERS`; its selftest is the spec |
 | `scripts/es_cfg_guard.py --selftest` | `make check-scripts` | the config backup/restore guard broke its own protocol | fix the script; its selftest is the spec |
+| `scripts/bench_parse.py --selftest` | `make check-scripts` | the APM health-line reader or the `es animstate` parser broke, or the incremental reader stopped agreeing with a full-file rescan | fix the script; its selftest is the spec |
+| `scripts/backup_config.py --selftest` | `make check-scripts` | the snapshot / verify / restore protocol broke | fix the script; its selftest is the spec |
 | `scripts/apm_tail.py --selftest` | `make check-scripts` | the APM log tail cache or its window math broke, or it stopped invalidating on a log that was truncated, rewritten or rolled over at the same path | fix the script; its selftest is the spec |
 | `scripts/coverage_badge.py --selftest` | `make check-scripts` | the coverage-badge generator broke (Cobertura parsing or SVG rendering; CI uses it to publish the README badge) | fix the script; its selftest is the spec |
 

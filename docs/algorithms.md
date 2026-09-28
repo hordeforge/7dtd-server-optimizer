@@ -1,4 +1,4 @@
-# Dedicated server algorithms & data structures (V3.0.1)
+# Dedicated server algorithms & data structures (V3.1.0)
 
 **Owns:** the algorithm + data-structure used by each hot subsystem - what runs, in
 what complexity, on what structure. **Hub:** [`INDEX.md`](INDEX.md). Deep dives:

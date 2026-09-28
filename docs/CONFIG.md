@@ -80,14 +80,17 @@ running server-only behavior. No reason to change.
 
 ## AiLod - entity-AI level of detail
 
-Distance-banded AI update scaling for `EntityEnemy`. Bands are SQUARED distances
-(100 = 10 m).
+Distance-banded AI update scaling for every non-player `EntityAlive` (the
+measurements cover zombies). Bands are SQUARED distances (100 = 10 m).
 
 ### `AiLod.Enabled` (default `true`)
 - **Mechanism:** per-entity distance to the nearest player selects a band; the
   band's scale stretches AI update cadence (task re-evaluation, look/turn updates).
 - **Gameplay impact:** distant zombies "think" less often. Within `FullAiDistSq`
-  nothing changes; alerted/targeting entities are never scaled down.
+  nothing changes. This band pass is purely distance-based: an alerted or
+  targeting entity beyond `FullAiDistSq` is scaled down too. The alert
+  exemption lives in the separate `updateTasks` LOD (`AiLod.MidTickStride`,
+  `SkipTasksFarDistSq`), not here.
 - **Measured:** part of the original mod package (~-8% at healthy load, RESULTS §3).
 
 ### `FullAiDistSq` (100) / `MediumAiDistSq` (400) / `SkipTasksFarDistSq` (2500)
@@ -304,12 +307,14 @@ One-way per process: the collector mode is a P/Invoke that cannot be undone, so
 
 ## CrowdCollisionLod - crowd collision resolution rate (v1.17.0)
 
-Soft-push separated crowd resolution for tight groups. Default OFF pending
-human A/B (see RESULTS §3r for the null finding).
+Soft-push separation keeps running every tick; the lever staggers the broadphase
+neighbor collision QUERIES behind it, in tight groups. Default OFF: the human A/B
+returned null (see RESULTS §3r).
 
 ### `CrowdCollisionLod.Enabled` (default `false`)
 - **Mechanism:** when on, each zombie resolves entity collision every Nth tick
-  instead of every tick (see `ResolveEveryNTicks`). Default OFF pending the A/B.
+  instead of every tick (see `ResolveEveryNTicks`). Default OFF: the A/B
+  returned null.
 
 ### `ResolveEveryNTicks` (default `4`, clamp [1,16])
 - **Mechanism:** each zombie fully resolves entity collision every Nth tick,
@@ -524,7 +529,7 @@ their defaults, so a fresh install refuses.
 | `GC_NPROCS` | `nproc` | Parallel GC marking threads. Marginal but free. |
 | `MONO_ENV_OPTIONS` | `-O=all` | Mono JIT full optimization: ~5% section-avg win, direction-consistent across all timed sections (single A/B pair). |
 | `GC_INITIAL_HEAP_SIZE` | unset | Optional heap preallocation (e.g. `8G`) to avoid startup collection bursts. |
-| `GC_USE_ENTIRE_HEAP` | unset | Set `1` to collect only when the whole heap is full (fewer collects; see the heap-size caveat in run_server.sh). |
+| `GC_USE_ENTIRE_HEAP` | unset | Set `1` to collect only when the whole heap is full (fewer collects; see the heap-size ceiling in [runtime-tuning.md](runtime-tuning.md)). |
 | `SEVENDTD_GC_INCREMENTAL` | unset | Opt-in incremental GC: sets `GC_ENABLE_INCREMENTAL=1`; pair with `GC_PAUSE_TIME_TARGET` (ms) to cap each pause. |
 | (`settargetfps` console cmd) | 20 | Tick rate = frame rate (see `Server.TargetFps` above for the persistent mod knob). |
 | `SEVENDTD_CPU_AFFINITY` | unset | **Leave off.** Naive pinning measured a LOSS (+122% jitter): it defeats Ryzen CPPC preferred-core boost (HOST_TUNING). |

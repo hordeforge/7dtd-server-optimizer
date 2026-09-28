@@ -37,10 +37,12 @@ mid-range wandering-horde profiles, but do not expect a win on the standard load
 Two fidelity guards (v1.4.0): `UpdateTasksLodPatch` invokes `EntityAlive.CheckDespawn()`
 before skipping, because that check is the first step *inside* `updateTasks`; without
 it, far wandering-horde / bloodmoon / lifetime-expired entities would accumulate
-instead of despawning. `AiLodPatch` toggles cloth level-triggered (off far, back on
-near) rather than one-way, so it self-heals on approach instead of leaving cloth off
-permanently after one far excursion (visible only on a player host; cosmetic on a
-true dedicated server).
+instead of despawning. `AiLodPatch` toggles cloth level-triggered (on only inside
+`FullAiDistSq`, 10 m at the default 100, so the mid band is suppressed too; off from
+there out) rather than one-way, so it self-heals on approach instead of leaving cloth
+off permanently after one far excursion (visible only on a player host; cosmetic on a
+true dedicated server). Jiggle is one-way: the entity's own tick re-enables it, so the
+patch only ever suppresses it.
 
 **`aiActiveScale` band audit (2026-08-09, vs stock RE):** stock `EntityActivityUpdate`
 keeps the closest **N = clamp(60/playerCount, 4, 20)** entities at full 1.0 scale
@@ -68,8 +70,9 @@ prefixes: it is the separate `ExplosionParticlesPatch` prefix on
 Cloth/jiggle-bone suppression is also NOT a `DedicatedSkipPatch` prefix:
 `AiLodPatch`'s postfix consumes
 `SkipOnDedicated.ClothAndJiggleBoneSimulation` and toggles cloth level-triggered
-(off far, back on near) per entity during the same distance-band pass (so that
-knob, unlike the four prefixes above, needs `AiLod.Enabled` too). Every skipped
+(back on only inside `FullAiDistSq`, 10 m at the default 100; jiggle is suppressed
+one-way, the entity's own tick restores it) per entity during the same distance-band
+pass (so that knob, unlike the four prefixes above, needs `AiLod.Enabled` too). Every skipped
 target logs a WARNING when its type or method is not found (skip disabled),
 never hiding the loss silently. The skip prefixes live-gate on their own knob
 per call, so `es reload` can take a skip away without a restart.

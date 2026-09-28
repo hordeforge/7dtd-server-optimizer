@@ -44,8 +44,12 @@ invariant new patches must preserve:
   `EntityAlive.updateTasks`, every `EntityAlive.FindPath` caller (all EAI/UAI
   task leaves), `NetEntityDistribution.OnUpdateEntities` (from UpdateTick),
   `ChunkManager.SendChunksToClients`, `Entity.ccEntityCollision`,
-  `AvatarZombieController.Update/LateUpdate`, and `AstarManager.UpdateGraphs`
-  (driven by the `Start` coroutine). Path COMPUTE is also main-thread here:
+  `AvatarZombieController.Update/LateUpdate`, `AstarManager.UpdateGraphs`
+  (driven by the `Start` coroutine) and `AstarManager.UpdateGraphPos`,
+  `EntityPlayer.DamageEntity` (bench god), `ConnectionManager.SendPackage`,
+  and `GameManager.ExplosionClient`. The one exception is the
+  `LayerGridGraph.ScanInternal` iterator, which AstarPath runs on a path
+  worker under its own work-item lock (see `InitScanPoolPatch`). Path COMPUTE is also main-thread here:
   `ASPPathFinderThread.FindPaths` is a Unity coroutine (`StartCoroutine`), not
   an OS thread.
 - **Console commands** (`es ...`) execute on the main thread too: telnet/stdin/web
@@ -98,9 +102,12 @@ invariant new patches must preserve:
   is needed and nothing main-owned is mutated. It fixes a stock race: the vanilla
   code enumerates that live list on the receive thread while the main thread
   mutates it (network.md 4.0).
-- **One config generation per call:** every patch prefix reads `ModApi.Config`
-  into a local and passes that reference to `ShouldRun(cfg)`, so the knob it
-  acts on and the gate that decided to act are the same object. Reading the
+- **One config generation per call:** almost every patch prefix reads
+  `ModApi.Config` into a local and passes that reference to `ShouldRun(cfg)`,
+  so the knob it
+  acts on and the gate that decided to act are the same object.
+  `TargetFpsPatch` and `BenchGodPatch` use the no-arg overload instead, and
+  `BenchGodPatch` then re-reads `ModApi.Config` for its arm gate. Reading the
   published field separately for each use costs a second volatile acquire on
   per-entity-per-tick paths and could straddle a `ReloadConfig` swap, pairing a
   gate decision from one generation with a knob value from the next.
@@ -331,7 +338,7 @@ Hundreds of packages. High frequency:
 
 `MeshDataManager.LateUpdate` runs from `GameManager.LateUpdate`.
 
-Settings knobs (`DynamicMeshSettings`): `MaxRegionLoadMsPerFrame`, `MaxRegionMeshData` / `MaxDyMeshData`, `OnlyPlayerAreas`, `PlayerAreaChunkBuffer`, `MaxViewDistance`.
+Settings knobs the mod lowers on dedicated: `DynamicMeshSettings.{MaxRegionLoadMsPerFrame, OnlyPlayerAreas, PlayerAreaChunkBuffer}` and `DynamicMeshServer.MaxActiveSyncs` (stock 10).
 
 EfficientServer lowers per-frame mesh budget on dedicated and prefers player-area work.
 
@@ -401,13 +408,13 @@ See [`../../7dtd-engine-research/docs/loop/loop.md`](../../7dtd-engine-research/
 - **2026-08-23:** Concurrency model section added (main-thread confinement audit: patch surfaces, console drain, the one background thread, reload re-basing rule).
 - **2026-08-23:** Stale in-repo `tools/` dump-helper references repointed to `../7dtd-engine-research/tools/`.
 - **2026-08-08:** Stale `il/*-v3.0.1/` dump links repointed to current `*-v3.1.0/` dirs (loop-complete, deep, deeper, opt-scan).
+- **2026-07-19:** Ownership/related docs polish.
 - **2026-07-16:** Optim candidates doc under `docs/OPTIMIZATION_CANDIDATES.md` (not 7dtd-engine-research/il).
 - **2026-07-16:** Gap-close: ticks/sec 20, path→AstarPath, AIDirector component list, net bands.
 - **2026-07-16:** loop complete map link; dual entity paths; open gaps pointer.
 - **2026-07-16:** Link deeper synthesis (path drain ≤8/slice, MoveHelper, EAI rank); RESEARCH_INDEX.
 - **2026-07-16:** Deep entity/AI/path: updateTasks always-on nav; ASPPathFinderThread+coroutine; EAITaskList; link entity-ai.
 - **2026-07-16:** Deep `gmUpdate` / `UpdateTick` / peer Update RE from V3.0.1 Cecil dump; multi-behaviour frame model; entity slice EMA; dedicated GC.Collect; conductor targets.
-- **2026-07-19:** Ownership/related docs polish.
 
 ## Related docs
 | Doc | Role |

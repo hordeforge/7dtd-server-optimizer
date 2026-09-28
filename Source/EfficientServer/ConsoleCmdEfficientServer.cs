@@ -94,7 +94,8 @@ namespace EfficientServer
         }
 
         // Subcommand/argument matching is case-insensitive everywhere, so the
-        // lookup folds case itself; both call sites are subcommand words.
+        // lookup folds case itself; one call site is a subcommand word, the
+        // other is the benchgod on|off argument.
         static string Arg(List<string> args, int index)
         {
             if (args == null || index < 0 || index >= args.Count) return "";

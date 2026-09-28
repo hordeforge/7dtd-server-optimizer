@@ -10,9 +10,9 @@ namespace EfficientServer
     public class ModApi : IModApi
     {
         public const string HarmonyId = "com.7dtd.efficientserver";
-        // Both of these are the mod's whole read-mostly cross-thread state, and
-        // both are SWAPPED at runtime (InitMod, ReloadConfig) while non-main
-        // threads read them: the LiteNetLib receive thread through
+        // These are the mod's whole read-mostly cross-thread state. `Config` is
+        // SWAPPED at runtime (InitMod, ReloadConfig) while non-main threads read
+        // it: the LiteNetLib receive thread through
         // ClientListSnapshotPatch's duplicate-IP scan, the connection writer
         // through the send path. Plain static fields give no publication
         // guarantee there - a reader can observe the new Config reference before
@@ -24,7 +24,8 @@ namespace EfficientServer
         // volatile reference carries the release/acquire pair the cross-thread
         // read needs; `Active` gets the same guarantee from its own volatile
         // backing field. (Same reasoning, and the same qualifier, for the
-        // dedicated flag resolved in ShouldRun below.)
+        // dedicated flag resolved in ShouldRun below.) `ModPath` has no
+        // cross-thread reader and is resolved once at init.
         public static ServerPerfConfig Config
         {
             get { return ConfigPublication.Current; }
@@ -214,10 +215,13 @@ namespace EfficientServer
 
         // The re-apply chain `es reload` runs, in apply order.
         //
-        // The governor re-base leads because it settles state derived from the
-        // PREVIOUS config object (the cached vanilla base and the in-place
-        // throttle levers), which every other step below then reads against the
-        // swapped-in object. The rest re-run the apply-once knobs, so "reload
+        // The governor re-base leads because it is the one step whose effect is
+        // not visible in the swapped-in config: the tier machine derives its
+        // live levers from the operator's declared intent on every read
+        // (GovernorTiers.EffectiveEntityStride / EffectiveGraphEvery), so a
+        // reload has to settle the TIER itself and release a standing animator
+        // emergency the new config no longer authorizes (GovernorPatch.
+        // OnConfigReloaded). The rest re-run the apply-once knobs, so "reload
         // takes effect immediately" holds for them too (all idempotent; they log
         // only real changes). The imperative skip group is installed at
         // GameStartDone ONLY when the then-current config was enabled
@@ -406,8 +410,9 @@ namespace EfficientServer
         /// <summary>
         /// The gate against a config generation the caller has ALREADY read.
         /// Every patch prefix needs the config twice (its own section, then the
-        /// master gate), and <see cref="Config"/> is a volatile field because it is
-        /// swapped under non-main-thread readers. Reading it separately for each
+        /// master gate), and <see cref="Config"/> reads a volatile reference
+        /// (<see cref="ConfigPublication.Current"/>) that is swapped under
+        /// non-main-thread readers. Reading it separately for each
         /// use costs a second volatile acquire on paths that run per entity per
         /// tick, and worse, the two reads can straddle a <c>ReloadConfig</c>
         /// swap: a prefix would gate on one generation and then read its knob out

@@ -209,7 +209,8 @@ namespace EfficientServer
     // the broadphase (vanilla already staggers only the response). Movement/
     // collision integration is 54% of the per-zombie tick; the per-neighbor share
     // exists only in dense packs. Off-tick zombies still collide with the world
-    // and are still soft-push separated. Default OFF pending the A/B.
+    // and are still soft-push separated. Default OFF: the A/B ran and returned
+    // NULL (RESULTS 3r), so there is no proven win to default on.
     public sealed class CrowdCollisionLodConfig
     {
         public bool Enabled { get; set; } = false;

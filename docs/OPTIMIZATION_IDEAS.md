@@ -117,7 +117,7 @@ Legend: **Near** = fits EfficientServer-style Harmony/config · **Mid** = large 
 | Cap pathfind requests per frame / per blood moon | **Near** | Coalesce “all zeds path to same player”; inverse of IceCoffee unbounded path workers |
 | Skip or slow `SpawnManagerBiomes` walk far from players | **Near/Mid** | Every-20-tick cost scales with chunks |
 | Sleeper volume tick budget by player distance | **Near** | Careful: quests/POI clears |
-| Deco / music / cloth already skippable on dedicated | **Near** | Partially done |
+| Music / splash / environment audio / ambient spectrum already skippable on dedicated (shipped); cloth is toggled inside the AI LOD pass; deco is not patched at all | **Near** | Partial |
 | Lower imposter / dynamic mesh for non-observers | **Near** | Partially done |
 | Entity tick slice: prefer players’ neighborhoods | **Mid** | Change fairness of who gets sim time |
 | Disable or rate-limit Twitch/vote leftovers if present | **Near** | ARCHITECTURE notes waste if unused |
@@ -233,16 +233,16 @@ Loop RE evidence: [`../../7dtd-engine-research/docs/loop/loop.md`](../../7dtd-en
 
 ### 5.1 Near-term (Grade A from RE)
 
-1. **Pathfind admission** on `EntityAlive.FindPath` / `PathFinderThread.FindPath` - stock **always enqueues** (Y-clamp only when xz dist² &gt; 1225). Per-entityId dict coalesces. Worker coroutine drains **≤8 paths/slice** then yields; each path runs **`AstarPath.StartPath`** (A* package). Combat EAI can call FindPath **3× per Update**.
+1. **SHIPPED v1.17.0: pathfind admission** on `EntityAlive.FindPath` (`PathAdmissionPatch`, both knobs default 0) - stock **always enqueues** (Y-clamp only when xz dist² &gt; 1225). Per-entityId dict coalesces. Worker coroutine drains **≤8 paths/slice** then yields; each path runs **`AstarPath.StartPath`** (A* package). Combat EAI can call FindPath **3× per Update**.
 2. **Closest-player cache TTL** - `GetClosestPlayer` linear over players; `EntityActivityUpdate` primary consumer.
 3. **Spawn walk scoping** - `SpawnManagerBiomes.SpawnUpdate` **441 IL**, ~every 20 ticks × area-master chunks.
 4. **Optional falling-block → air** - `AddFallingBlock` → `GroupFallingBlocks` (292) / `LetBlocksFall`.
-5. **Guard dedicated `GC.Collect`** in `gmUpdate`.
+5. **SHIPPED 2026-07-18: guard dedicated `GC.Collect`** in `gmUpdate` (`GcGuardPatch`).
 6. **Keep / tune LOD + far updateTasks skip** - scale only throttles EAI; **`EntityMoveHelper.UpdateMoveHelper` (1236 IL)** does dig/jump/stuck/attack assist on every updateTasks. Far skip avoids it. Vulture `updateTasks` is **1344 IL** if relevant.
 
 ### 5.2 Next (Grade B, evidence-gated)
 
-7. **Dedicated deco / splash skip** - `DecoManager.UpdateTick` (330), `WaterSplashCubes.Update` (185); same class as music skip.
+7. **Dedicated deco skip** - `DecoManager.UpdateTick` (330) is still unbuilt; `WaterSplashCubes.Update` (185) already ships with the music skip.
 8. **Sleeper volume LOD** - `SleeperVolume.Tick` / touch paths.
 9. **Vehicle/drone manager idle early-out** - 297 / 305 IL every gmUpdate if instances exist.
 10. **Net interest rate LOD** - `updatePlayerList` (**509 IL**): Teleport if enc Δ∉±256; full PosAndRot if ∉±128 or age&gt;100; else RelPos; vel if motion²&gt;0.04; interest refresh if distSq&gt;16. High desync risk.

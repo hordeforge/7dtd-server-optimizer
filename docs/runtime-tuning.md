@@ -1,4 +1,4 @@
-# Runtime tuning surfaces (V 3.0.1 dedicated)
+# Runtime tuning surfaces (V3.1.0 dedicated)
 
 **Owns:** process-level knobs (Boehm GC symbols/env, `GC.Collect` gate, `settargetfps`, ModEvents lifecycle).  
 **Scaling context:** [`measured-scaling.md`](measured-scaling.md). **Hub:** [`INDEX.md`](INDEX.md).
@@ -41,8 +41,9 @@ this build honors only a subset (verified string-table list below); e.g.
 `GC_FREE_SPACE_DIVISOR`, `GC_INITIAL_HEAP_SIZE`, `GC_MAXIMUM_HEAP_SIZE`,
 `GC_USE_ENTIRE_HEAP`, `GC_FULL_FREQUENCY`, `GC_NPROCS`, `GC_ENABLE_INCREMENTAL` /
 `GC_DISABLE_INCREMENTAL`, `GC_PAUSE_TIME_TARGET`, `GC_FORCE_UNMAP_ON_GCOLLECT`,
-`GC_DONT_GC`. **NOT honored:** `GC_MARKERS` / `GC_PAUSE_TIME_TARGET` alone (use
-`GC_NPROCS` for parallel marking).
+`GC_DONT_GC`. `GC_PAUSE_TIME_TARGET` is forwarded by run_server.sh only together
+with `SEVENDTD_GC_INCREMENTAL`, so it takes effect in incremental mode alone.
+**NOT honored:** `GC_MARKERS` (use `GC_NPROCS` for parallel marking).
 
 **`GC_FREE_SPACE_DIVISOR` value vs memory** (live working set ~6 GB on this world):
 
@@ -118,7 +119,7 @@ vanilla knob, not a mod concern.
 
 Sanctioned hooks that avoid a Harmony patch just for timing: `ModEvents.GameAwake`,
 `GameStartDone`, `GameShutdown`, `PlayerSpawnedInWorld`, etc. Register via
-`ModEvents.<Event>.RegisterHandler(handler)`. In V3.0.1 the handler is a **typed
+`ModEvents.<Event>.RegisterHandler(handler)`. In V3.1.0 the handler is a **typed
 `ref` delegate**: `ModEventHandlerDelegate<TData>(ref TData)` - e.g.
 `GameStartDone` takes `ref ModEvents.SGameStartDoneData` (the older parameterless
 `void()` form is pre-V1.0). Prefer these + public setters + P/Invoke over Harmony;

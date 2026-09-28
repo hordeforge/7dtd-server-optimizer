@@ -1,9 +1,15 @@
 namespace EfficientServer.Patches
 {
     /// <summary>
-    /// Process-wide counter for per-entity LOD striping inside the TICK path
-    /// (<see cref="UpdateTasksLodPatch"/> mid-band striding,
-    /// <see cref="CrowdCollisionLodPatch"/> resolve staggering). Advanced by
+    /// Process-wide counter every cadence gate in the mod reads. Per-entity LOD
+    /// striping: <see cref="UpdateTasksLodPatch"/> mid-band striding,
+    /// <see cref="CrowdCollisionLodPatch"/> resolve staggering,
+    /// <see cref="AnimatorLodPatch"/> frame stripe. Run cursor rather than an
+    /// entity stripe: <see cref="AstarGraphThrottlePatch"/> and
+    /// <see cref="EntityDistributionStridePatch"/> pass a fixed id 0, so the
+    /// whole world advances and skips together, and
+    /// <see cref="PathAdmissionPatch"/> keys its enqueue window on the counter
+    /// rather than claiming a slot. Advanced by
     /// <see cref="TickClockPatch"/>, whose prefix fires once per GameManager.UpdateTick
     /// INVOCATION - and UpdateTick runs EVERY FRAME while the ~20 Hz full sim tick is
     /// gated inside it (measured: 19.9 -> 59.7 UpdateTick calls/s when Server.TargetFps
