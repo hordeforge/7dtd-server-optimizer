@@ -94,6 +94,7 @@ acceptance (`docs/FEATURES.md` fidelity checks).
 | `scripts/check_version.py` (+ `--selftest`) | `make check-scripts` | versions disagree across `ModInfo.xml` / `AssemblyInfo.cs`, docs claim a version newer than shipped, the changelog lacks the shipped version, or the gate's own parsing broke | bump `Source/EfficientServer/ModInfo.xml` and `AssemblyInfo.cs` together and add the matching `CHANGELOG.md` entry in the same change, or fix the script; its selftest is the spec |
 | `scripts/repo_root.py --selftest` | `make check-scripts` | the repository-root marker walk the other scripts resolve their paths with broke | fix the script, or add the moved/renamed marker to `MARKERS`; its selftest is the spec |
 | `scripts/es_cfg_guard.py --selftest` | `make check-scripts` | the config backup/restore guard broke its own protocol | fix the script; its selftest is the spec |
+| `scripts/apm_tail.py --selftest` | `make check-scripts` | the APM log tail cache or its window math broke, or it stopped invalidating on a log that was truncated, rewritten or rolled over at the same path | fix the script; its selftest is the spec |
 | `scripts/coverage_badge.py --selftest` | `make check-scripts` | the coverage-badge generator broke (Cobertura parsing or SVG rendering; CI uses it to publish the README badge) | fix the script; its selftest is the spec |
 
 ## PR expectations beyond the gates
