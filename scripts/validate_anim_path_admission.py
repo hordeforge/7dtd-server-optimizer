@@ -37,6 +37,7 @@ import time
 from typing import TypedDict
 
 from cli_common import run_cli
+from es_cfg_guard import write_atomic
 from harness_common import (
     CFG_SWAP,
     DEDICATED_CMDLINE_MARKER,
@@ -46,7 +47,6 @@ from harness_common import (
     kill_matching_processes,
     log,
     teardown_bots,
-    write_atomic,
     write_diag_config,
     write_path_config,
     write_report,

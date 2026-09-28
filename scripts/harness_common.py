@@ -34,7 +34,9 @@ import bloodmoon_profile as B
 from es_cfg_guard import CFG_ENCODING, ConfigSwap, unique_path, write_atomic
 
 # Public surface of this shared module (mypy no_implicit_reexport: consumers
-# may import exactly these; B and write_atomic are deliberate re-exports).
+# may import exactly these; B is a deliberate re-export). write_atomic and
+# unique_path stay out: their home is es_cfg_guard, so consumers import them
+# from there rather than through a second spelling of the same name.
 __all__ = [
     "CFG_SWAP",
     "DEDICATED_CMDLINE_MARKER",
@@ -47,8 +49,6 @@ __all__ = [
     "kill_matching_processes",
     "log",
     "teardown_bots",
-    "unique_path",
-    "write_atomic",
     "write_diag_config",
     "write_path_config",
     "write_report",
