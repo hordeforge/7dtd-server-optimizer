@@ -57,9 +57,9 @@ RUFF_VERSION := 0.16.4
 # between versions, so the type gate must be identical on both sides.
 MYPY_VERSION := 2.1.0
 
-.PHONY: help build build-mcs test lint unit unit-list check-scripts preflight-lint preflight-unit \
-	preflight-scripts scratch coverage install uninstall run clean package verify-reproducible \
-	backup-config ruff-version mypy-version
+.PHONY: help build build-mcs test lint unit unit-list check-scripts check-scripts-list \
+	preflight-lint preflight-unit preflight-scripts preflight-script scratch coverage install \
+	uninstall run clean package verify-reproducible backup-config ruff-version mypy-version
 
 # Read by .github/workflows/ci.yml (`make -s ruff-version`) so the pinned
 # version has one source of truth. Printing it here beats a second literal in
@@ -110,6 +110,10 @@ help:
 	@echo "  Single check in the unit harness (quote a '*' so the shell keeps it):"
 	@echo "  make unit FILTER='Governor*'   Only matching checks; no match exits 1"
 	@echo "  make unit-list                  List the check names a FILTER can match"
+	@echo
+	@echo "  Single Python gate (no wildcard; the .py suffix is optional):"
+	@echo "  make check-scripts SCRIPT=bench_parse   Only that gate; no match exits 2"
+	@echo "  make check-scripts-list                 List the names a SCRIPT can match"
 	@echo
 	@echo "  make clean             Remove dist/, TestResults/ and bin/obj build outputs"
 	@echo "  make coverage          Run the unit suite under dotnet-coverage into"
@@ -226,20 +230,62 @@ unit-list: preflight-unit scratch
 	@dotnet restore --locked-mode $(ROOT)/Source/EfficientServer.Tests >/dev/null
 	@dotnet run --project $(ROOT)/Source/EfficientServer.Tests -c Release --no-restore -- --list $(if $(FILTER),--filter "$(FILTER)",)
 
-check-scripts: preflight-scripts scratch
+check-scripts: preflight-scripts preflight-script scratch
 # Stdlib-only syntax gate for the scripts these targets never execute
 # (validate_*.py / measure_es_onoff.py need a live server). Bytecode lands in
-# scripts/__pycache__, which is gitignored.
+# scripts/__pycache__, which is gitignored. Unfiltered even under SCRIPT: it is
+# the cheapest gate in the tree and a syntax error anywhere is not the one you
+# are chasing.
 	python3 -m compileall -q $(ROOT)/scripts
-	python3 $(ROOT)/scripts/repo_root.py --selftest
-	python3 $(ROOT)/scripts/check_config_doc.py
-	python3 $(ROOT)/scripts/check_config_doc.py --selftest
-	python3 $(ROOT)/scripts/check_version.py
-	python3 $(ROOT)/scripts/check_version.py --selftest
-	python3 $(ROOT)/scripts/es_cfg_guard.py --selftest
-	python3 $(ROOT)/scripts/bench_parse.py --selftest
-	python3 $(ROOT)/scripts/coverage_badge.py --selftest
-	python3 $(ROOT)/scripts/backup_config.py --selftest
+	$(if $(SCRIPT_MATCH),,python3 $(ROOT)/scripts/check_config_doc.py)
+	$(if $(SCRIPT_MATCH),,python3 $(ROOT)/scripts/check_version.py)
+	$(SELFTEST_CMDS)
+
+# The Python gates, i.e. the scripts that own a --selftest. The rest of
+# scripts/ is a library (cli_common.py, selftest_support.py, harness_common.py)
+# or a validator that needs a running server (validate_*.py,
+# measure_es_onoff.py), so neither is a gate. One list, three readers: the
+# check-scripts recipe iterates it, check-scripts-list prints it, and
+# preflight-script validates against it, so a new gate cannot be added to one
+# and forgotten in the other two.
+CHECK_SELFTESTS := backup_config.py bench_parse.py check_config_doc.py \
+	check_version.py coverage_badge.py es_cfg_guard.py repo_root.py
+
+# SCRIPT runs one gate instead of the list, for the edit-test loop:
+# `make check-scripts SCRIPT=bench_parse` (the .py suffix is optional). The C#
+# harness got this first as `make unit FILTER`, and these gates are the same
+# shape of need, so they get the same shape of answer. `make test` and CI never
+# set SCRIPT, so the gate still runs the whole list.
+#
+# The two selftests that drive a real filesystem (es_cfg_guard, bench_parse)
+# build and tear down a temp tree per case, so the list costs tens of seconds
+# on a CoW filesystem and a contributor editing one script should not pay it
+# for the other six.
+SCRIPT ?=
+# Exact match, not a `stem%` pattern: make's filter takes wildcards, so a
+# truncated `bench_pars` would pattern-match `bench_parse` and quietly run the
+# whole list again instead of reporting the typo. basename() already drops a
+# supplied .py suffix, so both spellings land on the same stem.
+SCRIPT_STEM := $(basename $(notdir $(SCRIPT)))
+SCRIPT_MATCH := $(filter $(SCRIPT_STEM),$(basename $(CHECK_SELFTESTS)))
+SELFTEST_CMDS := $(if $(SCRIPT_MATCH),\
+	python3 $(ROOT)/scripts/$(SCRIPT_MATCH).py --selftest,\
+	$(foreach s,$(CHECK_SELFTESTS),python3 $(ROOT)/scripts/$s --selftest &&) true)
+
+# An unrecognized SCRIPT would otherwise select nothing and report a clean run,
+# which is the one outcome a debugging filter must never produce. Names the
+# list target, same as `make unit FILTER` refuses an empty match.
+preflight-script:
+	@test -z "$(SCRIPT)" && exit 0; \
+	if [ -z "$(SCRIPT_MATCH)" ]; then \
+	  echo "ERROR: SCRIPT=$(SCRIPT) is not one of this repo's Python gates." >&2; \
+	  echo "  Run 'make check-scripts-list' for the names, e.g.:" >&2; \
+	  echo "    make check-scripts SCRIPT=bench_parse" >&2; exit 2; fi
+
+# Gate names, one per line, for picking a SCRIPT. Prints stems, which is what
+# SCRIPT takes, and exits 0 without running anything.
+check-scripts-list:
+	@for s in $(CHECK_SELFTESTS); do echo "$${s%.py}"; done
 
 test:
 # Order matters and is the CI order: shell lints, then the .NET harness, then

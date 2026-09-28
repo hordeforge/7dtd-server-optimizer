@@ -49,7 +49,7 @@ only the one your edit touches; each needs just its own tools.
 
 ```bash
 $EDITOR Source/EfficientServer/Config.cs   # then: make unit
-$EDITOR scripts/es_cfg_guard.py            # then: make lint check-scripts
+$EDITOR scripts/es_cfg_guard.py            # then: make lint check-scripts SCRIPT=es_cfg_guard
 make test                                  # before opening the PR; same gates as CI
 ```
 
