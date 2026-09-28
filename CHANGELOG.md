@@ -19,12 +19,35 @@ A release carries one version number, named twice:
   reports at startup (`versions: mod=...`). `scripts/check_version.py` (run by
   `make test`/CI) keeps it identical across source, dist copy, and
   AssemblyInfo, rejects doc claims of versions that never shipped, and requires
-  the newest dated section above to be it. `.github/workflows/release.yml`
+  the newest dated section below to be it. `.github/workflows/release.yml`
   fails a pushed tag that does not equal the mod version, so the two cannot
   drift.
 
 The `v0.1.0`, `v1.17.0` and `v1.17.1` tags predate that rule and all carry mod
 version 1.17.0; every release after them takes its number from the tag.
+
+## What a version number promises
+
+This is the de facto policy, read off the history below rather than a scheme
+chosen up front:
+
+- **patch**: fixes only. The mod version lineage has one (1.4.1, follow-up
+  fixes); the tag scheme began at 0.1.0, so no tagged patch release exists yet.
+- **minor**: features, fixes, and config-surface changes, including removals
+  and renames. 1.13.0 renamed config keys and 1.19.0 removed
+  `scripts/gen_sbom.py`; the GC megapause probe's removal is the current
+  instance. A minor is therefore not semver-clean against the config file, and
+  an operator upgrading across minors is expected to read the notes.
+- The config load is what keeps that survivable: an unknown key is ignored
+  rather than rejected, the rest of the file still applies, and an ignored key
+  is now named at load, one WARNING per key with its section path. A key that
+  disappears leaves the lever at its built-in default, never a failed boot.
+- So the contract an upgrade relies on is: read the release's `Breaking` and
+  `Removed` sections (each names the exact keys or symbols and what to do),
+  then check the startup log for `config unknown key` to catch anything the
+  notes missed. Anything that removes or renames a config key, a console
+  command, or a documented default lands under one of those two headings;
+  nothing breaking goes under `Changed` alone.
 
 ## [Unreleased]
 
@@ -32,13 +55,30 @@ version 1.17.0; every release after them takes its number from the tag.
 - The opt-in GC megapause diagnostic is gone: `Diagnostics.GcMegapauseTest`,
   `Diagnostics.WarmupSeconds` and `Diagnostics.GrowSeconds` no longer exist,
   and `GcDiagnostics` (the background thread that disabled the collector, grew
-  the heap and timed one forced `GC_gcollect`) is deleted with them. A config
-  still carrying those keys keeps them on disk, but nothing reads them: the
-  probe is simply never armed, so delete them. Nothing else consumed the
-  removal: the production GC path is `Gc.Incremental` plus the `Gc` safety
-  ceiling, both untouched. The measurement the probe produced (479 ms forced
-  collect on a 6.91 GB heap) stays in `docs/RESULTS.md`; the shipped lever it
-  informed is the allocation work it argued for.
+  the heap and timed one forced `GC_gcollect`) is deleted with them. The probe
+  did ship (mod 1.5.0/1.5.1, carried in the `[0.1.0]` artifact, which packaged
+  mod 1.17.0), so a config edited against that install really does carry those
+  three keys. The load still succeeds: an unrecognized key is ignored rather
+  than rejected, and the probe is never armed, so the only effect on such a
+  config is that the unknown-key warning added in this same release now names
+  each removed key on load (`config unknown key
+  'Diagnostics.GcMegapauseTest' ignored`). Delete them from the installed
+  `efficientserver.json` to silence it. Nothing else consumed the removal: the
+  production GC path is `Gc.Incremental` plus the `Gc` safety ceiling, both
+  untouched. The measurement the probe produced (479 ms forced collect on a
+  6.91 GB heap) stays in `docs/RESULTS.md`; the shipped lever it informed is
+  the allocation work it argued for.
+- `es animoff` (every enemy animator culled, timer-only attack cadence) and
+  `es rigoff` (unguarded rig visual components disabled) now REFUSE until the
+  new `Diagnostics.AllowFidelityProbes` knob is true in the installed config
+  (`es reload` applies it). Both commands shipped back in mod 1.14 and worked
+  with no config, so a validation run scripted against 1.19.0 stops at the
+  refusal line until the knob is set. Each refusal is audited and echoed, and
+  `es status` shows the switch as `probeAllow=`. The restore commands
+  (`es animon`, `es rigon`) and `es animstate` stay ungated, so an armed probe
+  can always be walked back, and `es reload` releases one when the reloaded
+  config takes the switch back to false. This matches the `es benchgod on` gate
+  1.18.0 added; the default (false) is what refuses a fresh install.
 
 ### Added
 - The game-type-free harness (config load, normalize, config-path discovery)
@@ -46,11 +86,13 @@ version 1.17.0; every release after them takes its number from the tag.
   DLL is OS-neutral managed code is exercised on the host OS a dedicated
   server usually runs, not asserted from a Linux-only run. No shipped behavior
   changed.
-- A JSON key that binds to no knob is now named at load
-  (`config unknown key 'Pathfinding.GraphUpdateEveryTick' ignored ...` on the
-  WARNING channel) instead of silently leaving the lever at its default. The
-  dotted path points at the section the typo is in; case variants of real keys
-  still bind and are not reported. This is the behavior docs/CONFIG.md already
+- A JSON key that binds to no knob is named at load again, one WARNING per key
+  with its section path (`config unknown key 'Pathfinding.GraphUpdateEveryTick'
+  ignored ...`), restoring what 1.19.0 dropped so a typo stops being a silent
+  default. The load itself is unchanged (fail-soft per group, the rest of the
+  file still applies). The dotted path points at the section the typo is in;
+  name lookup is ordinal-ignore-case, matching the binder, so a recased key
+  binds and is not reported. This is the behavior docs/CONFIG.md already
   promised.
 - `Diagnostics.AllowFidelityProbes` (default false) gates the console arms of
   the fidelity probes: `es animoff` (every enemy animator culled, timer-only
@@ -210,12 +252,6 @@ version 1.17.0; every release after them takes its number from the tag.
   run. Those runs are routinely SIGKILLed by tool timeouts, and nothing ever
   removed them, so a long-lived server install accumulated one per killed
   run. Temps owned by a still-running pid are left alone.
-- Unknown config keys are named again at load, one WARNING per key with its
-  section path (`config unknown key 'Pathfinding.GraphUpdateEveryTick' ignored`).
-  The load is unchanged (fail-soft per group, the rest of the file still
-  applies), so this only makes a typo visible instead of silent. Name lookup is
-  ordinal-ignore-case, matching the binder: a recased key binds and is not
-  reported.
 - `Server.TargetFps > 0` now caps `Governor.OverBudgetMs` at 1.2x the target
   frame interval (60 at fps 20, 30 at 40, 20 at 60). The band is compared
   against the measured frame interval, so the fps-20 default of 57 could never

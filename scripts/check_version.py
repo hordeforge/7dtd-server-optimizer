@@ -19,6 +19,9 @@ Checks that:
 6. The shipped version has a row in the docs/RESULTS.md version-history
    table, so a release cannot ship with a version history that stops at the
    release before it.
+7. SECURITY.md's supported-versions section names the shipped mod version and
+   nothing newer, so the "which version still gets fixes" promise cannot go
+   stale behind a bump.
 
 Run: python3 scripts/check_version.py
      python3 scripts/check_version.py --selftest     (both wired into `make test`)
@@ -46,9 +49,10 @@ USAGE = """\
 usage: scripts/check_version.py [--selftest] [-h | --help]
 
 Gate: ModInfo.xml, AssemblyInfo.cs and the dist ModInfo must carry consistent
-versions, docs must not claim a version newer than shipped, and CHANGELOG.md
+versions, docs must not claim a version newer than shipped, CHANGELOG.md
 must mention the shipped version in a well-formed, newest-first release
-section list. Wired into `make test`.
+section list, and SECURITY.md must name the shipped version as the supported
+one. Wired into `make test`.
   --selftest  exercise the version extraction/normalization logic itself (the
               repo gate above only fails on tree drift; it stays green if this
               script's own matching logic silently breaks)
@@ -206,6 +210,50 @@ def _results_history_fails(text: str, shipped: str) -> list[str]:
             (
                 f"RESULTS.md version history has no row for {version[0]}.{version[1]}"
                 f" (shipped mod version is {shipped})"
+            )
+        ]
+    return []
+
+
+def _security_version_fails(text: str, shipped: str) -> list[str]:
+    """SECURITY.md's supported-version statement must name the shipped mod version.
+
+    That section is where an operator reads which version still gets fixes, and
+    it spells the number out in prose ("1.19.0 at this writing"). Nothing else
+    covered it: the docs/*.md scan looks for `v1.N` claims, which this file never
+    uses, so a release bumped ModInfo and left the security promise naming the
+    version before it. Older versions may also be named there (the 0.1.0
+    artifact's `mod=1.17.0` is the worked example of the tag/mod split), and a
+    tag inside a zip name is not a mod version at all, so a hyphenated token is
+    skipped. The rule is the one that matters: the shipped version must be named
+    and nothing newer may be.
+    """
+    m = re.search(
+        r"^## Supported versions\s*$(?P<body>.*?)(?=^## |\Z)",
+        text,
+        re.MULTILINE | re.DOTALL,
+    )
+    if m is None:
+        return ["SECURITY.md has no `## Supported versions` section"]
+    claimed = {
+        norm(tok)
+        for tok in re.findall(r"(?<![-\w.])(\d+\.\d+\.\d+)\b", m.group("body"))
+    }
+    shipped_version = norm(shipped)
+    if shipped_version not in claimed:
+        return [
+            (
+                "SECURITY.md supported-versions section does not name the "
+                f"shipped mod version {shipped}"
+            )
+        ]
+    newer = sorted(v for v in claimed if v > shipped_version)
+    if newer:
+        names = ", ".join(".".join(str(p) for p in v) for v in newer)
+        return [
+            (
+                f"SECURITY.md supported-versions section names {names}, "
+                f"newer than the shipped {shipped}"
             )
         ]
     return []
@@ -379,6 +427,48 @@ def _selftest() -> int:
         _results_history_fails(outside, "1.19.0") != [],
     )
 
+    # The supported-versions statement, on a synthetic SECURITY.md. Older mod
+    # versions and a tag inside a zip name may appear there; the shipped one
+    # must be named and nothing newer may be.
+    security = (
+        "## Supported versions\n\nFixes are made for `ModInfo.xml` (1.19.0 at "
+        "this writing). Older releases receive no backports, so\n"
+        "`EfficientServer-0.1.0.zip` logging `mod=1.17.0` is correct.\n\n"
+        "## Reporting\n\n1.19.0 is fine here.\n"
+    )
+    t.check(
+        "_security_version_fails accepts the shipped version",
+        _security_version_fails(security, "1.19.0") == [],
+    )
+    t.check(
+        "_security_version_fails catches a stale supported version",
+        any("does not name" in f for f in _security_version_fails(security, "1.20.0")),
+    )
+    t.check(
+        "_security_version_fails catches a newer version promised as supported",
+        any(
+            "newer than the shipped" in f
+            for f in _security_version_fails(
+                "## Supported versions\n\nFixed for 1.19.0 and for the "
+                "upcoming 1.20.0.\n\n## Reporting\n\nx\n",
+                "1.19.0",
+            )
+        ),
+    )
+    t.check(
+        "_security_version_fails reads the section, not the whole file",
+        _security_version_fails(
+            "## Supported versions\n\nThe current mod version is 1.19.0.\n\n"
+            "## Reporting\n\ntry 1.99.0\n",
+            "1.19.0",
+        )
+        == [],
+    )
+    t.check(
+        "_security_version_fails catches a missing section",
+        _security_version_fails("## Reporting\n\nx\n", "1.19.0") != [],
+    )
+
     return t.finish()
 
 
@@ -420,7 +510,13 @@ def main() -> int:
         shipped = norm(mi)
         # docs should not claim a future minor (v1.18 drift class); skip
         # changelog sections, which legitimately describe version history.
-        for f in sorted(DOCS.glob("*.md")):
+        # README/SECURITY/CONTRIBUTING carry the same `v1.N` claim form and
+        # were outside the glob, so a stale one there read as current.
+        for f in sorted(DOCS.glob("*.md")) + [
+            ROOT / name
+            for name in ("README.md", "SECURITY.md", "CONTRIBUTING.md")
+            if (ROOT / name).exists()
+        ]:
             txt = f.read_text(encoding="utf-8", errors="replace")
             body = txt.split("## Changelog", 1)[0]
             for m in re.finditer(r"v1\.(\d+)", body):
@@ -437,6 +533,12 @@ def main() -> int:
     results = ROOT / "docs" / "RESULTS.md"
     if mi and results.exists():
         fails.extend(_results_history_fails(results.read_text(encoding="utf-8"), mi))
+
+    security = ROOT / "SECURITY.md"
+    if mi and security.exists():
+        fails.extend(
+            _security_version_fails(security.read_text(encoding="utf-8"), mi)
+        )
 
     if fails:
         print("FAIL:", file=sys.stderr)

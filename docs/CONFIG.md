@@ -455,11 +455,14 @@ horde.
 ## Diagnostics
 
 The former GC megapause probe (`GcMegapauseTest` + `WarmupSeconds` +
-`GrowSeconds`) shipped from v1.5.1 through v1.19.0 and is deleted in the
-unreleased `[Unreleased]` section of the CHANGELOG: a config that still carries
-those keys parses fine but nothing reads them, so delete them.
-RESULTS.md keeps the evidence the probe produced (measured 479 ms forced
-collect at 6.9 GB). Remaining knobs:
+`GrowSeconds`) shipped in mod 1.5.0/1.5.1 (carried in the `[0.1.0]` artifact,
+which packaged mod 1.17.0) and is deleted in the unreleased `[Unreleased]`
+section of the CHANGELOG, so a config edited against that install really does
+carry the three keys. They parse fine, nothing reads them, and the load names
+each one (`config unknown key 'Diagnostics.GcMegapauseTest' ignored`): delete
+them to silence the warning. The CHANGELOG `Breaking` section for the release
+that removed them is the upgrade record. RESULTS.md keeps the evidence the
+probe produced (measured 479 ms forced collect at 6.9 GB). Remaining knobs:
 
 ### `AllowBenchGod` (false) and `AllowFidelityProbes` (false)
 Runtime allow-switches for the bench-only console commands. `AllowBenchGod`

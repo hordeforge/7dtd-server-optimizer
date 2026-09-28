@@ -8,9 +8,10 @@ report those to their respective maintainers (The Fun Pimps for the game).
 
 Security-relevant fixes are made for the current mod version stated in
 `Source/EfficientServer/ModInfo.xml` (1.19.0 at this writing; it is
-authoritative) and land on `main`. Older releases receive no backports. The
-mod version is independent of the GitHub release tag, so
-`EfficientServer-v0.1.0.zip` logging `mod=1.17.0` is correct, not drift.
+authoritative) and land on `main`. Older releases receive no backports, so an
+operator on an older mod version gets no fix, security or otherwise. The mod
+version is independent of the GitHub release tag, so
+`EfficientServer-0.1.0.zip` logging `mod=1.17.0` is correct, not drift.
 
 ## Reporting
 
