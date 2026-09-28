@@ -130,25 +130,47 @@ def utc_stamp(now: datetime | None = None) -> str:
     return (now or datetime.now(timezone.utc)).strftime(STAMP_FORMAT)
 
 
-def sha256_of(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+def sha256_of_bytes(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def read_config_bytes(path: Path) -> bytes:
+    """The raw bytes of a config file, raising BackupError when it cannot be read.
+
+    Split from :func:`parse_config_bytes` so a caller that needs the bytes for
+    more than the document (the sha256 in a manifest, the copy written into a
+    snapshot dir) reads the file ONCE. ``snapshot`` and ``verify`` each used to
+    read the same file two or three times for those three answers.
+    """
+    try:
+        return path.read_bytes()
+    except OSError as exc:
+        msg = f"unreadable config {path}: {exc}"
+        raise BackupError(msg) from exc
+
+
+def parse_config_bytes(data: bytes, origin: Path) -> dict[str, object]:
+    """The document in already-read config bytes, raising BackupError on anything unloadable.
+
+    ``origin`` names the file in the failure message; the bytes may have been
+    read by the caller for other reasons. A non-object document (a list, a bare
+    number) parses fine and still cannot be a config, so the shape is checked
+    here rather than trusted downstream.
+    """
+    try:
+        doc = json.loads(data.decode(CFG_ENCODING))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        msg = f"unreadable config {origin}: {exc}"
+        raise BackupError(msg) from exc
+    if not isinstance(doc, dict):
+        msg = f"config {origin} is a {type(doc).__name__}, not a JSON object"
+        raise BackupError(msg)
+    return doc
 
 
 def read_config(path: Path) -> dict[str, object]:
-    """Parse a config file, raising BackupError on anything unloadable.
-
-    A non-object document (a list, a bare number) parses fine and still cannot
-    be a config, so the shape is checked here rather than trusted downstream.
-    """
-    try:
-        doc = json.loads(path.read_text(encoding=CFG_ENCODING))
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
-        msg = f"unreadable config {path}: {exc}"
-        raise BackupError(msg) from exc
-    if not isinstance(doc, dict):
-        msg = f"config {path} is a {type(doc).__name__}, not a JSON object"
-        raise BackupError(msg)
-    return doc
+    """Parse a config file, raising BackupError on anything unloadable."""
+    return parse_config_bytes(read_config_bytes(path), path)
 
 
 def read_serverconfig(path: Path) -> None:
@@ -199,12 +221,21 @@ def template_keys(template: Path = TEMPLATE_JSON) -> frozenset[str]:
     The mod's loader ignores unknown keys silently, so a typo'd key is a knob
     that quietly never applies. check_config_doc.py proves the template itself;
     this only bounds a snapshot against it.
+
+    One read per call, and the caller decides how many it makes: a loop over
+    snapshots hoists this out rather than re-reading the same file per snapshot.
     """
     return frozenset(read_config(template))
 
 
-def unknown_keys(doc: dict[str, object], template: Path = TEMPLATE_JSON) -> set[str]:
-    return set(doc) - template_keys(template)
+def unknown_keys(doc: dict[str, object], known: frozenset[str]) -> set[str]:
+    """Top-level keys in ``doc`` that ``known`` (see :func:`template_keys`) does not declare.
+
+    Takes the key set, not the template path, so a caller comparing many
+    documents against one template reads it once. Reading it here instead made
+    every snapshot in a verify re-read and re-parse the same shipped file.
+    """
+    return set(doc) - known
 
 
 def live_config(server_root: Path) -> Path:
@@ -329,8 +360,11 @@ def snapshot(
             " (install the mod with `make install DS=...` first)"
         )
         raise BackupError(msg)
-    doc = read_config(live)
-    stray = unknown_keys(doc)
+    # One read of the live file feeds all three answers below (document,
+    # manifest digest, snapshot copy); it used to be read three times.
+    live_bytes = read_config_bytes(live)
+    doc = parse_config_bytes(live_bytes, live)
+    stray = unknown_keys(doc, template_keys())
     if stray:
         print(
             f"WARNING: {live} has keys the shipped template does not:"
@@ -372,8 +406,8 @@ def snapshot(
     manifest: Manifest = {
         "stamp": target.name,
         "source": str(live),
-        "sha256": sha256_of(live),
-        "serverconfig": {sc.name: sha256_of(sc) for sc in serverconfigs},
+        "sha256": sha256_of_bytes(live_bytes),
+        "serverconfig": {sc.name: sha256_of_bytes(sc.read_bytes()) for sc in serverconfigs},
     }
     # Build under a name no reader matches, then publish with one rename. The
     # stamp in the manifest is the FINAL name, so the manifest is built here,
@@ -384,7 +418,7 @@ def snapshot(
     dest.mkdir(parents=True, exist_ok=True)
     staging = _new_staging(dest)
     try:
-        (staging / CONFIG_NAME).write_bytes(live.read_bytes())
+        (staging / CONFIG_NAME).write_bytes(live_bytes)
         for sc in serverconfigs:
             (staging / sc.name).write_bytes(sc.read_bytes())
         (staging / MANIFEST_NAME).write_text(
@@ -465,6 +499,14 @@ def verify(dest: Path) -> list[str]:
     dirs = snapshot_dirs(dest)
     if not dirs:
         return [f"no snapshots under {dest}"]
+    # The shipped template is the same file for every snapshot, so it is read
+    # once here rather than once per snapshot in the loop below. A template this
+    # tool cannot read is a failure of the tool, not of any snapshot, and verify
+    # answers with problem strings rather than raising, so it is reported as one.
+    try:
+        known = template_keys()
+    except BackupError as exc:
+        return [f"cannot bound snapshots against the template: {exc}"]
     problems: list[str] = []
     for d in dirs:
         manifest_path = d / MANIFEST_NAME
@@ -474,16 +516,23 @@ def verify(dest: Path) -> list[str]:
             problems.append(f"{d.name}: unreadable manifest ({exc})")
             continue
         recorded = manifest.get("sha256") if isinstance(manifest, dict) else None
-        actual = sha256_of(d / CONFIG_NAME)
+        # One read of the snapshot serves the digest and the parse below; a
+        # mismatch short-circuits, so a corrupt snapshot is not parsed at all.
+        try:
+            config_bytes = read_config_bytes(d / CONFIG_NAME)
+        except BackupError as exc:
+            problems.append(str(exc))
+            continue
+        actual = sha256_of_bytes(config_bytes)
         if recorded != actual:
             problems.append(f"{d.name}: sha256 {actual} != manifest {recorded}")
             continue
         try:
-            doc = read_config(d / CONFIG_NAME)
+            doc = parse_config_bytes(config_bytes, d / CONFIG_NAME)
         except BackupError as exc:
             problems.append(str(exc))
             continue
-        stray = unknown_keys(doc)
+        stray = unknown_keys(doc, known)
         if stray:
             problems.append(f"{d.name}: keys not in the shipped template: {sorted(stray)}")
         problems.extend(_verify_serverconfigs(d, manifest))
@@ -511,7 +560,7 @@ def _verify_serverconfigs(d: Path, manifest: object) -> list[str]:
             problems.append(f"{d.name}: serverconfig {name} is in the manifest but missing")
             continue
         expected = recorded[name]
-        actual = sha256_of(path)
+        actual = sha256_of_bytes(path.read_bytes())
         if actual != expected:
             problems.append(f"{d.name}: {name} sha256 {actual} != manifest {expected}")
             continue
@@ -1060,11 +1109,31 @@ def _selftest() -> int:
         for stray in hostile:
             shutil.rmtree(stray)
 
+    shipped = template_keys()
     t.check(
         "a typo'd key is reported as unknown",
-        unknown_keys({"NoSuchKnob": 1}) == {"NoSuchKnob"},
+        unknown_keys({"NoSuchKnob": 1}, shipped) == {"NoSuchKnob"},
     )
-    t.check("shipped template keys are known", unknown_keys(read_config(TEMPLATE_JSON)) == set())
+    t.check(
+        "shipped template keys are known",
+        unknown_keys(read_config(TEMPLATE_JSON), shipped) == set(),
+    )
+    # The read and parse halves must agree with the combined read_config, or a
+    # caller reusing one read of the bytes would see a different verdict than
+    # the old two-read path did.
+    t.check(
+        "parse_config_bytes agrees with read_config on a good file",
+        parse_config_bytes(TEMPLATE_JSON.read_bytes(), TEMPLATE_JSON) == read_config(TEMPLATE_JSON),
+    )
+    nonobject_refused = False
+    try:
+        parse_config_bytes(b"[]", TEMPLATE_JSON)
+    except BackupError:
+        nonobject_refused = True
+    t.check(
+        "parse_config_bytes rejects a non-object document like read_config did",
+        nonobject_refused,
+    )
 
     # The game's server settings, which the install tree holds and nothing
     # regenerates. Every check above ran against a mod-only tree, where a
@@ -1132,7 +1201,7 @@ def _selftest() -> int:
                 {
                     "stamp": target.name,
                     "source": str(live),
-                    "sha256": sha256_of(target / CONFIG_NAME),
+                    "sha256": sha256_of_bytes((target / CONFIG_NAME).read_bytes()),
                 },
                 indent=2,
             )
