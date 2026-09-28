@@ -123,7 +123,7 @@ if [[ ! -f "$SRV/Mods/0_TFP_Harmony/0Harmony.dll" ]]; then
   echo "WARNING: EfficientServer requires the stock 0_TFP_Harmony mod at load time; without it the server will not load this mod." >&2
 fi
 # Preserve the whole installed Config/ across upgrade/reinstall, not just the
-# JSON: the guard backup (efficientserver.json.swap-bak) and its quarantined
+# JSON: the guard backup (efficientserver.json.swap-bak<pid>) and its quarantined
 # .stale files are the only crash-recovery snapshot of a config a killed bench
 # run left half-swapped, and nothing regenerates them. Same rule uninstall.sh
 # applies, and the RPO claim in docs/PRODUCTION.md depends on it.

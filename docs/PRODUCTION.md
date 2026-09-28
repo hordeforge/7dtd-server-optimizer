@@ -176,7 +176,7 @@ state that is NOT regenerable is what an operator edits on the server host:
 | Live config (tuning) | `<DS>/Mods/EfficientServer/Config/efficientserver.json`, or the file `$ES_CONFIG_PATH` names | No. The repo copy is the shipped default; the host copy holds the tuned values |
 | Server settings | `<DS>/serverconfig*.xml` (ports, password, world and generation options), plus the `<name>.pre-optimized` copy `run_server.sh` keeps | No. The tracked `serverconfig.optimized.xml` is a shipped default; the live set has never existed anywhere else. Backed up by `scripts/backup_config.py` (7.1) |
 | Admin and whitelist | `<UserDataFolder>/Saves/<AdminFileName>` (default `serveradmin.xml`), or the install root on a host that keeps it there | No. The game owns the file, it is created on the host, and it decides who may in. Backed up by `scripts/backup_config.py` (7.1), which resolves the location out of `serverconfig.xml` |
-| Guard backup | `.../Config/efficientserver.json.swap-bak` | No. Only exists mid-bench-run; crash recovery for a killed swap |
+| Guard backup | `.../Config/efficientserver.json.swap-bak<pid>` | No. Only exists mid-bench-run; crash recovery for a killed swap. The suffix is the owning run's pid, so two concurrent harnesses never share one |
 | Quarantined guard backups | `.../Config/efficientserver.json.swap-bak*.stale` | No. Evidence a leftover backup was stale rather than an interrupted restore. Bounded: the newest `STALE_KEEP` (5) are kept, older ones pruned, so a bench loop cannot grow them without limit |
 | Installed DLL | `<DS>/Mods/EfficientServer/` | Yes: `make build && make install` |
 | Server logs | `server/logs/server_<UTC>.log` (default) | No, but expendable: restart writes a new one |
@@ -316,12 +316,15 @@ now says out loud when it happens. `SEVENDTD_UNINSTALL_PURGE=1` skips the copy
 and deletes the config with the mod, which is a deliberate act with no recovery
 path.
 
-Mid-bench-run crash (`efficientserver.json.swap-bak` present, live config holds
-the harness's toggled values): the next harness run finishes the interrupted
-restore automatically (`scripts/es_cfg_guard.py`). To inspect or replay it by
-hand, copy the `.swap-bak` over the live file. A `.swap-bak.stale` file means
-the live config moved on beyond the swap, so the guard left it alone; read it
-before deciding.
+Mid-bench-run crash (an `efficientserver.json.swap-bak<pid>` present whose pid
+is no longer running, live config holds the harness's toggled values): the next
+harness run finishes the interrupted restore automatically
+(`scripts/es_cfg_guard.py`). To inspect or replay it by hand, copy the
+`.swap-bak<pid>` over the live file. A `.swap-bak<pid>.stale` file means the
+live config moved on beyond the swap, so the guard left it alone; read it
+before deciding. A backup whose pid IS still running belongs to a harness
+running right now and is never touched by another run, so two harnesses on one
+install cannot restore each other's snapshots.
 
 ### Backups that do not exist here
 

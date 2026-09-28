@@ -61,7 +61,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import TypedDict
 
-from es_cfg_guard import CFG_ENCODING, owner_pid
+from es_cfg_guard import CFG_ENCODING, _pid_alive, owner_pid
 from repo_root import repo_root
 from selftest_support import Checks
 
@@ -370,18 +370,14 @@ def _sweep_abandoned_staging(dest: Path) -> None:
     `snapshot_dirs`, so nothing else in this tool would ever remove it: a host
     whose snapshots are taken by a cron killed by a timeout would accumulate one
     per run forever. A dir whose owning pid is still running belongs to a
-    concurrent run and is left alone, exactly like the guard's temp sweep.
+    concurrent run and is left alone, exactly like the guard's temp sweep, and
+    through the same `_pid_alive` probe so the two cannot disagree about what
+    "still running" means.
     """
     for entry in dest.glob(f"{STAGING_PREFIX}*"):
         owner = _staging_owner(entry.name)
-        if not owner:
-            continue
-        try:
-            os.kill(owner, 0)
-        except ProcessLookupError:
+        if owner and not _pid_alive(owner):
             shutil.rmtree(entry, ignore_errors=True)
-        except OSError:
-            pass  # alive (or not ours to signal): not ours to remove
 
 
 def _new_staging(dest: Path) -> Path:

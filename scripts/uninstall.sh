@@ -94,7 +94,7 @@ repo_lock install
 
 BACKUP_DIR="${SEVENDTD_UNINSTALL_BACKUP_DIR:-$SRV/EfficientServer-uninstall-backup}"
 # Every Config file is kept, not just the JSON: the bench harnesses' guard
-# backup (efficientserver.json.swap-bak) is the only crash-recovery snapshot of
+# backup (efficientserver.json.swap-bak<pid>) is the only crash-recovery snapshot of
 # a config a killed run left half-swapped, and the mod folder is about to go.
 PRESERVED=()
 if [[ "${SEVENDTD_UNINSTALL_PURGE:-0}" == "1" ]]; then
@@ -149,7 +149,7 @@ Restore after reinstalling:
   make install DS="$SRV"
 EOF
   # Only name the copy line for files that were actually preserved: the Config
-  # directory can hold the guard's .swap-bak with no efficientserver.json beside
+  # directory can hold the guard's .swap-bak<pid> with no efficientserver.json beside
   # it, and a hint that names a file which was never copied sends the operator to
   # a "No such file" instead of their tuning.
   for f in "${PRESERVED[@]}"; do

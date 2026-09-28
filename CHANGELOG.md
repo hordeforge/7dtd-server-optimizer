@@ -55,6 +55,12 @@ chosen up front:
 
 ## [Unreleased]
 
+### Fixed
+- The bench config guard names its backup after the owning run's pid
+  (`efficientserver.json.swap-bak<pid>`), so two harnesses on one install no
+  longer restore each other's snapshot. A leftover backup from an older build
+  is still recovered by the next run.
+
 ## [1.20.0] - 2026-09-28
 
 Artifact: `EfficientServer-1.20.0.zip`, containing mod version 1.20.0.

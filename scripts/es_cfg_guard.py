@@ -28,6 +28,13 @@ Guard protocol (every step idempotent under repetition):
   a JSON object, the full snapshot is restored instead (a managed-keys-only
   rebuild would destroy or misplace every other operator setting).
 
+The backup is named after the OWNING RUN's pid (``<config>.swap-bak<pid>``),
+so two harnesses pointed at one install never share a snapshot and cannot
+restore each other's. ``recover()`` resolves backups no live run owns: a dead
+pid's, and any name without a parseable pid (a backup from before backups were
+pid-scoped). A live pid's backup is left strictly alone, because that run is
+mid-experiment and its snapshot is the only copy of the pre-run config.
+
 All writes go through temp-file + rename so a kill mid-write cannot leave a
 truncated JSON behind for the game's config reader or the next run.
 """
@@ -63,6 +70,12 @@ STALE_SUFFIX = ".stale"
 # temp stranded by a killed run is attributable to that run. The pid is
 # followed by an attempt counter; _temp_owner parses both halves.
 TEMP_INFIX = ".tmp"
+# The backup marker, carrying the SAME owning pid the temp names do. One
+# backup per RUN rather than one per install: a single fixed backup path is
+# shared by every harness pointed at the install, so two concurrent runs
+# snapshot into the same file and each restores the other's snapshot. See
+# ConfigSwap for the interleaving; _backup_owner parses the pid.
+BAK_INFIX = ".swap-bak"
 # How many temp names one write may try before giving up. Each attempt is a
 # name this call did not create yet, so exhausting them means something is
 # squatting on every name (see _write_atomic), which is a fail-loud condition.
@@ -112,6 +125,37 @@ def _temp_owner(name: str, base_name: str) -> int | None:
         return None
     tail = name[len(base_name) + len(TEMP_INFIX) :]
     return owner_pid(tail.split("_", 1)[0])
+
+
+def _backup_owner(name: str, base_name: str) -> int | None:
+    """The pid that owns backup ``name`` of ``base_name``, or None when unparseable.
+
+    None alone cannot tell a name that is not this protocol's backup at all from
+    a backup written by a build from before backups were pid-scoped, so the
+    caller resolves that second case itself: :meth:`ConfigSwap._orphan_backups`
+    treats any backup-shaped name with no parseable pid as an orphan to recover,
+    which is what makes a run started by the older build still recoverable.
+    """
+    if not name.startswith(base_name + BAK_INFIX):
+        return None
+    return owner_pid(name[len(base_name) + len(BAK_INFIX) :])
+
+
+def _pid_alive(pid: int) -> bool:
+    """Whether ``pid`` is a live process this host could still signal.
+
+    A signal-0 probe, the same liveness test the temp sweep uses, so the two
+    sweeps cannot disagree about what "still running" means. ``OSError`` other
+    than ProcessLookupError (EPERM on a process owned by another user) means
+    the pid EXISTS but is not ours to signal: alive, and never ours to remove.
+    """
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except OSError:
+        return True
+    return True
 
 
 USAGE = """\
@@ -257,6 +301,19 @@ def _quarantine_key(bak_name: str, name: str) -> tuple[int, int, str]:
     return ((0, 0, name) if not tail else (1, 0, name))
 
 
+def _quarantined_backup_name(name: str) -> str:
+    """The backup name a quarantine file was renamed from.
+
+    Strips STALE_SUFFIX and the optional ``.<n>`` collision counter
+    unique_path adds, so ``cfg.swap-bak42.3.stale`` yields ``cfg.swap-bak42``.
+    A pid follows BAK_INFIX with no dot, so the counter cannot be confused
+    with it.
+    """
+    stem = name[: -len(STALE_SUFFIX)] if name.endswith(STALE_SUFFIX) else name
+    head, dot, tail = stem.rpartition(".")
+    return head if dot and _UNIQUE_SUFFIX_RE.fullmatch(dot + tail) else stem
+
+
 def write_atomic(path: Path, data: str) -> None:
     """Replace ``path`` with ``data`` atomically (temp file + rename), UTF-8.
 
@@ -285,10 +342,58 @@ class ConfigSwap:
         log: Callable[..., None] = print,
     ):
         self.cfg = cfg_path
-        self.bak = cfg_path.with_suffix(cfg_path.suffix + ".swap-bak")
         self.keys = keys
         self._log = log
         self._begun = False
+        # This run's OWN backup, carrying its pid. Per-run, not per-install:
+        # a single shared backup path let two concurrent runs snapshot into
+        # the same file, so each one's restore replayed the OTHER's snapshot.
+        # The interleaving, with A beginning first and B second:
+        #
+        #   A  begin()      -> bak = snapshot of the pre-A config
+        #   A  rewrites the managed keys it is testing
+        #   B  begin()      -> recover() finds A's bak, and since the live
+        #                       file diverges from it on exactly the managed
+        #                       keys, concludes A DIED mid-restore, replays
+        #                       A's snapshot over the live config, and unlinks
+        #                       the backup A still needs
+        #   B  begin()      -> snapshots the now-A-restored config into the
+        #                       same path
+        #   A  restore()    -> restores B's snapshot, silently reverting the
+        #                       operator's file to B's pre-run state
+        #
+        # and the worse ordering, where A's restore lands while B is mid-test:
+        #
+        #   A  restore()    -> writes A's snapshot back over B's in-flight
+        #                       config, so the measured run is corrupted
+        #
+        # Neither interleaving needs a kill; both just need two harnesses on
+        # one install, which the tool already documents as a real case (the
+        # temp sweep below leaves a live pid's files alone for exactly that
+        # reason). One backup per run closes both: A and B never name the
+        # same file.
+        self.bak = cfg_path.with_name(f"{cfg_path.name}{BAK_INFIX}{os.getpid()}")
+
+    def _orphan_backups(self) -> list[Path]:
+        """Backups no live run owns: a killed run's, or a pre-pid-scoping one.
+
+        These are exactly what ``recover()`` exists to resolve. A backup whose
+        pid is still running is EXCLUDED: that run is mid-experiment, its
+        snapshot is the only copy of the pre-run config, and replaying or
+        deleting it is the cross-run corruption the per-run name prevents. A
+        name with no parseable pid is included rather than skipped: that is a
+        backup written by the build from before backups carried their owner's
+        pid, and it is just as abandoned.
+        """
+        orphans: list[Path] = []
+        for candidate in self.cfg.parent.glob(f"{self.cfg.name}{BAK_INFIX}*"):
+            if candidate == self.bak or candidate.name.endswith(STALE_SUFFIX):
+                continue  # ours, or quarantined evidence a prior run set aside
+            owner = _backup_owner(candidate.name, self.cfg.name)
+            if owner is not None and _pid_alive(owner):
+                continue  # a concurrent run's, not an orphan
+            orphans.append(candidate)
+        return orphans
 
     # -- key helpers -------------------------------------------------------
 
@@ -337,27 +442,34 @@ class ConfigSwap:
         attributable identity: only that decides liveness, never the attempt
         counter, and a name with no leading pid is not a temp of this protocol
         at all and is left untouched.
-        """
-        for base in (self.cfg, self.bak):
-            for tmp in base.parent.glob(f"{base.name}{TEMP_INFIX}*"):
-                owner = _temp_owner(tmp.name, base.name)
-                if owner is None:
-                    continue
-                try:
-                    os.kill(owner, 0)
-                except ProcessLookupError:
-                    tmp.unlink(missing_ok=True)
-                except OSError:
-                    pass  # alive (or not ours to signal): not ours to remove
 
-    def _quarantine(self, why: str) -> None:
+        Swept for EVERY backup base in the directory, not just this run's: a
+        killed run strands a temp beside ITS backup, and that backup is named
+        after its own pid, so a sweep scoped to the current run's name would
+        leave one stranded temp per killed run forever.
+        """
+        bases = [self.cfg.name, self.bak.name]
+        bases.extend(
+            c.name
+            for c in self.cfg.parent.glob(f"{self.cfg.name}{BAK_INFIX}*")
+            if c.name not in bases and not c.name.endswith(STALE_SUFFIX)
+        )
+        for base_name in bases:
+            for tmp in self.cfg.parent.glob(f"{base_name}{TEMP_INFIX}*"):
+                owner = _temp_owner(tmp.name, base_name)
+                if owner is None or _pid_alive(owner):
+                    continue
+                tmp.unlink(missing_ok=True)
+
+    def _quarantine(self, why: str, bak: Path | None = None) -> None:
         # Suffix-resolved: two quarantines in the same run's lifetime (or two
         # runs of a bench loop that keeps hitting damaged state) must not have
         # the second rename destroy the first one's evidence.
-        stale = unique_path(self.bak.with_suffix(self.bak.suffix + STALE_SUFFIX))
-        self.bak.replace(stale)
+        target = self.bak if bak is None else bak
+        stale = unique_path(target.with_suffix(target.suffix + STALE_SUFFIX))
+        target.replace(stale)
         self._log(
-            f"config guard: leftover backup {self.bak.name} is stale ({why}); "
+            f"config guard: leftover backup {target.name} is stale ({why}); "
             f"kept as evidence at {stale.name}, live file NOT touched"
         )
         self._prune_quarantines()
@@ -379,17 +491,22 @@ class ConfigSwap:
         that has no use for it. Ordered by mtime, with the collision counter
         unique_path assigned as the tie-break (see _quarantine_key), so the
         newest rename wins a tie on a coarse-mtime filesystem.
+
+        Counted across EVERY run's quarantines of this config, not just this
+        run's: backups are named after their owning pid, so a bound scoped to
+        this run's name would see only its own files and the directory would
+        still grow by one per killed run.
         """
-        parent = self.bak.parent
+        parent = self.cfg.parent
         found: list[tuple[int, tuple[int, int, str], Path]] = []
-        for path in parent.glob(self.bak.name + "*" + STALE_SUFFIX):
+        for path in parent.glob(f"{self.cfg.name}{BAK_INFIX}*{STALE_SUFFIX}"):
             if not path.is_file():
                 continue
             try:
                 # st_mtime_ns, not st_mtime: the float seconds lose the
                 # sub-second ordering on a coarse-mtime filesystem, so a burst
                 # of kills inside one second ties and falls to the key below.
-                found.append((path.stat().st_mtime_ns, _quarantine_key(self.bak.name, path.name), path))
+                found.append((path.stat().st_mtime_ns, _quarantine_key(_quarantined_backup_name(path.name), path.name), path))
             except OSError:
                 continue  # swept out from under this scan
         if len(found) <= STALE_KEEP:
@@ -414,18 +531,34 @@ class ConfigSwap:
         )
 
     def recover(self) -> None:
-        """Resolve a backup left behind by an earlier killed run."""
+        """Resolve a backup left behind by an earlier killed run.
+
+        Considers this run's own backup and every ORPHAN (a dead owner's, or
+        one written before backups were pid-scoped), and never a backup a live
+        pid owns: that run is mid-experiment, and replaying or deleting its
+        snapshot is the cross-run corruption the per-run backup name exists to
+        prevent. Several orphans resolve in name order so the outcome does not
+        depend on directory iteration order.
+        """
         self._sweep_abandoned_temps()
-        if not self.bak.is_file():
+        pending = ([self.bak] if self.bak.is_file() else []) + sorted(
+            self._orphan_backups(), key=lambda p: p.name
+        )
+        for bak in pending:
+            self._recover_one(bak)
+
+    def _recover_one(self, bak: Path) -> None:
+        """Resolve one orphaned (or this run's) backup against the live config."""
+        if not bak.is_file():
             return
         try:
-            bak_doc = _read_doc(self.bak)
-            bak_bytes = self.bak.read_bytes()
+            bak_doc = _read_doc(bak)
+            bak_bytes = bak.read_bytes()
         except Exception as e:
-            self._quarantine(f"unreadable: {e}")
+            self._quarantine(f"unreadable: {e}", bak)
             return
         if not self.cfg.is_file():
-            self._quarantine("live config missing")
+            self._quarantine("live config missing", bak)
             return
         try:
             # Not _read_doc: the live document's SHAPE is unknown here (that is
@@ -433,7 +566,7 @@ class ConfigSwap:
             # json.loads is.
             live: object = json.loads(self.cfg.read_text(encoding=CFG_ENCODING))
         except Exception as e:
-            self._quarantine(f"live config unreadable: {e}")
+            self._quarantine(f"live config unreadable: {e}", bak)
             return
         # A VALID-JSON but non-object live document (array, scalar, null) parses
         # yet has no keys to replay managed values into: the divergence rule
@@ -441,7 +574,9 @@ class ConfigSwap:
         # across a shape an operator (or a corrupting writer) produced is never
         # this guard's call.
         if not isinstance(live, dict):
-            self._quarantine(f"live config is valid JSON but not an object ({type(live).__name__})")
+            self._quarantine(
+                f"live config is valid JSON but not an object ({type(live).__name__})", bak
+            )
             return
         # Replay the backup's managed-key values onto the live doc; if that
         # makes the documents identical, only this harness touched the file
@@ -452,10 +587,13 @@ class ConfigSwap:
             self._set(replayed, kp, present, value)
         if _canonical(replayed) == _canonical(bak_doc):
             _write_atomic(self.cfg, bak_bytes)
-            self.bak.unlink()
-            self._log("config guard: finished restore from backup left by a killed earlier run")
+            bak.unlink()
+            self._log(
+                f"config guard: finished restore from backup {bak.name} "
+                "left by a killed earlier run"
+            )
         else:
-            self._quarantine("live config changed beyond managed keys since snapshot")
+            self._quarantine("live config changed beyond managed keys since snapshot", bak)
 
     def begin(self) -> None:
         """Snapshot the live file for later restore (idempotent once begun)."""
@@ -463,6 +601,8 @@ class ConfigSwap:
         if self._begun and self.bak.is_file():
             return
         # Resolve any backup a killed earlier run left before snapshotting.
+        # A concurrent run's own backup is untouched (recover skips live pids),
+        # so two runs on one install each keep the snapshot they need.
         self.recover()
         if not self.cfg.is_file():
             msg = f"missing {self.cfg}"
@@ -973,9 +1113,9 @@ def _selftest() -> int:
         bom_cfg.write_bytes(
             b"\xef\xbb\xbf" + (json.dumps(bom_doc, indent=2) + "\n").encode("utf-8")
         )
-        bom_bak = bom_cfg.with_suffix(bom_cfg.suffix + ".swap-bak")
-        bom_bak.write_bytes(bom_cfg.read_bytes())
         mk_bom = ConfigSwap(bom_cfg, [("Enabled",)], log=logs.append)
+        bom_bak = mk_bom.bak
+        bom_bak.write_bytes(bom_cfg.read_bytes())
         # recover(): a BOM'd live file whose only divergence is a managed key
         # is an interrupted run, not stale evidence.
         bom_live = dict(bom_doc, Enabled=False)
@@ -1222,6 +1362,89 @@ def _selftest() -> int:
         s10b.restore()
         live_numbered.unlink()
 
+        # 15. TWO CONCURRENT RUNS on one install. The backup used to be a single
+        # fixed path, so both runs snapshotted into and restored from the SAME
+        # file: B's begin() read A's backup, saw the live config diverging only
+        # on managed keys, concluded A had died, replayed A's snapshot over the
+        # live config and unlinked the backup A still needed; A's restore then
+        # replayed B's snapshot over the operator's file. Both interleavings
+        # need no kill, only two harnesses.
+        #
+        # A second run is simulated as a ConfigSwap whose backup name carries a
+        # DIFFERENT (live) pid, which is exactly what a second process produces
+        # now that backups are pid-scoped. Its owner must be left strictly
+        # alone: not deleted, not replayed, not quarantined.
+        other_pid = os.getppid()
+        if other_pid == os.getpid():  # pragma: no cover - defensive
+            other_pid = os.getpid() - 1
+        run_a = mk()
+        cfg.write_text(json.dumps(original, indent=2) + "\n", encoding="utf-8")
+        run_a.begin()
+        run_b_bak = cfg.with_name(f"{cfg.name}{BAK_INFIX}{other_pid}")
+        t.check(
+            "two runs on one install name two different backups",
+            run_b_bak != run_a.bak and _pid_alive(other_pid),
+        )
+        # B is mid-experiment: its backup holds a document B is about to
+        # restore, and it has a managed key set to something A must not touch.
+        b_snapshot = dict(original, Enabled=False)
+        run_b_bak.write_text(json.dumps(b_snapshot, indent=2) + "\n", encoding="utf-8")
+        # A mutates the live config, then a THIRD run (standing in for B's
+        # begin(), which runs recover() first) executes underneath it. That
+        # recovery must not consume A's or B's in-flight backups: both owners
+        # are live, so both are skipped.
+        a_live = json.loads(cfg.read_text(encoding=CFG_ENCODING))
+        section(a_live, "Pathfinding")["MaxPathEnqueuesPerTick"] = 64
+        cfg.write_text(json.dumps(a_live, indent=2) + "\n", encoding="utf-8")
+        third = mk()
+        # Two ConfigSwap instances in ONE process derive the same backup name,
+        # so point this one at its own (absent) live-pid name: it then has no
+        # backup of its own to resolve and can only reach the directory scan,
+        # which is the behavior under test.
+        third.bak = cfg.with_name(f"{cfg.name}{BAK_INFIX}{other_pid + 1}")
+        third.recover()
+        t.check(
+            "a live run's backup survives another run's recovery",
+            run_b_bak.is_file(),
+        )
+        t.check(
+            "a live run's backup is never replayed over the live config",
+            _read_doc(run_b_bak)["Enabled"] is False,
+        )
+        t.check(
+            "another run's recovery leaves this run's backup alone",
+            run_a.bak.is_file() and third.bak != run_b_bak,
+        )
+        run_a.restore()
+        t.check(
+            "this run still restores its own snapshot after a concurrent recovery",
+            _canonical(_read_doc(cfg)) == _canonical(original),
+        )
+        run_b_bak.unlink()
+
+        # 15b. A KILLED run's backup (a dead pid) is still recovered, which is
+        # the whole point of scoping backups by owner: the recovery path must
+        # find a backup that is not this run's.
+        killed = cfg.with_name(f"{cfg.name}{BAK_INFIX}{dead_pid}")
+        killed.write_text(json.dumps(original, indent=2) + "\n", encoding="utf-8")
+        killed_live = dict(original, Enabled=False)
+        cfg.write_text(json.dumps(killed_live, indent=2) + "\n", encoding="utf-8")
+        mk().recover()
+        t.check(
+            "a dead run's backup is recovered by the next run",
+            _canonical(_read_doc(cfg)) == _canonical(original) and not killed.exists(),
+        )
+
+        # 15c. A quarantined backup (the .stale evidence a prior run set aside)
+        # is not itself an orphan to recover: its name matches the backup glob
+        # but carries no owner. Re-processing it would consume the evidence and
+        # quarantine it again on every later run.
+        cfg.write_text(json.dumps(original, indent=2) + "\n", encoding="utf-8")
+        evidence = cfg.with_name(f"{cfg.name}{BAK_INFIX}{dead_pid}{STALE_SUFFIX}")
+        evidence.write_text("{ not json ][", encoding="utf-8")
+        mk().recover()
+        t.check("quarantined evidence is left in place", evidence.is_file())
+
         # 14d. The pid comes off a NAME in the live install directory, not off
         # one this process minted, so the sweep has to reject a name it cannot
         # turn into a pid instead of raising out of begin(). str.isdigit()
@@ -1323,8 +1546,21 @@ def _selftest() -> int:
             f"{{ truncated {last}" in bodies and "{ truncated 0" not in bodies,
         )
         t.check("the bounded prune consumed its own backup", not s12.bak.exists())
-        for name in kept:
-            (root / name).unlink()
+        # Each run's backup carries its own pid, so quarantines from earlier
+        # (dead) runs have other names and still count against the bound.
+        for i in range(STALE_KEEP):
+            (root / f"{s12.cfg.name}{BAK_INFIX}{dead_pid + i}{STALE_SUFFIX}").write_text(
+                "{ old", encoding="utf-8"
+            )
+        s12.bak.write_text("{ truncated again", encoding="utf-8")
+        s12.recover()
+        all_kept = list(root.glob(f"{s12.cfg.name}{BAK_INFIX}*{STALE_SUFFIX}"))
+        t.check(
+            "quarantines from other runs' backups share one bound",
+            len(all_kept) == STALE_KEEP,
+        )
+        for path in all_kept:
+            path.unlink()
 
     # 16. THE WHOLE PROTOCOL, RUN TWICE, MUST CONVERGE. Everything above
     # exercises one damaged state at a time; this is the property the module
