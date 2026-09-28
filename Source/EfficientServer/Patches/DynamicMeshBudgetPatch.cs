@@ -20,8 +20,9 @@ namespace EfficientServer.Patches
 
         public static void ApplyBudgets()
         {
-            var cfg = ModApi.Config != null ? ModApi.Config.DynamicMesh : null;
-            if (!ModApi.ShouldRun() || cfg == null || !cfg.Enabled)
+            ServerPerfConfig config = ModApi.Config;
+            var cfg = config != null ? config.DynamicMesh : null;
+            if (!ModApi.ShouldRun(config) || cfg == null || !cfg.Enabled)
             {
                 RestoreStock();
                 return;

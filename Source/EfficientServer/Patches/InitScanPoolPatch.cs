@@ -71,8 +71,9 @@ namespace EfficientServer.Patches
         // count is on the stack under the pushed graph; signature (int, graph).
         public static LevelGridNode[] ReuseOrAlloc(int count, LayerGridGraph graph)
         {
-            PathfindingConfig cfg = ModApi.Config != null ? ModApi.Config.Pathfinding : null;
-            if (!ModApi.ShouldRun() || cfg == null || !cfg.PoolInitScanNodes)
+            ServerPerfConfig config = ModApi.Config;
+            PathfindingConfig cfg = config != null ? config.Pathfinding : null;
+            if (!ModApi.ShouldRun(config) || cfg == null || !cfg.PoolInitScanNodes)
                 return new LevelGridNode[count]; // vanilla when disabled
             LevelGridNode[] existing = graph != null ? graph.nodes : null;
             if (existing != null && existing.Length == count)

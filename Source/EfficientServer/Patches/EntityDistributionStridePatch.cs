@@ -31,8 +31,9 @@ namespace EfficientServer.Patches
 
         static bool Prefix()
         {
-            NetworkConfig cfg = ModApi.Config != null ? ModApi.Config.Network : null;
-            if (!ModApi.ShouldRun() || cfg == null)
+            ServerPerfConfig config = ModApi.Config;
+            NetworkConfig cfg = config != null ? config.Network : null;
+            if (!ModApi.ShouldRun(config) || cfg == null)
                 return true;
             // The stride in force: the configured cadence, or the governor's
             // doubled one while it is throttling. The governor decides in the

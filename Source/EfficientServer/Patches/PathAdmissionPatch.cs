@@ -35,8 +35,9 @@ namespace EfficientServer.Patches
         // Return false to skip the original FindPath (drop this request).
         static bool Prefix(EntityAlive __instance)
         {
-            PathfindingConfig cfg = ModApi.Config != null ? ModApi.Config.Pathfinding : null;
-            if (!ModApi.ShouldRun() || cfg == null) return true;
+            ServerPerfConfig config = ModApi.Config;
+            PathfindingConfig cfg = config != null ? config.Pathfinding : null;
+            if (!ModApi.ShouldRun(config) || cfg == null) return true;
             int maxPerTick = cfg.MaxPathEnqueuesPerTick;
             float dropFarSq = cfg.DropPathWhenFarDistSq;
             if (maxPerTick <= 0 && dropFarSq <= 0f)

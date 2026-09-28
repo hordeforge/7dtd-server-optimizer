@@ -257,6 +257,15 @@ namespace EfficientServer
         // sweep (PruneDestroyedTracked), so the bound is "live components",
         // not lifetime spawns.
         static readonly List<Behaviour> _rigDisabled = new List<Behaviour>();
+        // Membership mirror of _rigDisabled, so the rigoff sweep tests "already
+        // tracked" in O(1) instead of a linear List.Contains per candidate. The
+        // sweep walks every Behaviour on every entity's rig, so the linear form
+        // was O(components x already-disabled): a repeated rigoff over a large
+        // horde re-tests the whole tracked set for every component it visits.
+        // Kept in lockstep by Add/Restore-and-clear below; PruneDestroyedTracked
+        // removes from both. UnityEngine.Object overrides Equals, so the set uses
+        // the same destroyed-object semantics as List.Contains.
+        static readonly HashSet<Behaviour> _rigDisabledSet = new HashSet<Behaviour>();
 
         // Tracked components whose entity died or despawned while disabled can
         // never be restored (only an unusable Unity wrapper remains), so keep
@@ -274,6 +283,7 @@ namespace EfficientServer
                 // reads == null even though the reference is non-null.
                 if (_rigDisabled[i] == null)
                 {
+                    _rigDisabledSet.Remove(_rigDisabled[i]);
                     _rigDisabled.RemoveAt(i);
                     removed++;
                 }
@@ -310,9 +320,10 @@ namespace EfficientServer
                     {
                         if (behaviours[b] == null || !behaviours[b].enabled) continue;
                         if (!RigTypes.Contains(behaviours[b].GetType().Name)) continue;
-                        if (_rigDisabled.Contains(behaviours[b])) continue;
+                        if (_rigDisabledSet.Contains(behaviours[b])) continue;
                         behaviours[b].enabled = false;
                         _rigDisabled.Add(behaviours[b]);
+                        _rigDisabledSet.Add(behaviours[b]);
                         disabled++;
                     }
                 }
@@ -337,6 +348,7 @@ namespace EfficientServer
             for (int i = 0; i < _rigDisabled.Count; i++)
                 if (_rigDisabled[i] != null) { _rigDisabled[i].enabled = true; restored++; }
             _rigDisabled.Clear();
+            _rigDisabledSet.Clear();
             return restored;
         }
 

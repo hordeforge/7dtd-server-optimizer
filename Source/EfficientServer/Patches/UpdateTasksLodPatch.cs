@@ -43,8 +43,9 @@ namespace EfficientServer.Patches
 
         static bool Prefix(EntityAlive __instance)
         {
-            if (!ModApi.ShouldRun()) return true;
-            var cfg = ModApi.Config.AiLod;
+            ServerPerfConfig config = ModApi.Config;
+            if (!ModApi.ShouldRun(config)) return true;
+            var cfg = config.AiLod;
             if (cfg == null || !cfg.Enabled) return true;
             if (__instance == null || __instance is EntityPlayer) return true;
 

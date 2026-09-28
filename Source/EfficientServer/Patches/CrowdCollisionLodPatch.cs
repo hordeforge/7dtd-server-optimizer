@@ -55,8 +55,9 @@ namespace EfficientServer.Patches
         static void Prefix(Entity __instance, out int __state)
         {
             __state = NoStrip;
-            CrowdCollisionLodConfig cfg = ModApi.Config != null ? ModApi.Config.CrowdCollisionLod : null;
-            if (!ModApi.ShouldRun() || cfg == null || !cfg.Enabled)
+            ServerPerfConfig config = ModApi.Config;
+            CrowdCollisionLodConfig cfg = config != null ? config.CrowdCollisionLod : null;
+            if (!ModApi.ShouldRun(config) || cfg == null || !cfg.Enabled)
                 return;
             if (!(__instance is EntityEnemy))
                 return;

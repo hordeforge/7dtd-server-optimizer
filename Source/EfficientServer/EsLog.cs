@@ -23,11 +23,20 @@ namespace EfficientServer
         // INACTIVE or the mod partially broken route to Error. The game's Log
         // static writes to the dedicated log file and console; if it is unavailable
         // (very early init, odd host), fall back to stdout rather than losing the line.
+        // Bound once: a method-group conversion to Action<string> allocates a new
+        // delegate on every evaluation, and Emit is called from per-tick and
+        // per-entity paths (a disabled governor still logs its transitions at tick
+        // rate, and the skip patches run inside the tick loop), so resolving the
+        // sink per call put one short-lived delegate in every log line's path.
+        static readonly Action<string> InfoSink = global::Log.Out;
+        static readonly Action<string> WarnSink = global::Log.Warning;
+        static readonly Action<string> ErrorSink = global::Log.Error;
+
         public static void Emit(LogLevel severity, string msg)
         {
-            Action<string> sink = severity == LogLevel.Warn ? (Action<string>)global::Log.Warning
-                : severity == LogLevel.Error ? (Action<string>)global::Log.Error
-                : (Action<string>)global::Log.Out;
+            Action<string> sink = severity == LogLevel.Warn ? WarnSink
+                : severity == LogLevel.Error ? ErrorSink
+                : InfoSink;
             string line = LogPrefix + msg;
             try { sink(line); }
             // The game Log static is the only sink that reaches the dedicated log

@@ -64,8 +64,9 @@ namespace EfficientServer.Patches
         // byte-equivalent to stock.
         public static float Threshold()
         {
-            PathfindingConfig cfg = ModApi.Config != null ? ModApi.Config.Pathfinding : null;
-            if (!ModApi.ShouldRun() || cfg == null)
+            ServerPerfConfig config = ModApi.Config;
+            PathfindingConfig cfg = config != null ? config.Pathfinding : null;
+            if (!ModApi.ShouldRun(config) || cfg == null)
                 return 100f;
             return cfg.MoveRescanThresholdSq;
         }

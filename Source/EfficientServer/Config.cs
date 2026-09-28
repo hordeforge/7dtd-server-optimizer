@@ -484,6 +484,12 @@ namespace EfficientServer
         // reports only keys that genuinely bind to nothing.
         static void CollectUnknownKeys(string prefix, JObject owner, Type type, List<string> unknown)
         {
+            // The bindable property list is read ONCE per section instead of once
+            // per JSON key. GetProperties re-runs the binder's type walk and
+            // allocates a fresh array on every call, so the per-key form made an
+            // O(keys x properties) scan of reflection metadata for every config
+            // load, and the recursion re-did it at each nesting level.
+            PropertyInfo[] candidates = type.GetProperties(BindingFlags.Public | BindingFlags.Instance);
             foreach (JProperty prop in owner.Properties())
             {
                 string path = prefix.Length == 0 ? prop.Name : prefix + "." + prop.Name;
@@ -496,9 +502,7 @@ namespace EfficientServer
                 // compiles the same file with Nullable enabled, where a null
                 // would trip CS8600.
                 bool bound = false;
-                // `type` is always a section here: the top call passes
-                // ServerPerfConfig, every recursive one a matched section property.
-                foreach (PropertyInfo candidate in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
+                foreach (PropertyInfo candidate in candidates)
                 {
                     if (!string.Equals(candidate.Name, prop.Name, StringComparison.OrdinalIgnoreCase))
                         continue;

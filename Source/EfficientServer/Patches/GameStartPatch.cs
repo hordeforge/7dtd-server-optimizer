@@ -59,8 +59,9 @@ namespace EfficientServer.Patches
         // real transitions log, so repeated `es reload` stays quiet.
         public static void ApplyJobWorkers()
         {
-            ServerConfig cfg = ModApi.Config != null ? ModApi.Config.Server : null;
-            int wanted = cfg != null && ModApi.ShouldRun() ? cfg.JobWorkerCount : 0;
+            ServerPerfConfig config = ModApi.Config;
+            ServerConfig cfg = config != null ? config.Server : null;
+            int wanted = cfg != null && ModApi.ShouldRun(config) ? cfg.JobWorkerCount : 0;
             try
             {
                 int current = Unity.Jobs.LowLevel.Unsafe.JobsUtility.JobWorkerCount;
@@ -133,8 +134,9 @@ namespace EfficientServer.Patches
 
         static void ApplyTargetFpsInner()
         {
-            ServerConfig cfg = ModApi.Config != null ? ModApi.Config.Server : null;
-            int wanted = cfg != null && ModApi.ShouldRun() ? cfg.TargetFps : 0;
+            ServerPerfConfig config = ModApi.Config;
+            ServerConfig cfg = config != null ? config.Server : null;
+            int wanted = cfg != null && ModApi.ShouldRun(config) ? cfg.TargetFps : 0;
             if (wanted <= 0)
             {
                 if (!_fpsApplied) return;

@@ -59,26 +59,30 @@ namespace EfficientServer.Patches
         // values in the dump and the values actually in force here.
         public static int EffectiveEntityStride()
         {
-            NetworkConfig net = ModApi.Config != null ? ModApi.Config.Network : null;
+            ServerPerfConfig config = ModApi.Config;
+            NetworkConfig net = config != null ? config.Network : null;
             return net == null ? 1 : EffectiveEntityStride(net.EntityDistributionEveryTicks);
         }
 
         public static int EffectiveGraphEvery()
         {
-            PathfindingConfig path = ModApi.Config != null ? ModApi.Config.Pathfinding : null;
+            ServerPerfConfig config = ModApi.Config;
+            PathfindingConfig path = config != null ? config.Pathfinding : null;
             return path == null ? 1 : EffectiveGraphEvery(path.GraphUpdateEveryTicks);
         }
 
         static bool GovernorEnabled()
         {
-            GovernorConfig cfg = ModApi.Config != null ? ModApi.Config.Governor : null;
+            ServerPerfConfig config = ModApi.Config;
+            GovernorConfig cfg = config != null ? config.Governor : null;
             return cfg != null && cfg.Enabled;
         }
 
         static void Postfix()
         {
-            GovernorConfig cfg = ModApi.Config != null ? ModApi.Config.Governor : null;
-            if (!ModApi.ShouldRun() || cfg == null || !cfg.Enabled)
+            ServerPerfConfig config = ModApi.Config;
+            GovernorConfig cfg = config != null ? config.Governor : null;
+            if (!ModApi.ShouldRun(config) || cfg == null || !cfg.Enabled)
                 return;
 
             double emaMs = TickEma.Advance();
@@ -166,10 +170,11 @@ namespace EfficientServer.Patches
         /// </summary>
         public static void OnConfigReloaded()
         {
-            GovernorConfig cfg = ModApi.Config != null ? ModApi.Config.Governor : null;
+            ServerPerfConfig config = ModApi.Config;
+            GovernorConfig cfg = config != null ? config.Governor : null;
             // The master switch counts too: Enabled=false promises "every patch
             // installed but inert", and the postfix stops running under it.
-            bool active = ModApi.Config != null && ModApi.Config.Enabled
+            bool active = config != null && config.Enabled
                 && cfg != null && cfg.Enabled;
             bool releaseRigs = Tiers.ApplyReloadedConfig(cfg, active);
             if (releaseRigs)

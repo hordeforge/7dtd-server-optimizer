@@ -42,8 +42,9 @@ namespace EfficientServer.Patches
         // Return false to skip the original UpdateGraphs on non-Nth ticks.
         static bool Prefix()
         {
-            PathfindingConfig cfg = ModApi.Config != null ? ModApi.Config.Pathfinding : null;
-            if (!ModApi.ShouldRun() || cfg == null) return true;
+            ServerPerfConfig config = ModApi.Config;
+            PathfindingConfig cfg = config != null ? config.Pathfinding : null;
+            if (!ModApi.ShouldRun(config) || cfg == null) return true;
             // The cadence in force: the configured one, or the governor's doubled
             // one while it is throttling (the governor decides in the UpdateTick
             // POSTFIX, so a tier set at the end of tick N-1 is what runs here).

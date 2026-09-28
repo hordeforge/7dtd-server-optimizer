@@ -55,8 +55,10 @@ namespace EfficientServer.Patches
                 return false;
             }
 
-            AnimatorLodConfig cfg = ModApi.Config != null ? ModApi.Config.AnimatorLod : null;
-            if (!ModApi.ShouldRun() || cfg == null || !cfg.Enabled)
+            ServerPerfConfig config = ModApi.Config;
+
+            AnimatorLodConfig cfg = config != null ? config.AnimatorLod : null;
+            if (!ModApi.ShouldRun(config) || cfg == null || !cfg.Enabled)
             {
                 // LOD off (config reload / mod disable / host change): release any rig
                 // this patch left strided-disabled, else its animator never evaluates

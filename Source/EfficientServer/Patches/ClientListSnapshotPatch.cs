@@ -120,8 +120,9 @@ namespace EfficientServer.Patches
         {
             if (live == null)
                 return Generic(Empty());
-            NetworkConfig cfg = ModApi.Config != null ? ModApi.Config.Network : null;
-            if (!ModApi.ShouldRun() || cfg == null || !cfg.ClientListSnapshot)
+            ServerPerfConfig config = ModApi.Config;
+            NetworkConfig cfg = config != null ? config.Network : null;
+            if (!ModApi.ShouldRun(config) || cfg == null || !cfg.ClientListSnapshot)
                 return Generic(live);
 
             ClientInfo[] raw;

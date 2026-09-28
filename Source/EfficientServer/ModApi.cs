@@ -316,9 +316,22 @@ namespace EfficientServer
         static volatile bool _dedicatedResolved;
         static volatile bool _isDedicated;
 
-        public static bool ShouldRun()
+        public static bool ShouldRun() => ShouldRun(ConfigPublication.Current);
+
+        /// <summary>
+        /// The gate against a config generation the caller has ALREADY read.
+        /// Every patch prefix needs the config twice (its own section, then the
+        /// master gate), and <see cref="Config"/> is a volatile field because it is
+        /// swapped under non-main-thread readers. Reading it separately for each
+        /// use costs a second volatile acquire on paths that run per entity per
+        /// tick, and worse, the two reads can straddle a <c>ReloadConfig</c>
+        /// swap: a prefix would gate on one generation and then read its knob out
+        /// of the NEXT one. Passing the reference the caller already holds pins
+        /// both to the same generation. Same decision as the no-arg overload, which
+        /// is now this one.
+        /// </summary>
+        public static bool ShouldRun(ServerPerfConfig cfg)
         {
-            ServerPerfConfig cfg = Config;
             bool? isDedicated;
             if (cfg != null && cfg.Enabled && cfg.DedicatedOnly)
             {

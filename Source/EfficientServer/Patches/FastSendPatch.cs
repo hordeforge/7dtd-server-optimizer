@@ -35,8 +35,9 @@ namespace EfficientServer.Patches
             Nullable<Vector3> _entitiesInRangeOfWorldPos, int _range,
             bool _onlyClientsNotAttachedToAnEntity)
         {
-            NetworkConfig cfg = ModApi.Config != null ? ModApi.Config.Network : null;
-            if (!ModApi.ShouldRun() || cfg == null || !cfg.FastSingleTargetSend) return true;
+            ServerPerfConfig config = ModApi.Config;
+            NetworkConfig cfg = config != null ? config.Network : null;
+            if (!ModApi.ShouldRun(config) || cfg == null || !cfg.FastSingleTargetSend) return true;
             if (_package == null) return true;
             // Pure single-target only: one attached entity, no other filter mode.
             if (_attachedToEntityId < 0 || _allButAttachedToEntityId >= 0

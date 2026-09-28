@@ -84,6 +84,12 @@ must preserve:
   is needed and nothing main-owned is mutated. It fixes a stock race: the vanilla
   code enumerates that live list on the receive thread while the main thread
   mutates it (network.md 4.0).
+- **One config generation per call:** every patch prefix reads `ModApi.Config`
+  into a local and passes that reference to `ShouldRun(cfg)`, so the knob it
+  acts on and the gate that decided to act are the same object. Reading the
+  published field separately for each use costs a second volatile acquire on
+  per-entity-per-tick paths and could straddle a `ReloadConfig` swap, pairing a
+  gate decision from one generation with a knob value from the next.
 
 ## Process model
 

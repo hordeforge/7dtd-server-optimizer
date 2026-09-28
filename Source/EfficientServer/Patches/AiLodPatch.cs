@@ -22,8 +22,9 @@ namespace EfficientServer.Patches
 
         static void Postfix(World __instance)
         {
-            if (!ModApi.ShouldRun()) return;
-            var cfg = ModApi.Config.AiLod;
+            ServerPerfConfig config = ModApi.Config;
+            if (!ModApi.ShouldRun(config)) return;
+            var cfg = config.AiLod;
             if (cfg == null || !cfg.Enabled) return;
 
             List<EntityAlive> alives = __instance.EntityAlives;
@@ -31,8 +32,8 @@ namespace EfficientServer.Patches
 
             float fullSq = cfg.FullAiDistSq;
             float medSq = cfg.MediumAiDistSq;
-            bool killCloth = ModApi.Config.SkipOnDedicated != null
-                && ModApi.Config.SkipOnDedicated.ClothAndJiggleBoneSimulation;
+            SkipConfig skip = config.SkipOnDedicated;
+            bool killCloth = skip != null && skip.ClothAndJiggleBoneSimulation;
 
             for (int i = 0; i < alives.Count; i++)
             {

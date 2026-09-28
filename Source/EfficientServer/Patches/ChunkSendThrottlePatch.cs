@@ -60,8 +60,9 @@ namespace EfficientServer.Patches
         // default path is byte-identical to stock.
         public static int BatchCap()
         {
-            WorldTransferConfig cfg = ModApi.Config != null ? ModApi.Config.WorldTransfer : null;
-            if (!ModApi.ShouldRun() || cfg == null)
+            ServerPerfConfig config = ModApi.Config;
+            WorldTransferConfig cfg = config != null ? config.WorldTransfer : null;
+            if (!ModApi.ShouldRun(config) || cfg == null)
                 return 3;
             return cfg.ChunkPackagesPerObserverPerTick;
         }

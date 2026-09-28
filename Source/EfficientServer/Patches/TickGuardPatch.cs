@@ -40,8 +40,9 @@ namespace EfficientServer.Patches
 
         static void Postfix()
         {
-            TickGuardConfig cfg = ModApi.Config != null ? ModApi.Config.TickGuard : null;
-            if (!ModApi.ShouldRun() || cfg == null || !cfg.Enabled)
+            ServerPerfConfig config = ModApi.Config;
+            TickGuardConfig cfg = config != null ? config.TickGuard : null;
+            if (!ModApi.ShouldRun(config) || cfg == null || !cfg.Enabled)
                 return;
 
             double emaMs = TickEma.Advance();

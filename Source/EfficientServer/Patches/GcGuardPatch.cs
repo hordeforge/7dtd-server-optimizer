@@ -59,9 +59,10 @@ namespace EfficientServer.Patches
 
         public static void MaybeCollect()
         {
-            GcConfig cfg = ModApi.Config != null ? ModApi.Config.Gc : null;
+            ServerPerfConfig config = ModApi.Config;
+            GcConfig cfg = config != null ? config.Gc : null;
             // Not our run, or explicitly disabled -> preserve vanilla behavior.
-            if (!ModApi.ShouldRun() || cfg == null || !cfg.Enabled || !cfg.SkipForcedCollect)
+            if (!ModApi.ShouldRun(config) || cfg == null || !cfg.Enabled || !cfg.SkipForcedCollect)
             {
                 GC.Collect();
                 return;

@@ -106,7 +106,7 @@ namespace EfficientServer.Patches
             get
             {
                 ServerPerfConfig cfg = ModApi.Config;
-                return ModApi.ShouldRun() && cfg != null ? cfg.SkipOnDedicated : null;
+                return ModApi.ShouldRun(cfg) && cfg != null ? cfg.SkipOnDedicated : null;
             }
         }
 

@@ -26,8 +26,9 @@ namespace EfficientServer.Patches
             float _blastRadius, float _blockDamage, int _entityId,
             List<BlockChangeInfo> _explosionChanges, ref GameObject __result)
         {
-            SkipConfig cfg = ModApi.Config != null ? ModApi.Config.SkipOnDedicated : null;
-            if (!ModApi.ShouldRun() || cfg == null || !cfg.ExplosionParticles)
+            ServerPerfConfig config = ModApi.Config;
+            SkipConfig cfg = config != null ? config.SkipOnDedicated : null;
+            if (!ModApi.ShouldRun(config) || cfg == null || !cfg.ExplosionParticles)
                 return true; // vanilla
             if (__instance.World == null)
                 return true; // vanilla early-return path
