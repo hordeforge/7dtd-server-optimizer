@@ -24,6 +24,7 @@ import sys
 from itertools import pairwise
 from pathlib import Path
 
+from cli_common import Selftest, run_cli
 from repo_root import repo_root
 
 ROOT = repo_root()
@@ -132,14 +133,7 @@ def _selftest() -> int:
     """
     import tempfile
 
-    failures: list[str] = []
-
-    def check(name: str, cond: bool) -> None:
-        if cond:
-            print("PASS: " + name)
-        else:
-            print("FAIL: " + name, file=sys.stderr)
-            failures.append(name)
+    t = Selftest()
 
     with tempfile.TemporaryDirectory(prefix="es-version-test.") as td:
         mi = Path(td) / "ModInfo.xml"
@@ -151,22 +145,22 @@ def _selftest() -> int:
             "</xml>\n",
             encoding="utf-8",
         )
-        check("modinfo_version reads the Version attribute", modinfo_version(mi) == "1.17.0")
+        t.check("modinfo_version reads the Version attribute", modinfo_version(mi) == "1.17.0")
         no_version = Path(td) / "NoVersion.xml"
         no_version.write_text('<xml>\n\t<Name value="X" />\n</xml>\n', encoding="utf-8")
-        check(
+        t.check(
             "modinfo_version returns None when Version is missing",
             modinfo_version(no_version) is None,
         )
 
-    check("norm splits numeric parts", norm("1.17.0") == (1, 17, 0))
+    t.check("norm splits numeric parts", norm("1.17.0") == (1, 17, 0))
     # The shipped pair: ModInfo "1.17.0" vs AssemblyVersion "1.17.0.0". The
     # comparison in main() truncates the assembly tuple to the ModInfo length;
     # pin both the equal and the drifted outcome of exactly that expression.
     mi_v, asm_v = "1.17.0", "1.17.0.0"
-    check("norm treats trailing .0 as cosmetic", norm(mi_v) == norm(asm_v)[: len(norm(mi_v))])
+    t.check("norm treats trailing .0 as cosmetic", norm(mi_v) == norm(asm_v)[: len(norm(mi_v))])
     other_mi, other_asm = "1.18.0", "1.17.0.0"
-    check(
+    t.check(
         "norm exposes a real version mismatch",
         norm(other_mi) != norm(other_asm)[: len(norm(other_mi))],
     )
@@ -179,49 +173,45 @@ def _selftest() -> int:
         "## [1.19.0] - 2026-09-20\n\n### Fixed\n- thing\n\n"
         "## [1.18.0] - 2026-09-11\n\n### Fixed\n- thing\n"
     )
-    check(
+    t.check(
         "_changelog_fails accepts a well-formed newest-first list",
         _changelog_fails(good, "1.19.0") == [],
     )
-    check(
+    t.check(
         "released_sections drops Unreleased and prose headings",
         [label for label, _ in released_sections(good)] == ["1.19.0", "1.18.0"],
     )
     # A version bump that never reached the notes: manifest ahead of the list.
-    check(
+    t.check(
         "_changelog_fails catches a manifest bump with no release section",
         any("1.20.0" in f for f in _changelog_fails(good, "1.20.0")),
     )
     # Notes for a release the manifest does not carry.
-    check(
+    t.check(
         "_changelog_fails catches notes ahead of the manifest",
         any("1.19.0" in f for f in _changelog_fails(good, "1.18.0")),
     )
     undated = "## [1.19.0]\n\n### Fixed\n- thing\n"
-    check(
+    t.check(
         "_changelog_fails rejects an undated release section",
         any("no release date" in f for f in _changelog_fails(undated, "1.19.0")),
     )
     repeated = "## [1.19.0] - 2026-09-20\n\nx\n\n## [1.19.0] - 2026-09-19\n\nx\n"
-    check(
+    t.check(
         "_changelog_fails rejects a repeated release section",
         any("repeats" in f for f in _changelog_fails(repeated, "1.19.0")),
     )
     ascending = "## [1.18.0] - 2026-09-11\n\nx\n\n## [1.19.0] - 2026-09-20\n\nx\n"
-    check(
+    t.check(
         "_changelog_fails rejects an oldest-first list",
         any("newest-first" in f for f in _changelog_fails(ascending, "1.19.0")),
     )
-    check(
+    t.check(
         "_changelog_fails rejects a changelog with no release section",
         _changelog_fails("## [Unreleased]\n\n- thing\n", "1.19.0") != [],
     )
 
-    if failures:
-        print(f"FAIL: {len(failures)} check_version selftest check(s)", file=sys.stderr)
-        return 1
-    print("PASS: check_version selftest")
-    return 0
+    return t.finish("check_version")
 
 
 def main() -> int:
@@ -286,14 +276,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    argv = sys.argv[1:]
-    if argv in (["-h"], ["--help"]):
-        print(USAGE)
-        raise SystemExit(0)
-    if argv == ["--selftest"]:
-        raise SystemExit(_selftest())
-    if argv:
-        print(f"check_version.py: unrecognized arguments: {' '.join(argv)}", file=sys.stderr)
-        print(USAGE, file=sys.stderr)
-        raise SystemExit(2)
-    sys.exit(main())
+    run_cli("check_version.py", USAGE, main, _selftest)

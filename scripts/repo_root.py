@@ -9,8 +9,9 @@ Run: python3 scripts/repo_root.py --selftest    (wired into `make test`)
 """
 from __future__ import annotations
 
-import sys
 from pathlib import Path
+
+from cli_common import Selftest, run_cli
 
 # Paths that exist together only at this repository's root. Both are required,
 # so a stray Makefile in a parent workspace directory cannot be mistaken for it.
@@ -41,16 +42,9 @@ def repo_root(start: Path | None = None) -> Path:
 def _selftest() -> int:
     import tempfile
 
-    failures: list[str] = []
+    t = Selftest()
 
-    def check(name: str, cond: bool) -> None:
-        if cond:
-            print("PASS: " + name)
-        else:
-            print("FAIL: " + name, file=sys.stderr)
-            failures.append(name)
-
-    check("finds the real root from this file", (repo_root() / MARKERS[0]).is_file())
+    t.check("finds the real root from this file", (repo_root() / MARKERS[0]).is_file())
 
     with tempfile.TemporaryDirectory(prefix="es-repo-root-test.") as td:
         root = Path(td) / "tree"
@@ -59,8 +53,8 @@ def _selftest() -> int:
             (root / marker).write_text("", encoding="utf-8")
         nested = root / "scripts" / "deep" / "deeper"
         nested.mkdir(parents=True)
-        check("walks up from a nested start", repo_root(nested / "s.py") == root.resolve())
-        check("a marker directory is its own root", repo_root(root) == root.resolve())
+        t.check("walks up from a nested start", repo_root(nested / "s.py") == root.resolve())
+        t.check("a marker directory is its own root", repo_root(root) == root.resolve())
 
         # One marker alone must not satisfy the lookup, or a workspace-level
         # Makefile above the repo would shadow the real root. Asserted as "not
@@ -75,22 +69,10 @@ def _selftest() -> int:
             found = repo_root(partial / "sub" / "s.py")
         except RuntimeError:
             pass  # no root anywhere above: also a correct rejection of `partial`
-        check("one marker of two is not a root", found != partial.resolve())
+        t.check("one marker of two is not a root", found != partial.resolve())
 
-    if failures:
-        print("FAIL: repo_root selftest", file=sys.stderr)
-        return 1
-    print("PASS: repo_root selftest")
-    return 0
+    return t.finish("repo_root")
 
 
 if __name__ == "__main__":
-    argv = sys.argv[1:]
-    if argv in (["-h"], ["--help"]):
-        print(USAGE)
-        raise SystemExit(0)
-    if argv not in ([], ["--selftest"]):
-        print(f"repo_root.py: unrecognized arguments: {' '.join(argv)}", file=sys.stderr)
-        print(USAGE, file=sys.stderr)
-        raise SystemExit(2)
-    raise SystemExit(_selftest())
+    run_cli("repo_root.py", USAGE, _selftest, _selftest)

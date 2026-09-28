@@ -35,9 +35,10 @@ from __future__ import annotations
 
 import json
 import os
-import sys
 from collections.abc import Callable, Sequence
 from pathlib import Path
+
+from cli_common import Selftest, run_cli
 
 STALE_SUFFIX = ".stale"
 # Marker write_atomic puts between a file name and its writer's pid, so a
@@ -292,14 +293,7 @@ class ConfigSwap:
 def _selftest() -> int:
     import tempfile
 
-    failures: list[str] = []
-
-    def check(name: str, cond: bool) -> None:
-        if cond:
-            print("PASS: " + name)
-        else:
-            print("FAIL: " + name, file=sys.stderr)
-            failures.append(name)
+    t = Selftest()
 
     def section(doc: dict[str, object], key: str) -> dict[str, object]:
         """Narrow a top-level JSON object to one of its nested sections."""
@@ -337,7 +331,7 @@ def _selftest() -> int:
         cfg.write_text(json.dumps(doc, indent=2) + "\n", encoding="utf-8")
         s.restore()
         expected = json.dumps(original, indent=2).encode() + b"\n"
-        check("roundtrip restores exact bytes", cfg.read_bytes() == expected)
+        t.check("roundtrip restores exact bytes", cfg.read_bytes() == expected)
 
         # 2. crash simulation: a NEW instance finishes the interrupted restore.
         s = mk()
@@ -346,8 +340,8 @@ def _selftest() -> int:
         doc["Enabled"] = False
         cfg.write_text(json.dumps(doc, indent=2) + "\n", encoding="utf-8")
         mk().recover()  # next run, before any mutation
-        check("crashed run recovered", _canonical(_read_doc(cfg)) == _canonical(original))
-        check("recovery consumed backup", not s.bak.exists())
+        t.check("crashed run recovered", _canonical(_read_doc(cfg)) == _canonical(original))
+        t.check("recovery consumed backup", not s.bak.exists())
 
         # 3. stale backup: live diverged beyond managed keys -> untouched.
         s.begin()
@@ -356,8 +350,8 @@ def _selftest() -> int:
         cfg.write_text(json.dumps(doc, indent=2) + "\n", encoding="utf-8")
         mk().recover()
         stale = s.bak.with_suffix(s.bak.suffix + STALE_SUFFIX)
-        check("stale quarantined", stale.is_file() and not s.bak.exists())
-        check(
+        t.check("stale quarantined", stale.is_file() and not s.bak.exists())
+        t.check(
             "stale recover leaves live untouched",
             section(_read_doc(cfg), "Network")["EntityDistributionEveryTicks"] == 3,
         )
@@ -373,16 +367,16 @@ def _selftest() -> int:
         s2.restore()
         s2.restore()  # second call must be a no-op
         after = _read_doc(cfg)
-        check(
+        t.check(
             "key-scoped restore keeps other keys",
             section(after, "Network")["EntityDistributionEveryTicks"] == 3,
         )
-        check("restore reverts managed key", after["Enabled"] is True)
-        check(
+        t.check("restore reverts managed key", after["Enabled"] is True)
+        t.check(
             "restore removes key absent in snapshot",
             "DropPathWhenFarDistSq" not in section(after, "Pathfinding"),
         )
-        check("repeat restore is a no-op", not s2.bak.exists())
+        t.check("repeat restore is a no-op", not s2.bak.exists())
 
         # 5. double begin does not re-snapshot over modified state.
         s3 = mk()
@@ -392,7 +386,7 @@ def _selftest() -> int:
         cfg.write_text(json.dumps(doc, indent=2) + "\n", encoding="utf-8")
         s3.begin()
         s3.restore()
-        check("begin is sticky until restored", _read_doc(cfg)["Enabled"] is True)
+        t.check("begin is sticky until restored", _read_doc(cfg)["Enabled"] is True)
 
         # 6. live file deleted between begin and restore -> full backup restore
         # (not just managed keys, which would produce a truncated config).
@@ -401,11 +395,11 @@ def _selftest() -> int:
         snapshot = _canonical(_read_doc(cfg))
         cfg.unlink()
         s4.restore()
-        check(
+        t.check(
             "missing live config restored from full backup",
             cfg.is_file() and _canonical(_read_doc(cfg)) == snapshot,
         )
-        check("backup consumed after missing-live restore", not s4.bak.exists())
+        t.check("backup consumed after missing-live restore", not s4.bak.exists())
 
         # 7. live file UNREADABLE (corrupt JSON) between begin and restore ->
         # full backup restore too: key-scoped restore onto {} would silently
@@ -415,21 +409,21 @@ def _selftest() -> int:
         snapshot = _canonical(_read_doc(cfg))
         cfg.write_text("{ this is not json ][", encoding="utf-8")
         s5.restore()
-        check(
+        t.check(
             "corrupt live config restored from full backup",
             _canonical(_read_doc(cfg)) == snapshot,
         )
-        check("backup consumed after corrupt-live restore", not s5.bak.exists())
+        t.check("backup consumed after corrupt-live restore", not s5.bak.exists())
 
         # 8. public atomic write: create, overwrite, exact bytes, no temp litter.
         wa = root / "atomic.json"
         write_atomic(wa, '{"k": 1}\n')
         write_atomic(wa, '{"k": 2}\n')
-        check(
+        t.check(
             "atomic write creates and overwrites",
             wa.read_text(encoding="utf-8") == '{"k": 2}\n',
         )
-        check(
+        t.check(
             "atomic write leaves no temp files",
             [p.name for p in root.iterdir() if ".tmp" in p.name] == [],
         )
@@ -445,8 +439,8 @@ def _selftest() -> int:
             replace_failed = False
         except OSError:
             replace_failed = True
-        check("failed atomic write raises", replace_failed)
-        check(
+        t.check("failed atomic write raises", replace_failed)
+        t.check(
             "failed atomic write leaves no temp files",
             [p.name for p in root.iterdir() if ".tmp" in p.name] == [],
         )
@@ -467,8 +461,8 @@ def _selftest() -> int:
         live_before = cfg.read_bytes()
         s6.recover()
         stale6 = s6.bak.with_suffix(s6.bak.suffix + STALE_SUFFIX)
-        check("unreadable backup quarantined", stale6.is_file() and not s6.bak.exists())
-        check("unreadable backup leaves live untouched", cfg.read_bytes() == live_before)
+        t.check("unreadable backup quarantined", stale6.is_file() and not s6.bak.exists())
+        t.check("unreadable backup leaves live untouched", cfg.read_bytes() == live_before)
         stale6.unlink()
 
         # 10. backup exists but the LIVE config is missing at recover time:
@@ -480,9 +474,9 @@ def _selftest() -> int:
         cfg.unlink()
         s7.recover()
         stale7 = s7.bak.with_suffix(s7.bak.suffix + STALE_SUFFIX)
-        check("missing live config at recover -> backup quarantined",
+        t.check("missing live config at recover -> backup quarantined",
               stale7.is_file() and not s7.bak.exists())
-        check("missing live config stays missing after recover", not cfg.exists())
+        t.check("missing live config stays missing after recover", not cfg.exists())
         stale7.unlink()
 
         # 11. begin() on a missing live config must fail loudly (named error)
@@ -493,7 +487,7 @@ def _selftest() -> int:
             begin_raised_named_error = False
         except FileNotFoundError:
             begin_raised_named_error = True
-        check("begin on missing live config fails loudly", begin_raised_named_error)
+        t.check("begin on missing live config fails loudly", begin_raised_named_error)
 
         # 12. live config is VALID JSON but not an object at recover time:
         # parses fine, so the unreadable branch does not fire, yet the
@@ -510,7 +504,7 @@ def _selftest() -> int:
             except Exception:
                 recovered_cleanly = False
             stale8 = s8.bak.with_suffix(s8.bak.suffix + STALE_SUFFIX)
-            check(
+            t.check(
                 f"non-object live config ({shape}) quarantined without raising",
                 recovered_cleanly and stale8.is_file() and not s8.bak.exists(),
             )
@@ -525,11 +519,11 @@ def _selftest() -> int:
         snapshot = _canonical(_read_doc(cfg))
         cfg.write_text("[1]", encoding="utf-8")
         s9.restore()
-        check(
+        t.check(
             "non-object live config restored from full backup",
             _canonical(_read_doc(cfg)) == snapshot,
         )
-        check("backup consumed after non-object-live restore", not s9.bak.exists())
+        t.check("backup consumed after non-object-live restore", not s9.bak.exists())
 
         # 14. Atomic-write temps stranded by KILLED runs are swept: each one
         # is a file the protocol would never match again, so without the sweep
@@ -548,28 +542,16 @@ def _selftest() -> int:
             stray.write_text("{}", encoding="utf-8")
         cfg.write_text(json.dumps(original, indent=2) + "\n", encoding="utf-8")
         s10.begin()
-        check("temp of a dead run beside the config is swept", not stray_cfg.exists())
-        check("temp of a dead run beside the backup is swept", not stray_bak.exists())
-        check("temp owned by a live pid is kept", live_tmp.is_file())
-        check("unrelated .tmp-named file is left alone", not_a_temp.is_file())
+        t.check("temp of a dead run beside the config is swept", not stray_cfg.exists())
+        t.check("temp of a dead run beside the backup is swept", not stray_bak.exists())
+        t.check("temp owned by a live pid is kept", live_tmp.is_file())
+        t.check("unrelated .tmp-named file is left alone", not_a_temp.is_file())
         s10.restore()
         live_tmp.unlink()
         not_a_temp.unlink()
 
-    if failures:
-        print(f"FAIL: {len(failures)} es_cfg_guard selftest check(s)", file=sys.stderr)
-        return 1
-    print("PASS: es_cfg_guard selftest")
-    return 0
+    return t.finish("es_cfg_guard")
 
 
 if __name__ == "__main__":
-    argv = sys.argv[1:]
-    if argv in (["-h"], ["--help"]):
-        print(USAGE)
-        raise SystemExit(0)
-    if argv and argv != ["--selftest"]:
-        print(f"es_cfg_guard.py: unrecognized arguments: {' '.join(argv)}", file=sys.stderr)
-        print(USAGE, file=sys.stderr)
-        raise SystemExit(2)
-    raise SystemExit(_selftest())
+    run_cli("es_cfg_guard.py", USAGE, _selftest, _selftest)

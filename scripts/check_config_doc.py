@@ -24,6 +24,7 @@ import re
 import sys
 from typing import TypedDict
 
+from cli_common import Selftest, run_cli
 from repo_root import repo_root
 
 ROOT = repo_root()
@@ -165,49 +166,42 @@ def _selftest() -> int:
     Config.cs-shaped snippet and plain dicts so every helper's spec is asserted
     directly, following the --selftest convention of es_cfg_guard.
     """
-    failures: list[str] = []
-
-    def check(name: str, cond: bool) -> None:
-        if cond:
-            print("PASS: " + name)
-        else:
-            print("FAIL: " + name, file=sys.stderr)
-            failures.append(name)
+    t = Selftest()
 
     # parse_cs_default: every initializer form Config.cs uses.
-    check(
+    t.check(
         "parse_cs_default bool literals",
         parse_cs_default("true") is True and parse_cs_default("false") is False,
     )
-    check(
+    t.check(
         "parse_cs_default int literals",
         parse_cs_default("4") == 4 and parse_cs_default("-1") == -1,
     )
-    check(
+    t.check(
         "parse_cs_default float suffix stripped to number",
         parse_cs_default("100f") == 100 and parse_cs_default("0.5f") == 0.5,
     )
-    check("parse_cs_default absent initializer -> None", parse_cs_default(None) is None)
-    check(
+    t.check("parse_cs_default absent initializer -> None", parse_cs_default(None) is None)
+    t.check(
         "parse_cs_default non-numeric literal -> None (skipped, not misreported as drift)",
         parse_cs_default('"AiLod"') is None,
     )
 
     # values_equal: Python bool IS int, so the type-faithful guard is the spec.
-    check(
+    t.check(
         "values_equal never equates bool with number",
         not values_equal(True, 1) and not values_equal(False, 0) and not values_equal(1, True),
     )
-    check(
+    t.check(
         "values_equal bool identity holds",
         values_equal(True, True) and values_equal(False, False),
     )
-    check("values_equal accepts int/float cross-type", values_equal(100, 100.0))
-    check(
+    t.check("values_equal accepts int/float cross-type", values_equal(100, 100.0))
+    t.check(
         "values_equal detects real drift",
         not values_equal(2, 3) and not values_equal(True, False),
     )
-    check(
+    t.check(
         "values_equal strings compare exactly",
         values_equal("a", "a") and not values_equal("a", "b"),
     )
@@ -239,20 +233,20 @@ def _selftest() -> int:
         "}\n"
     )
     schema = parse_cs_schema(cs_snippet)
-    check(
+    t.check(
         "parse_cs_schema finds every top-level config class",
         set(schema) == {"AiLodConfig", "SubConfig", "ServerPerfConfig"},
     )
-    check(
+    t.check(
         "parse_cs_schema parses scalar defaults (bool/int/float-suffix/absent)",
         schema["AiLodConfig"]["scalars"]
         == {"Enabled": True, "FullAiDistSq": 100, "Stride": None},
     )
-    check(
+    t.check(
         "parse_cs_schema classifies non-scalar properties as sections by type name",
         schema["AiLodConfig"]["sections"] == {"Sub": "SubConfig"},
     )
-    check(
+    t.check(
         "parse_cs_schema ignores methods without { get; set; }",
         "Reset" not in schema["AiLodConfig"]["scalars"]
         and "Reset" not in schema["AiLodConfig"]["sections"],
@@ -260,57 +254,53 @@ def _selftest() -> int:
 
     # unknown_json_keys: typo paths at both levels plus wrong-shape values.
     clean = {"Enabled": False, "AiLod": {"Enabled": True, "FullAiDistSq": 100}}
-    check(
+    t.check(
         "unknown_json_keys accepts a fully known template",
         unknown_json_keys(schema, clean) == [],
     )
-    check(
+    t.check(
         "unknown_json_keys names a root-level typo",
         unknown_json_keys(schema, {"Enabld": True}) == ["Enabld"],
     )
-    check(
+    t.check(
         "unknown_json_keys names a nested typo as a dotted path",
         unknown_json_keys(schema, {"AiLod": {"FullAiDistSqX": 5}}) == ["AiLod.FullAiDistSqX"],
     )
-    check(
+    t.check(
         "unknown_json_keys flags an object where a scalar belongs",
         unknown_json_keys(schema, {"AiLod": {"Enabled": {}}})
         == ["AiLod.Enabled (object where scalar expected)"],
     )
-    check(
+    t.check(
         "unknown_json_keys flags a section bound to a non-object value",
         unknown_json_keys(schema, {"AiLod": [1]}) == ["AiLod"],
     )
 
     # default_drift: exact message format pinned (it is operator-facing output).
-    check(
+    t.check(
         "default_drift reports scalar drift with both values",
         default_drift(schema, {"Enabled": False})
         == ["Enabled: shipped False != code default True"],
     )
-    check(
+    t.check(
         "default_drift reports nested drift with dotted path",
         default_drift(schema, {"AiLod": {"FullAiDistSq": 50}})
         == ["AiLod.FullAiDistSq: shipped 50 != code default 100"],
     )
-    check(
+    t.check(
         "default_drift skips keys absent from the template",
         default_drift(schema, {}) == [] and default_drift(schema, {"AiLod": {}}) == [],
     )
-    check(
+    t.check(
         "default_drift skips expression defaults it cannot compare",
         default_drift(schema, {"AiLod": {"Stride": 99}}) == [],
     )
-    check(
+    t.check(
         "default_drift accepts code defaults verbatim",
         default_drift(schema, {"Enabled": True, "AiLod": {"FullAiDistSq": 100}}) == [],
     )
 
-    if failures:
-        print(f"FAIL: {len(failures)} check_config_doc selftest check(s)", file=sys.stderr)
-        return 1
-    print("PASS: check_config_doc selftest")
-    return 0
+    return t.finish("check_config_doc")
 
 
 def main() -> int:
@@ -367,14 +357,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    argv = sys.argv[1:]
-    if argv in (["-h"], ["--help"]):
-        print(USAGE)
-        raise SystemExit(0)
-    if argv == ["--selftest"]:
-        raise SystemExit(_selftest())
-    if argv:
-        print(f"check_config_doc.py: unrecognized arguments: {' '.join(argv)}", file=sys.stderr)
-        print(USAGE, file=sys.stderr)
-        raise SystemExit(2)
-    sys.exit(main())
+    run_cli("check_config_doc.py", USAGE, main, _selftest)

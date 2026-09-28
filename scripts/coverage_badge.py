@@ -10,6 +10,8 @@ import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
+from cli_common import Selftest
+
 USAGE = """\
 usage: coverage_badge.py COBERTURA_XML OUTPUT.svg [--selftest] [-h | --help]
 
@@ -87,14 +89,7 @@ def _selftest() -> int:
     """
     import tempfile
 
-    failures: list[str] = []
-
-    def check(name: str, cond: bool) -> None:
-        if cond:
-            print("PASS: " + name)
-        else:
-            print("FAIL: " + name, file=sys.stderr)
-            failures.append(name)
+    t = Selftest()
 
     if sys.argv[1:] != ["--selftest"]:
         print(f"usage: {Path(sys.argv[0]).name} --selftest", file=sys.stderr)
@@ -114,12 +109,12 @@ def _selftest() -> int:
         (0, "#e05d44", "0 red"),
         (100, "#4c1", "100 green"),
     ):
-        check(f"colour boundary: {label}", colour(pct) == want)
+        t.check(f"colour boundary: {label}", colour(pct) == want)
 
     svg = badge(92, "#97ca00")
-    check("badge labels the percentage", "coverage: 92%" in svg)
-    check("badge paints the value rect with the fill colour", 'fill="#97ca00"' in svg)
-    check("badge uses the fixed 64+36 layout", 'width="100" height="20"' in svg)
+    t.check("badge labels the percentage", "coverage: 92%" in svg)
+    t.check("badge paints the value rect with the fill colour", 'fill="#97ca00"' in svg)
+    t.check("badge uses the fixed 64+36 layout", 'width="100" height="20"' in svg)
 
     with tempfile.TemporaryDirectory(prefix="es-badge-test.") as td:
         out = Path(td) / "badge.svg"
@@ -131,9 +126,9 @@ def _selftest() -> int:
         rc = main([sys.argv[0], str(report), str(out)])
         text = out.read_text(encoding="utf-8")
         # round(0.9234 * 100) == 92 -> green band (>= 90).
-        check("main exits 0 on a well-formed report", rc == 0)
-        check("main renders the rounded percentage", 'coverage: 92%' in text)
-        check(
+        t.check("main exits 0 on a well-formed report", rc == 0)
+        t.check("main renders the rounded percentage", 'coverage: 92%' in text)
+        t.check(
             "main picks the band colour for 92",
             'fill="#4c1"' in text,
         )
@@ -142,17 +137,13 @@ def _selftest() -> int:
         bare.write_text("<coverage></coverage>", encoding="utf-8")
         rc_bare = main([sys.argv[0], str(bare), str(out)])
         text_bare = out.read_text(encoding="utf-8")
-        check("main treats a missing line-rate as exit 0", rc_bare == 0)
-        check(
+        t.check("main treats a missing line-rate as exit 0", rc_bare == 0)
+        t.check(
             "missing line-rate renders 0% red",
             'coverage: 0%' in text_bare and '#e05d44' in text_bare,
         )
 
-    if failures:
-        print(f"FAIL: {len(failures)} coverage_badge selftest check(s)", file=sys.stderr)
-        return 1
-    print("PASS: coverage_badge selftest")
-    return 0
+    return t.finish("coverage_badge")
 
 
 if __name__ == "__main__":

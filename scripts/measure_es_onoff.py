@@ -32,12 +32,12 @@ from __future__ import annotations
 import json
 import os
 import re
-import sys
 import time
 from collections.abc import Iterable
 from pathlib import Path
 from typing import TypedDict
 
+from cli_common import run_cli
 from es_cfg_guard import ConfigSwap, write_atomic
 from harness_common import (
     DS,
@@ -414,12 +414,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    argv = sys.argv[1:]
-    if argv in (["-h"], ["--help"]):
-        print(USAGE)
-        raise SystemExit(0)
-    if argv:
-        print(f"measure_es_onoff.py: unrecognized arguments: {' '.join(argv)}", file=sys.stderr)
-        print(USAGE, file=sys.stderr)
-        raise SystemExit(2)
-    sys.exit(main())
+    run_cli("measure_es_onoff.py", USAGE, main)

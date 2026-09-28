@@ -22,10 +22,10 @@ from __future__ import annotations
 
 import json
 import os
-import sys
 import time
 from typing import TypedDict
 
+from cli_common import run_cli
 from harness_common import (
     CFG_SWAP,
     OUT_DIR,
@@ -204,15 +204,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    argv = sys.argv[1:]
-    if argv in (["-h"], ["--help"]):
-        print(USAGE)
-        raise SystemExit(0)
-    if argv:
-        print(
-            f"validate_bloodmoon_path.py: unrecognized arguments: {' '.join(argv)}",
-            file=sys.stderr,
-        )
-        print(USAGE, file=sys.stderr)
-        raise SystemExit(2)
-    sys.exit(main())
+    run_cli("validate_bloodmoon_path.py", USAGE, main)

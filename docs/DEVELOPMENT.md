@@ -174,6 +174,7 @@ Offline gates run by `make test` and CI. Live-server harnesses need a running de
 | Script | Role |
 |---|---|
 | `repo_root.py` | Shared repository-root lookup (marker walk, not `parent.parent`) used by the gates below; selftest pins the walk |
+| `cli_common.py` | Shared argument dispatch (`-h`/`--help`, `--selftest`, unknown-argument exit 2) and the selftest check collector every script in this directory uses |
 | `check_config_doc.py` | Regression gate (in `make test`): every `ServerPerfConfig` field must be documented in CONFIG.md; selftest pins its parsing/comparison logic |
 | `check_version.py` | Regression gate (in `make test`): ModInfo (source+dist) == AssemblyVersion, no doc claims a future minor; selftest pins version extraction/normalization |
 | `es_cfg_guard.py` | Config swap/restore primitive: snapshot the installed `efficientserver.json` before a harness mutates it, and restore it on every exit path including a SIGKILLed run; selftest pins the guard protocol |
