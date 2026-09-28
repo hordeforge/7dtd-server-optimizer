@@ -34,12 +34,32 @@ namespace EfficientServer.Patches
     /// </summary>
     internal static class AnimatorEmergency
     {
-        // instanceId -> prior culling mode. UnityEngine.Object cannot be a reliable
-        // dictionary key after destroy; instance IDs stay stable for the GO lifetime.
-        static readonly Dictionary<int, AnimatorCullingMode> SavedModes =
-            new Dictionary<int, AnimatorCullingMode>();
-        // Reusable sweep scratch: ids seen this pass, ids to drop afterwards.
-        static readonly HashSet<int> SweepIds = new HashSet<int>();
+        /// <summary>
+        /// A saved culling mode plus the rig it was read from. The rig reference is
+        /// what makes the entry checkable: Unity recycles instance IDs after a
+        /// destroy, so an id on its own can hand a NEWLY SPAWNED rig a DEAD rig's
+        /// saved mode and restore it on Exit.
+        /// </summary>
+        struct SavedMode
+        {
+            public readonly Animator Rig;
+            public readonly AnimatorCullingMode Prior;
+
+            public SavedMode(Animator rig, AnimatorCullingMode prior)
+            {
+                Rig = rig;
+                Prior = prior;
+            }
+        }
+
+        // instanceId -> saved mode. Keyed by id because UnityEngine.Object cannot be
+        // a reliable dictionary key after destroy (instance IDs stay stable for the
+        // GO lifetime); the SavedMode.Rig reference is what proves the entry still
+        // describes that id's current owner.
+        static readonly Dictionary<int, SavedMode> SavedModes =
+            new Dictionary<int, SavedMode>();
+        // Reusable sweep scratch: id -> rig seen this pass, ids to drop afterwards.
+        static readonly Dictionary<int, Animator> LiveRigs = new Dictionary<int, Animator>();
         static readonly List<int> StaleIds = new List<int>();
 
         public static bool Active { get; private set; }
@@ -73,37 +93,48 @@ namespace EfficientServer.Patches
             World world = GameManager.Instance != null ? GameManager.Instance.World : null;
             if (world == null) return;
             int swept = 0;
-            SweepIds.Clear();
+            LiveRigs.Clear();
             foreach (Animator anim in LivingEnemyAnimators(world))
             {
                 int id = anim.GetInstanceID();
                 // Record BEFORE the culling check so an already-culled rig's
                 // existing saved entry is not mistaken for a despawned one.
-                SweepIds.Add(id);
+                LiveRigs[id] = anim;
                 // Never touch enabled. Only change cullingMode.
                 if (anim.cullingMode == AnimatorCullingMode.CullCompletely)
                     continue;
-                if (!SavedModes.ContainsKey(id))
-                    SavedModes[id] = anim.cullingMode;
+                // No entry, or an id Unity has handed to a different rig since the
+                // last sweep: record what THIS rig actually had.
+                SavedMode saved;
+                if (!SavedModes.TryGetValue(id, out saved) || !ReferenceEquals(saved.Rig, anim))
+                    SavedModes[id] = new SavedMode(anim, anim.cullingMode);
                 anim.cullingMode = AnimatorCullingMode.CullCompletely;
                 swept++;
             }
             PruneDespawnedSavedModes();
+            // Drop the sweep's rig references here rather than holding the last
+            // sweep's rigs alive between sweeps.
+            LiveRigs.Clear();
             if (!Active || swept > 0)
                 EsLog.Emit(LogLevel.Info, $"Governor: animator emergency {(Active ? "sweep" : "ENTER")} - CullCompletely on {swept} rigs (saved={SavedModes.Count})");
             Active = true;
         }
 
-        // Saved entries whose animator no longer enumerates as a living enemy rig
-        // (corpse despawned mid-emergency) can never be restored: Restore walks
-        // exactly the set this sweep enumerated. Drop them each sweep so a long
-        // tier-2 session does not accumulate one entry per spawn/despawn until Exit.
+        // Saved entries whose id is not a live rig this pass, or whose rig no
+        // longer owns that id (Unity recycles instance IDs), can never be restored
+        // without putting a dead rig's mode on a live one: Restore walks exactly
+        // the set this sweep enumerated. Drop them each sweep so a long tier-2
+        // session does not accumulate one entry per spawn/despawn until Exit.
         static void PruneDespawnedSavedModes()
         {
             if (SavedModes.Count == 0) return;
             StaleIds.Clear();
-            foreach (KeyValuePair<int, AnimatorCullingMode> kv in SavedModes)
-                if (!SweepIds.Contains(kv.Key)) StaleIds.Add(kv.Key);
+            foreach (KeyValuePair<int, SavedMode> kv in SavedModes)
+            {
+                Animator live;
+                if (!LiveRigs.TryGetValue(kv.Key, out live) || !ReferenceEquals(live, kv.Value.Rig))
+                    StaleIds.Add(kv.Key);
+            }
             if (StaleIds.Count == 0) return;
             for (int i = 0; i < StaleIds.Count; i++)
                 SavedModes.Remove(StaleIds[i]);
@@ -132,8 +163,13 @@ namespace EfficientServer.Patches
             foreach (Animator anim in LivingEnemyAnimators(world))
             {
                 int id = anim.GetInstanceID();
+                SavedMode saved;
                 AnimatorCullingMode prior;
-                if (!SavedModes.TryGetValue(id, out prior))
+                if (SavedModes.TryGetValue(id, out saved) && ReferenceEquals(saved.Rig, anim))
+                {
+                    prior = saved.Prior;
+                }
+                else
                 {
                     // Probe may have entered without a dict entry if the rig
                     // was already CullCompletely, or spawn arrived mid-exit.

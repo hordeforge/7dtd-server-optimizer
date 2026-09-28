@@ -154,7 +154,9 @@ the collector on Unity Mono). Off by default (`Gc.Incremental`) because the
 write-barrier adds per-allocation overhead whose net value is workload-dependent
 - measure with the APM GC window before retaining. Complements the GC guard: the
 guard removes the forced periodic collect, incremental mode shortens *every*
-collect including the churn-driven ones.
+collect including the churn-driven ones. A failed P/Invoke is not sticky: the
+one-shot guard is set only after the mode flip lands, so `es reload` retries it
+instead of reporting a mode flip that never happened.
 
 Server frame rate is NOT the tick rate: `gmUpdate` runs per frame, but `UpdateTick`
 and the full entity-sim/replication tick it drives are gated at ~20 Hz regardless of
@@ -440,7 +442,11 @@ read the clock and stays available. See CONFIG
 
 Governor tier 2 and `es animoff` set enemy `Animator.cullingMode` to
 `CullCompletely` without disabling the component, so exit can restore root motion.
-Still default-off (`Governor.AnimatorEmergency`). Validate with `es animstate`
+Saved modes are keyed by instance ID and carry the rig reference they were read
+from: Unity recycles instance IDs after a destroy, so an entry whose rig no longer
+owns the ID is dropped at the next sweep instead of restoring a dead rig's mode
+onto the spawn that inherited its ID. Still default-off
+(`Governor.AnimatorEmergency`). Validate with `es animstate`
 (`dp` should be non-zero after `es animon` on moving zombies).
 
 ## Lifecycle
