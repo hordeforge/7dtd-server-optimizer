@@ -93,12 +93,7 @@ namespace EfficientServer.Tests
         // The byte-level entry point the file-surface fuzz target drives: the
         // bytes land on disk exactly as generated, so invalid UTF-8, NULs and a
         // BOM reach Load's real decode path.
-        static ServerPerfConfig LoadTempBytes(byte[] bytes)
-        {
-            string p = WriteTempBytes(bytes);
-            try { return ServerPerfConfig.Load(p); }
-            finally { File.Delete(p); }
-        }
+        static ServerPerfConfig LoadTempBytes(byte[] bytes) => LoadTempFile(WriteTempBytes(bytes));
 
         // Load with a clean warning sink so channel assertions see only this file.
         static ServerPerfConfig LoadTempTracked(string json)
