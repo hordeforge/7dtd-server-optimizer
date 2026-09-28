@@ -99,7 +99,7 @@ mode. GC guard/incremental are secondary.
 | B9 | `WorldBlockTicker.tickScheduled` (151) / `tickRandom` (97) | Server world tick | Budget execute rate | Farming/liquid |
 | B10 | `VehicleManager.Update` (297) / `DroneManager.Update` (305) | gmUpdate every frame if instance | Idle early-out; less waypoint work | QoL |
 | B11 | `EntityVulture.updateTasks` (**1344 IL**) | Flying special case | Species-specific far skip | Flying AI |
-| B12 **DONE+VALIDATED (P1)** | `AstarManager.UpdateGraphs` (185) | Graph maintenance; **66 ms top section** AND top allocator (`InitScan`, corrected APM) at heavy load, total O(N^1.43) in players ([`PATHFINDING_OPTIMIZATION.md`](PATHFINDING_OPTIMIZATION.md)) | **P1+P2 shipped (v1.4.0):** `AstarGraphThrottlePatch` (cadence, `GraphUpdateEveryTicks`=4; A/B **ms_per_tick -28.5%**) + `AstarMoveThresholdPatch` (rescan dead-zone `MoveRescanThresholdSq`, default 100=vanilla). P3 **dropped** (unsound: `UpdateMoveGraph` already 1/call). P4 `InitScan` pooling **built (v1.8.0, `InitScanPoolPatch`, opt-in default off)**: the earlier concurrency doubt is resolved (scans hold AstarPath's work-item lock); alloc eliminated but no benchable tick win (RESULTS §3c-3d) | Nav holes / AI stuck |
+| B12 **DONE+VALIDATED (P1)** | `AstarManager.UpdateGraphs` (185) | Graph maintenance; **66 ms top section** AND top allocator (`InitScan`, corrected APM) at heavy load, total O(N^1.43) in players ([`PATHFINDING_OPTIMIZATION.md`](PATHFINDING_OPTIMIZATION.md)) | **P1 shipped (v1.3.0) + P2 (v1.4.0):** `AstarGraphThrottlePatch` (cadence, `GraphUpdateEveryTicks`=4; A/B **ms_per_tick -28.5%**) + `AstarMoveThresholdPatch` (rescan dead-zone `MoveRescanThresholdSq`, default 100=vanilla). P3 **dropped** (unsound: `UpdateMoveGraph` already 1/call). P4 `InitScan` pooling **built (v1.8.0, `InitScanPoolPatch`, opt-in default off)**: the earlier concurrency doubt is resolved (scans hold AstarPath's work-item lock); alloc eliminated but no benchable tick win (RESULTS §3c-3d) | Nav holes / AI stuck |
 | B13 | `ThreadManager.UpdateMainThreadTasks` (64) | Drains main queue every gmUpdate | Don’t flood from mods | - |
 | B14 | AIDirector always-on components | BM, wandering, chunk scouts, airdrop always installed | Measure BM/scout cost; don’t assume removable without CreateComponents change | Spawn fidelity |
 
@@ -518,19 +518,23 @@ Forensic ~500-player capture: `session_20260717_0301*`.
 
 ## 7. Harmony soft-fail target list (experiments)
 
+`[built]` marks a target with a shipped patch class under
+`Source/EfficientServer/Patches/`; `[not built]` marks a target that still has
+no patch and stays a research item.
+
 ```text
-EntityAlive.FindPath(Vector3, float, bool, EAIBase)
-PathFinderThread.FindPath (virt; Instance is ASPPathFinderThread)
-World.AddFallingBlock(Vector3i, bool)
-World.EntityActivityUpdate
-SpawnManagerBiomes.SpawnUpdate
-DecoManager.UpdateTick
-WaterSplashCubes.Update
-VehicleManager.Update
-DroneManager.Update
-GameManager.gmUpdate // GC.Collect site only, not full replace
-NetEntityDistributionEntry.updatePlayerList // research only
-EntityMoveHelper.UpdateMoveHelper // research; huge
+EntityAlive.FindPath(Vector3, float, bool, EAIBase)  [built: PathAdmissionPatch, default-off]
+PathFinderThread.FindPath (virt; Instance is ASPPathFinderThread)  [not built]
+World.AddFallingBlock(Vector3i, bool)  [not built]
+World.EntityActivityUpdate  [not built]
+SpawnManagerBiomes.SpawnUpdate  [not built]
+DecoManager.UpdateTick  [not built]
+WaterSplashCubes.Update  [built: DedicatedSkipPatch]
+VehicleManager.Update  [not built]
+DroneManager.Update  [not built]
+GameManager.gmUpdate // GC.Collect site only, not full replace  [built: GcGuardPatch]
+NetEntityDistributionEntry.updatePlayerList // research only  [not built]
+EntityMoveHelper.UpdateMoveHelper // research; huge  [not built]
 ```
 
 Each: feature flag, dedicated-only, soft-fail log, FEATURES fidelity notes.

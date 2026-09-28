@@ -193,12 +193,15 @@ grid was later refuted as a lever for that wall
   presize + retain at max capacity (free with 128 GB RAM), not new pooling.
 - **Measurement (mandatory per lever):** corrected APM alloc attribution
   (`top_alloc_sites` / `top_churn_sites`, ranked by bytes) + `gross MB/s` +
-  `ms_per_tick`, before/after, matched load. The **no-GC diagnostic window**
-  (`GC_disable` for ~90 s under load, measure `ms_per_tick`) gives the **GC-free
+  `ms_per_tick`, before/after, matched load. A **no-GC diagnostic window**
+  (`GC_disable` under load, measure `ms_per_tick`) gives the **GC-free
   tick floor**: it is the ceiling on how much any allocation cut can improve
   tick-time. If the GC-free floor is already near the observed tick time, the
   bottleneck is not GC/alloc and the win is RAM/pause-smoothness, not TPS - state
   that honestly rather than overselling an alloc cut as a TPS win (the P2 lesson).
+  The mod's in-process probe for that window was removed (see [§0](#0-why-upstream-not-gc)
+  and `CHANGELOG.md` Unreleased), so the floor now comes from an external
+  Boehm-level measurement; the one recorded run is in `RESULTS.md`.
 
 ---
 

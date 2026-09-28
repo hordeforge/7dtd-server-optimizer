@@ -138,9 +138,7 @@ namespace EfficientServer
                 // so a reload can take a skip away again without a restart too.
                 // GcIncremental joins for the same reason: its one-shot guard is what
                 // makes late-enable possible (disable stays impossible by design).
-                // Both calls self-guard on Enabled/ShouldRun. The megapause diagnostic
-                // is deliberately NOT re-run here: it blocks threads for minutes on
-                // purpose, so it stays a start-time-only lever.
+                // Both calls self-guard on Enabled/ShouldRun.
                 Patches.DedicatedSkipPatch.ApplyOptional();
                 GcIncremental.Apply();
             }

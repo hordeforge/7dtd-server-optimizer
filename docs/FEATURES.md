@@ -166,6 +166,14 @@ persist;
 buys nothing - send timing and tick cadence are identical at fps 20 vs 60; the only
 effect is per-frame loop overhead (RESULTS 3k).
 
+## Server job-worker pool (`Server.JobWorkerCount`, v1.16.1, default 0)
+
+Sets the Unity job-worker pool size (vanilla 31 on a 32-thread host) at every
+game start and on `es reload`. Default 0 leaves the vanilla pool alone.
+Measured: no resolvable effect on the saturated frame (a 4-24 worker sweep was
+noise), because the main thread's fence waits are serial rather than
+pool-bound. Ships 0, for experimenters only (RESULTS 3p).
+
 ## Pathfinding graph throttle (B12 / P1)
 
 `AstarGraphThrottlePatch` is a Harmony prefix on `AstarManager.UpdateGraphs`, the
@@ -334,10 +342,13 @@ Purpose: to size those components' per-frame cost (RE sweep 3n; measured: no
 resolvable cost at saturation variance). `rigoff` is an additive sweep, so
 repeating it converges to the same state and one `rigon` undoes it all;
 components whose rig despawned while disabled are pruned, since they can never
-be restored. Arming `rigoff` requires `Diagnostics.AllowFidelityProbes: true`;
-`es rigon` is never gated, so an armed probe can always be walked back.
-`es animoff` / `es animon` / `es animstate` share that same gate (the animator
-probe is a tier-2 gameplay probe, not a rig probe). Not config-persisted.
+be restored. `es animoff` and `es rigoff` carry the same shape under a second
+opt-in, `Diagnostics.AllowFidelityProbes: true` (default false): both arms
+refuse with an audited log line until the operator opts in, because each
+degrades enemy combat timing on a live server. The restores (`es animon`,
+`es rigon`) and `es animstate` stay ungated, so an armed probe can always be
+walked back (`es animoff` is a tier-2 gameplay probe, not a rig probe), and
+`es status` shows the switch as `probeAllow=`. Not config-persisted.
 
 ## TickGuard emergency load-shedding (v1.13.0, default off)
 
@@ -359,9 +370,10 @@ Validated
 live: engages under a 435-zombie overload (cushioning 299 -> 128 ms/frame), restores
 vanilla within seconds of the load clearing. It schedules existing levers only.
 Note the recovery threshold must sit ABOVE the idle frame interval - exactly
-50 ms at the vanilla fps 20, lower if the fps cap is raised; normalize enforces
-the hysteresis ordering (`HealthyMs` stays below `OverBudgetMs`), not the 50 ms
-figure (see [CONFIG](CONFIG.md)).
+50 ms at the vanilla fps 20, lower if the fps cap is raised. Normalize enforces
+the hysteresis ordering (`HealthyMs` stays below `OverBudgetMs`) and caps
+`OverBudgetMs` at 1.2x the target frame interval when `Server.TargetFps > 0`,
+so raising the cap moves the ceiling with it (see [CONFIG](CONFIG.md)).
 
 **Tier 2 (v1.16.0, `Governor.AnimatorEmergency`, default off):** when throttling has
 not recovered the tick and the EMA exceeds `EmergencyOverMs` (80), cull every
