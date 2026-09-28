@@ -7,8 +7,10 @@ silently resolving to the parent tree and reading or writing the wrong files.
 
 Run: python3 scripts/repo_root.py --selftest    (wired into `make test`)
 """
+
 from __future__ import annotations
 
+import contextlib
 from pathlib import Path
 
 from cli_common import run_cli
@@ -67,10 +69,9 @@ def _selftest() -> int:
         (partial / "sub").mkdir(parents=True)
         (partial / MARKERS[0]).write_text("", encoding="utf-8")
         found: Path | None = None
-        try:
+        # no root anywhere above: also a correct rejection of `partial`
+        with contextlib.suppress(RuntimeError):
             found = repo_root(partial / "sub" / "s.py")
-        except RuntimeError:
-            pass  # no root anywhere above: also a correct rejection of `partial`
         t.check("one marker of two is not a root", found != partial.resolve())
 
     return t.finish()

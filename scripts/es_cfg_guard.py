@@ -31,8 +31,10 @@ Guard protocol (every step idempotent under repetition):
 All writes go through temp-file + rename so a kill mid-write cannot leave a
 truncated JSON behind for the game's config reader or the next run.
 """
+
 from __future__ import annotations
 
+import contextlib
 import copy
 import json
 import os
@@ -93,6 +95,7 @@ def _temp_owner(name: str, base_name: str) -> int | None:
     pid = int(owner)
     return pid if pid <= _MAX_TEMP_OWNER_PID else None
 
+
 USAGE = """\
 usage: scripts/es_cfg_guard.py [--selftest] [-h | --help]
 
@@ -150,10 +153,8 @@ def _write_atomic(path: Path, data: bytes) -> None:
         try:
             sink = os.fdopen(fd, "wb")
         except BaseException:
-            try:
+            with contextlib.suppress(OSError):
                 os.close(fd)
-            except OSError:
-                pass
             raise
         with sink:
             sink.write(data)
@@ -161,21 +162,17 @@ def _write_atomic(path: Path, data: bytes) -> None:
         # tightened them (or a umask that made the original 0600) does not get
         # a silently widened file; a target that does not exist yet keeps the
         # owner-only mode the temp was created with.
-        try:
-            os.chmod(tmp, stat.S_IMODE(path.stat().st_mode))
-        except OSError:
-            pass
-        os.replace(tmp, path)
+        with contextlib.suppress(OSError):
+            tmp.chmod(stat.S_IMODE(path.stat().st_mode))
+        tmp.replace(path)
     except BaseException:
         # The temp file is this call's only copy of the data until the rename
         # lands, and a failed write (ENOSPC, EACCES on the target directory) or
         # a failed replace (cross-device, target is a directory, read-only fs)
         # leaves it stranded next to the live config for every later run to
         # trip over. Drop it, then let the original error propagate unchanged.
-        try:
+        with contextlib.suppress(OSError):
             tmp.unlink()
-        except OSError:
-            pass
         raise
 
 
@@ -304,7 +301,7 @@ class ConfigSwap:
         # runs of a bench loop that keeps hitting damaged state) must not have
         # the second rename destroy the first one's evidence.
         stale = unique_path(self.bak.with_suffix(self.bak.suffix + STALE_SUFFIX))
-        os.replace(self.bak, stale)
+        self.bak.replace(stale)
         self._log(
             f"config guard: leftover backup {self.bak.name} is stale ({why}); "
             f"kept as evidence at {stale.name}, live file NOT touched"
@@ -338,9 +335,7 @@ class ConfigSwap:
         # across a shape an operator (or a corrupting writer) produced is never
         # this guard's call.
         if not isinstance(live, dict):
-            self._quarantine(
-                f"live config is valid JSON but not an object ({type(live).__name__})"
-            )
+            self._quarantine(f"live config is valid JSON but not an object ({type(live).__name__})")
             return
         # Replay the backup's managed-key values onto the live doc; if that
         # makes the documents identical, only this harness touched the file
@@ -352,10 +347,7 @@ class ConfigSwap:
         if _canonical(replayed) == _canonical(bak_doc):
             _write_atomic(self.cfg, bak_bytes)
             self.bak.unlink()
-            self._log(
-                "config guard: finished restore from backup left by a "
-                "killed earlier run"
-            )
+            self._log("config guard: finished restore from backup left by a killed earlier run")
         else:
             self._quarantine("live config changed beyond managed keys since snapshot")
 
@@ -413,10 +405,7 @@ class ConfigSwap:
             # back to the exact snapshot instead.
             _write_atomic(self.cfg, bak_bytes)
             self.bak.unlink()
-            self._log(
-                f"config guard: live config unreadable ({e}); "
-                "restored full backup"
-            )
+            self._log(f"config guard: live config unreadable ({e}); restored full backup")
             return
         if not isinstance(live, dict):
             # Valid JSON of the wrong shape (array, scalar, null): a key-scoped
@@ -432,9 +421,7 @@ class ConfigSwap:
         for kp in self.keys:
             present, value = self._get(bak_doc, kp)
             self._set(live, kp, present, value)
-        _write_atomic(
-            self.cfg, (json.dumps(live, indent=2) + "\n").encode("utf-8")
-        )
+        _write_atomic(self.cfg, (json.dumps(live, indent=2) + "\n").encode("utf-8"))
         self.bak.unlink()
         self._begun = False
         self._log(f"config guard: restored managed keys from {self.bak.name}")
@@ -662,9 +649,7 @@ def _fuzz_protocol(failures: list[str], iteration: int) -> None:
                     if pre_live is not None and (
                         not swap.bak.is_file() or swap.bak.read_bytes() != pre_live
                     ):
-                        failures.append(
-                            f"iter {iteration}: begin did not snapshot the live file"
-                        )
+                        failures.append(f"iter {iteration}: begin did not snapshot the live file")
                 elif step == "recover":
                     swap.recover()
                     if pre_backup is not None and swap.bak.is_file():
@@ -672,20 +657,14 @@ def _fuzz_protocol(failures: list[str], iteration: int) -> None:
                     if pre_backup is not None and pre_live is not None:
                         post = cfg.read_bytes() if cfg.is_file() else None
                         if post not in (pre_live, pre_backup):
-                            failures.append(
-                                f"iter {iteration}: recover left a third live state"
-                            )
+                            failures.append(f"iter {iteration}: recover left a third live state")
                     elif pre_backup is not None and cfg.is_file():
-                        failures.append(
-                            f"iter {iteration}: recover resurrected a missing config"
-                        )
+                        failures.append(f"iter {iteration}: recover resurrected a missing config")
                 else:
                     swap.restore()
                     if pre_backup is None:
                         if cfg.is_file() and cfg.read_bytes() != pre_live:
-                            failures.append(
-                                f"iter {iteration}: restore wrote with no backup"
-                            )
+                            failures.append(f"iter {iteration}: restore wrote with no backup")
                         continue
                     # A snapshot that decodes to something other than a JSON
                     # object has no managed key to read back: the guard takes
@@ -728,9 +707,7 @@ def _fuzz_protocol(failures: list[str], iteration: int) -> None:
                         continue
                     after_decoded, after_doc = _fuzz_json(post)
                     if not after_decoded or not isinstance(after_doc, dict):
-                        failures.append(
-                            f"iter {iteration}: restore left an unreadable config"
-                        )
+                        failures.append(f"iter {iteration}: restore left an unreadable config")
                     elif _fuzz_unmanaged(after_doc, _FUZZ_KEYS) != _fuzz_unmanaged(
                         live_doc, _FUZZ_KEYS
                     ):
@@ -747,9 +724,7 @@ def _fuzz_protocol(failures: list[str], iteration: int) -> None:
                         "present live config"
                     )
             except Exception as exc:  # a hostile file must fail soft, never raise
-                failures.append(
-                    f"iter {iteration}: {step} raised {type(exc).__name__}: {exc}"
-                )
+                failures.append(f"iter {iteration}: {step} raised {type(exc).__name__}: {exc}")
             litter = _fuzz_temp_litter(root)
             if litter:
                 failures.append(f"iter {iteration}: {step} stranded temp files {litter}")
@@ -999,7 +974,8 @@ def _selftest() -> int:
             msg = "descriptor wrap failed"
             raise OSError(msg)
 
-        fds_open = len(os.listdir("/proc/self/fd"))
+        fd_dir = Path("/proc/self/fd")
+        fds_open = sum(1 for _ in fd_dir.iterdir())
         os.fdopen = wrap_boom
         try:
             write_atomic(root / "fdleak.json", '{"k": 4}\n')
@@ -1011,7 +987,7 @@ def _selftest() -> int:
         t.check("a failed descriptor wrap raises", wrap_failed)
         t.check(
             "a failed descriptor wrap leaks no file descriptor",
-            len(os.listdir("/proc/self/fd")) <= fds_open,
+            sum(1 for _ in fd_dir.iterdir()) <= fds_open,
         )
         t.check(
             "a failed descriptor wrap leaves no temp files",
@@ -1047,8 +1023,10 @@ def _selftest() -> int:
         cfg.unlink()
         s7.recover()
         stale7 = s7.bak.with_suffix(s7.bak.suffix + STALE_SUFFIX)
-        t.check("missing live config at recover -> backup quarantined",
-              stale7.is_file() and not s7.bak.exists())
+        t.check(
+            "missing live config at recover -> backup quarantined",
+            stale7.is_file() and not s7.bak.exists(),
+        )
         t.check("missing live config stays missing after recover", not cfg.exists())
         stale7.unlink()
 
@@ -1066,7 +1044,7 @@ def _selftest() -> int:
         # parses fine, so the unreadable branch does not fire, yet the
         # divergence rule cannot apply (no keys to replay into). Must be
         # quarantined like every other damaged state, never a crash.
-        for shape in ('[1, 2]', 'null', '"text"', '42'):
+        for shape in ("[1, 2]", "null", '"text"', "42"):
             s8 = mk()
             cfg.write_text(json.dumps(original, indent=2) + "\n", encoding="utf-8")
             s8.begin()
@@ -1104,7 +1082,7 @@ def _selftest() -> int:
         # owned by a RUNNING pid (a concurrent harness) must survive, and the
         # live config and the guard's own backup are both covered.
         s10 = mk()
-        dead_pid = 2 ** 22 - 1  # above the default pid_max: cannot be running
+        dead_pid = 2**22 - 1  # above the default pid_max: cannot be running
         stray_cfg = root / f"{cfg.name}{TEMP_INFIX}{dead_pid}"
         stray_bak = root / f"{s10.bak.name}{TEMP_INFIX}{dead_pid}"
         # The parent's pid, not ours: a temp named with OUR pid is this very
@@ -1170,8 +1148,9 @@ def _selftest() -> int:
         t.check("a temp name that is not a pid does not abort the sweep", swept)
         t.check("a sweep that raised still snapshotted the config", s10d.bak.is_file())
         s10d.restore()
-        t.check("every unparseable temp name is left on disk",
-                all(stray.is_file() for stray in hostile))
+        t.check(
+            "every unparseable temp name is left on disk", all(stray.is_file() for stray in hostile)
+        )
         for stray in hostile:
             stray.unlink()
 

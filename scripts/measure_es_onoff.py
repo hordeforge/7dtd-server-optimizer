@@ -27,6 +27,7 @@ start), one sample is taken, and no toggle happens. Run twice (once per
 arm) for a fresh-server-per-arm comparison; the caller owns the config
 between arms (set it explicitly, or reinstall to restore the default).
 """
+
 from __future__ import annotations
 
 import json
@@ -102,8 +103,7 @@ ES_SWAP = ConfigSwap(ES_CFG, [("Enabled",)], log=log)
 # SEVENDTD_LOGDIR (that names run_server.sh's output dir, which has no effect
 # on a loadgen-booted server).
 LOG_DIR = Path(
-    os.environ.get("RE_DEDICATED_USERDATA")
-    or str(Path.home() / ".cache" / "7dtd-loadgen")
+    os.environ.get("RE_DEDICATED_USERDATA") or str(Path.home() / ".cache" / "7dtd-loadgen")
 )
 
 
@@ -126,8 +126,6 @@ def latest_server_log() -> Path | None:
     if not cands:
         cands = by_mtime(DS.glob("logs/server_prefab_*.txt"))
     return cands[-1] if cands else None
-
-
 
 
 # The APM line parser, the incremental reader and the windowed-rate
@@ -248,9 +246,7 @@ def main() -> int:
                 # not an ES effect.
                 noise = max(0.5, on["gmUpdateAvg_err_ms"] + off["gmUpdateAvg_err_ms"])
                 verdict = (
-                    "within_noise"
-                    if abs(d) <= noise
-                    else ("ON_faster" if d < 0 else "ON_slower")
+                    "within_noise" if abs(d) <= noise else ("ON_faster" if d < 0 else "ON_slower")
                 )
                 report["gmUpdateAvg_delta_ms"] = round(d, 3)
                 report["gmUpdateAvg_noise_bound_ms"] = round(noise, 3)
@@ -300,8 +296,10 @@ def main() -> int:
                     # harness's Enabled value even though the file on disk is the
                     # operator's again, which is exactly the state the run is
                     # supposed to end without.
-                    log(f"  es reload after restore failed ({e}); the running server "
-                        "still has this run's Enabled value until someone reloads it")
+                    log(
+                        f"  es reload after restore failed ({e}); the running server "
+                        "still has this run's Enabled value until someone reloads it"
+                    )
                     reloaded = False
             report["restored"] = restored
             report["reloaded"] = reloaded

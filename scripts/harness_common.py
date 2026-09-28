@@ -9,6 +9,7 @@ path-knob config swap live here once instead of drifting across copies.
 Run via a sibling script (`python3 scripts/measure_es_onoff.py`); this module
 is never an entry point itself.
 """
+
 from __future__ import annotations
 
 import json
@@ -80,9 +81,7 @@ __all__ = [
 # before the first write.
 for _empty in ("SEVENDTD_DS_DIR", "SEVENDTD_SERVER_DIR", "VALIDATE_OUT"):
     if _empty in os.environ and not os.environ[_empty].strip():
-        sys.exit(
-            f"harness_common: {_empty} is set but empty; pass a real path or unset it."
-        )
+        sys.exit(f"harness_common: {_empty} is set but empty; pass a real path or unset it.")
 DS = Path(
     os.environ.get("SEVENDTD_DS_DIR")
     or os.environ.get("SEVENDTD_SERVER_DIR")

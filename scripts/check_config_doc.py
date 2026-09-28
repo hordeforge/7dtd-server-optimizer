@@ -16,6 +16,7 @@ defaults; two divergent copies would make one of them a lie).
 Run: python3 scripts/check_config_doc.py
      python3 scripts/check_config_doc.py --selftest     (both wired into `make test`)
 """
+
 from __future__ import annotations
 
 import json
@@ -258,8 +259,7 @@ def _selftest() -> int:
     )
     t.check(
         "parse_cs_schema parses scalar defaults (bool/int/float-suffix/absent)",
-        schema["AiLodConfig"]["scalars"]
-        == {"Enabled": True, "FullAiDistSq": 100, "Stride": None},
+        schema["AiLodConfig"]["scalars"] == {"Enabled": True, "FullAiDistSq": 100, "Stride": None},
     )
     t.check(
         "parse_cs_schema resolves a default that names a same-class const",

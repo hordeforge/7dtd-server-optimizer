@@ -10,6 +10,7 @@ drift apart across five copies.
 One spelling of the result line for every script, so a CI log is parsed the
 same way whichever gate produced it.
 """
+
 from __future__ import annotations
 
 import sys

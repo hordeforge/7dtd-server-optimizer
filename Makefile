@@ -90,7 +90,7 @@ help:
 	@echo
 	@echo "  Subset targets for the edit-test loop; each needs only its own tools,"
 	@echo "  and 'make test' is exactly these three in sequence:"
-	@echo "  make lint              shellcheck + ruff + mypy on scripts/"
+	@echo "  make lint              shellcheck + ruff check/format + mypy on scripts/"
 	@echo "  make unit              Config.Load/Normalize harness (Source/EfficientServer.Tests)"
 	@echo "  make check-scripts     Python gates: config doc/version, repo_root,"
 	@echo "                         cfg guard and coverage badge (needs python3 only)"
@@ -182,6 +182,7 @@ preflight-unit:
 lint: preflight-lint scratch
 	shellcheck -x $(wildcard $(ROOT)/scripts/*.sh)
 	ruff check $(ROOT)/scripts
+	ruff format --check $(ROOT)/scripts
 	mypy $(ROOT)/scripts
 
 # Locked restore: fails when a PackageReference changed without regenerating

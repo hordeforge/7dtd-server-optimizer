@@ -26,6 +26,7 @@ Checks that:
 Run: python3 scripts/check_version.py
      python3 scripts/check_version.py --selftest     (both wired into `make test`)
 """
+
 from __future__ import annotations
 
 import re
@@ -88,9 +89,7 @@ def norm(v: str) -> tuple[int, ...]:
 # `## [1.19.0] - 2026-09-20` is a released section; `## [Unreleased]` is the
 # staging section; `## Version numbering` is prose above the list. Anything
 # else at that level is not a release record.
-_SECTION_RE = re.compile(
-    r"^## \[(?P<label>[^\]]+)\](?:\s+-\s+(?P<date>\S+))?\s*$", re.MULTILINE
-)
+_SECTION_RE = re.compile(r"^## \[(?P<label>[^\]]+)\](?:\s+-\s+(?P<date>\S+))?\s*$", re.MULTILINE)
 
 
 def changelog_sections(text: str) -> list[tuple[str, str | None]]:
@@ -235,10 +234,7 @@ def _security_version_fails(text: str, shipped: str) -> list[str]:
     )
     if m is None:
         return ["SECURITY.md has no `## Supported versions` section"]
-    claimed = {
-        norm(tok)
-        for tok in re.findall(r"(?<![-\w.])(\d+\.\d+\.\d+)\b", m.group("body"))
-    }
+    claimed = {norm(tok) for tok in re.findall(r"(?<![-\w.])(\d+\.\d+\.\d+)\b", m.group("body"))}
     shipped_version = norm(shipped)
     if shipped_version not in claimed:
         return [
@@ -490,19 +486,15 @@ def main() -> int:
         fails.append("ModInfo.xml: no Version value")
     di = None
     di_src = read_or(DIST_MODINFO) if DIST_MODINFO.exists() else None
-    if di_src is not None:
-        di = modinfo_version(DIST_MODINFO)
+    di = modinfo_version(DIST_MODINFO) if di_src is not None else None
 
     asm_src = read_or(ASSEMBLY)
-    asm_m = (
-        re.search(r'AssemblyVersion\("([0-9.]+)"\)', asm_src) if asm_src is not None else None
-    )
+    asm_m = re.search(r'AssemblyVersion\("([0-9.]+)"\)', asm_src) if asm_src is not None else None
     asm = asm_m.group(1) if asm_m else None
 
-    if mi and asm:
-        # trailing ".0" parts in the 4-part assembly version are cosmetic
-        if norm(mi) != norm(asm):
-            fails.append(f"ModInfo {mi} != AssemblyInfo {asm}")
+    # trailing ".0" parts in the 4-part assembly version are cosmetic
+    if mi and asm and norm(mi) != norm(asm):
+        fails.append(f"ModInfo {mi} != AssemblyInfo {asm}")
     if di and mi and norm(di) != norm(mi):
         fails.append(f"dist ModInfo {di} != source ModInfo {mi}")
 
@@ -536,9 +528,7 @@ def main() -> int:
 
     security = ROOT / "SECURITY.md"
     if mi and security.exists():
-        fails.extend(
-            _security_version_fails(security.read_text(encoding="utf-8"), mi)
-        )
+        fails.extend(_security_version_fails(security.read_text(encoding="utf-8"), mi))
 
     if fails:
         print("FAIL:", file=sys.stderr)

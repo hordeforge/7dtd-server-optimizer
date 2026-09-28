@@ -4,6 +4,7 @@
 Run: python3 scripts/coverage_badge.py COBERTURA_XML OUTPUT.svg
      python3 scripts/coverage_badge.py --selftest     (wired into `make test`)
 """
+
 from __future__ import annotations
 
 import sys
@@ -76,17 +77,14 @@ def percent(line_rate: str) -> int:
     reads the decimal literal the report already is, and ROUND_HALF_UP settles
     the tie deterministically instead of leaving it to binary representation.
     """
-    return int(
-        (Decimal(line_rate) * 100).quantize(Decimal(1), rounding=ROUND_HALF_UP)
-    )
+    return int((Decimal(line_rate) * 100).quantize(Decimal(1), rounding=ROUND_HALF_UP))
 
 
 def main(argv: list[str]) -> int:
     """Run the badge render over the two positionals (arguments, not sys.argv)."""
     if len(argv) != 2:
         print(
-            f"{NAME}: expected COBERTURA_XML and OUTPUT.svg,"
-            f" got {len(argv)}: {' '.join(argv)}",
+            f"{NAME}: expected COBERTURA_XML and OUTPUT.svg, got {len(argv)}: {' '.join(argv)}",
             file=sys.stderr,
         )
         print(USAGE, file=sys.stderr)
@@ -114,8 +112,7 @@ def main(argv: list[str]) -> int:
         # conversion. Each used to escape as a traceback instead of the named
         # FAIL line.
         print(
-            f"FAIL: {argv[0]} has an unusable line-rate "
-            f"({root.get('line-rate', '0')!r}: {ex})",
+            f"FAIL: {argv[0]} has an unusable line-rate ({root.get('line-rate', '0')!r}: {ex})",
             file=sys.stderr,
         )
         return 1
@@ -188,7 +185,7 @@ def _selftest() -> int:
         text = out.read_text(encoding="utf-8")
         # percent(0.9234) == 92 -> green band (>= 90).
         t.check("main exits 0 on a well-formed report", rc == 0)
-        t.check("main renders the rounded percentage", 'coverage: 92%' in text)
+        t.check("main renders the rounded percentage", "coverage: 92%" in text)
         t.check(
             "main picks the band colour for 92",
             'fill="#4c1"' in text,
@@ -207,7 +204,7 @@ def _selftest() -> int:
         t.check("main treats a missing line-rate as exit 0", rc_bare == 0)
         t.check(
             "missing line-rate renders 0% red",
-            'coverage: 0%' in text_bare and '#e05d44' in text_bare,
+            "coverage: 0%" in text_bare and "#e05d44" in text_bare,
         )
         # An unwritable OUTPUT.svg is the caller's bad argument (exit 2), one
         # line on stderr, no traceback.
@@ -228,9 +225,7 @@ def _selftest() -> int:
         rc_malformed = main([str(malformed), str(out)])
         t.check("malformed report exits 1", rc_malformed == 1)
         notanumber = Path(td) / "notanumber.cobertura.xml"
-        notanumber.write_text(
-            '<coverage line-rate="n/a"></coverage>', encoding="utf-8"
-        )
+        notanumber.write_text('<coverage line-rate="n/a"></coverage>', encoding="utf-8")
         before = out.read_text(encoding="utf-8")
         rc_nan = main([str(notanumber), str(out)])
         t.check("non-numeric line-rate exits 1", rc_nan == 1)

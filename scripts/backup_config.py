@@ -24,6 +24,7 @@ a schedule; a backup whose failure is silent is not a backup.
 
     python3 scripts/backup_config.py --selftest    (wired into `make test`)
 """
+
 from __future__ import annotations
 
 import argparse
@@ -167,9 +168,7 @@ def _sweep_abandoned_staging(dest: Path) -> None:
 
 def _new_staging(dest: Path) -> Path:
     _sweep_abandoned_staging(dest)
-    return Path(
-        tempfile.mkdtemp(prefix=f"{STAGING_PREFIX}{os.getpid()}.", dir=str(dest))
-    )
+    return Path(tempfile.mkdtemp(prefix=f"{STAGING_PREFIX}{os.getpid()}.", dir=str(dest)))
 
 
 def _publish(staging: Path, target: Path) -> None:
@@ -182,7 +181,7 @@ def _publish(staging: Path, target: Path) -> None:
     that won the name is reported instead of merged into.
     """
     try:
-        os.rename(staging, target)
+        staging.rename(target)
     except OSError as exc:
         msg = f"could not publish snapshot {target.name}: {exc}"
         raise BackupError(msg) from exc
@@ -292,9 +291,7 @@ def snapshot(
         # nobody can restore is worse than no snapshot, and leaving it would
         # make every later verify and every later snapshot fail on it.
         shutil.rmtree(target, ignore_errors=True)
-        raise BackupError(
-            f"snapshot {target.name} does not verify: " + "; ".join(problems)
-        )
+        raise BackupError(f"snapshot {target.name} does not verify: " + "; ".join(problems))
     prune(dest, keep)
     return target, []
 
@@ -666,6 +663,7 @@ def _selftest() -> int:
             encoding="utf-8",
         )
         planted_bytes = (outside / CONFIG_NAME).read_bytes()
+
         def refused(stamp: str) -> bool:
             try:
                 restore(dest, stamp, out / "stolen.json", force=True)
@@ -684,8 +682,10 @@ def _selftest() -> int:
                 )
             ),
         )
-        t.check("the file outside the snapshot root is untouched",
-                (outside / CONFIG_NAME).read_bytes() == planted_bytes)
+        t.check(
+            "the file outside the snapshot root is untouched",
+            (outside / CONFIG_NAME).read_bytes() == planted_bytes,
+        )
         t.check("a refused traversal writes nothing", not (out / "stolen.json").exists())
 
     # The property the snapshot protocol actually promises: a run that did not
@@ -725,8 +725,10 @@ def _selftest() -> int:
         shutil.rmtree(broken)
         after, _ = snapshot(srv, dest, now=t0)
         t.check("a rerun after a failure takes a clean snapshot", verify(dest) == [])
-        t.check("the rerun's snapshot carries the live bytes",
-                (after / CONFIG_NAME).read_bytes() == live.read_bytes())
+        t.check(
+            "the rerun's snapshot carries the live bytes",
+            (after / CONFIG_NAME).read_bytes() == live.read_bytes(),
+        )
 
         # Staging dirs of killed runs are reaped by the next one (dead pid), a
         # live run's is left alone, and neither is ever a snapshot.

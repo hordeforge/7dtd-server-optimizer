@@ -12,6 +12,7 @@ The PASS/FAIL collector those selftests record into is `Checks` in
 
 Run via a sibling script; this module is never an entry point itself.
 """
+
 from __future__ import annotations
 
 import sys

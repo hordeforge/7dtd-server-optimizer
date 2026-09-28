@@ -28,6 +28,7 @@ zombies present), or entity collapse in the path phase. A missing animator
 frame cut under high load reports WEAK_no_frame_cut but does not fail the
 run; animstate snapshots that come back empty downgrade to SKIP verdicts.
 """
+
 from __future__ import annotations
 
 import json
@@ -119,8 +120,10 @@ def sample_health(label: str, seconds: float = SAMPLE_S) -> HealthSample:
             alives.append(float(h["entityAlives"]))
         if i + 1 < n:
             time.sleep(max(0.5, seconds / n))
+
     def avg(xs: list[float]) -> float | None:
         return round(sum(xs) / len(xs), 2) if xs else None
+
     out: HealthSample = {
         "label": label,
         "frameMs_avg": avg(frames),
@@ -153,9 +156,14 @@ def animstate_snapshot() -> tuple[str, list[dict[str, object]]]:
 def fast_spawn(target: int) -> int:
     """Burst telnet spawnentity; faster than bloodmoon_profile.spawn_endgame for mid loads."""
     mix = (
-        ["zombieBoeRadiated"] * 3 + ["zombieMarleneRadiated"] * 2 + ["zombieJoeRadiated"] * 2
-        + ["zombieArleneRadiated"] * 2 + ["zombieBikerFeral"] * 2 + ["zombieFatCop"] * 1
-        + ["zombieDemolition"] * 1 + ["zombieScreamer"] * 1
+        ["zombieBoeRadiated"] * 3
+        + ["zombieMarleneRadiated"] * 2
+        + ["zombieJoeRadiated"] * 2
+        + ["zombieArleneRadiated"] * 2
+        + ["zombieBikerFeral"] * 2
+        + ["zombieFatCop"] * 1
+        + ["zombieDemolition"] * 1
+        + ["zombieScreamer"] * 1
     )
     ids = B.player_ids()
     if not ids:
@@ -173,7 +181,7 @@ def fast_spawn(target: int) -> int:
             cmds.append(f"spawnentity {pid} {mix[mi % len(mix)]}")
             mi += 1
         B.telnet(cmds, settle=1.2)
-        log(f"  fast_spawn round {round_i+1}: alive={B.alive()}/{target}")
+        log(f"  fast_spawn round {round_i + 1}: alive={B.alive()}/{target}")
         time.sleep(1)
     # Boundary pin: alive() is untyped in the loadgen sibling; this function's
     # contract is a concrete spawned-entity count.
@@ -225,8 +233,7 @@ def main() -> int:
         if joined < max(1, int(PLAYERS * 0.5)):
             log(f"FAIL: only {joined}/{PLAYERS} players joined")
             verdicts["join"] = "FAIL"
-            code = 2
-            return code
+            return 2
         verdicts["join"] = "PASS"
         B.set_gamestage(GAMESTAGE)
         # Bench-god needs the runtime allow switch (the console gate refuses to
@@ -253,13 +260,9 @@ def main() -> int:
         _, off_rows = animstate_snapshot()
         report["animstate_off_n"] = len(off_rows)
         report["animstate_off_cull_modes"] = sorted({str(r.get("cull", "")) for r in off_rows})
-        cull_ok = any(
-            r.get("cull") and "CullCompletely" in str(r.get("cull")) for r in off_rows
-        )
+        cull_ok = any(r.get("cull") and "CullCompletely" in str(r.get("cull")) for r in off_rows)
         # if animstate empty, still ok if frame moved
-        verdicts["anim_cull_mode"] = (
-            "PASS" if cull_ok or not off_rows else "FAIL_no_CullCompletely"
-        )
+        verdicts["anim_cull_mode"] = "PASS" if cull_ok or not off_rows else "FAIL_no_CullCompletely"
 
         on_txt = B.telnet(["es animon"], settle=2.0)
         report["animon_reply"] = on_txt[-800:]
@@ -275,9 +278,7 @@ def main() -> int:
         report["animstate_on_moving_dp_gt0"] = len(moving_dp)
         report["animstate_on_sample"] = on_rows[:8]
         if moving:
-            verdicts["anim_root_motion"] = (
-                "PASS" if moving_dp else "FAIL_dp_zero_crawl"
-            )
+            verdicts["anim_root_motion"] = "PASS" if moving_dp else "FAIL_dp_zero_crawl"
         elif on_rows:
             verdicts["anim_root_motion"] = "SKIP_no_moving_zombies"
         else:
@@ -325,9 +326,7 @@ def main() -> int:
         pb, po = path_base.get("frameMs_avg"), path_on.get("frameMs_avg")
         if isinstance(pb, (int, float)) and isinstance(po, (int, float)):
             report["path_frame_delta_ms"] = round(po - pb, 2)
-            verdicts["path_frame"] = (
-                "PASS_or_noise" if po <= pb * 1.15 else "REGRESSION_frame_up"
-            )
+            verdicts["path_frame"] = "PASS_or_noise" if po <= pb * 1.15 else "REGRESSION_frame_up"
         else:
             verdicts["path_frame"] = "SKIP"
 
@@ -336,11 +335,7 @@ def main() -> int:
         B.telnet(["es reload"], settle=1.0)
 
         # overall
-        hard = {
-            k: v
-            for k, v in verdicts.items()
-            if str(v).startswith("FAIL")
-        }
+        hard = {k: v for k, v in verdicts.items() if str(v).startswith("FAIL")}
         if hard:
             code = max(code, 1)
         report["exit_code"] = code
@@ -375,16 +370,20 @@ def main() -> int:
                 # Best effort, since the sampled server may already be gone -
                 # but never silent: a failed reload leaves this server running
                 # the harness' path knobs until someone reloads it by hand.
-                log(f"  es reload after restore failed ({e}); the running server "
-                    "still has this run's path knobs until someone reloads it")
+                log(
+                    f"  es reload after restore failed ({e}); the running server "
+                    "still has this run's path knobs until someone reloads it"
+                )
         # animoff is console-side session state no config restore can undo, so
         # it is cleared on its own: a failed reload above must not leave the
         # animator LOD probe armed on a live server.
         try:
             B.telnet(["es animon"], settle=1.0)
         except Exception as e:
-            log(f"  es animon after restore failed ({e}); the animator LOD probe "
-                "may still be off on the running server")
+            log(
+                f"  es animon after restore failed ({e}); the animator LOD probe "
+                "may still be off on the running server"
+            )
         report["restored"] = restored
         teardown_bots(bots)
         # Default: leave dedicated running so multi-phase/tool-timeout runs can resume.

@@ -1,4 +1,6 @@
-# Python lint gate, wired into `make test` and CI next to shellcheck.
+# Python lint gate, wired into `make test` and CI next to shellcheck, plus the
+# formatter gate: `ruff format --check scripts` in the same target. Layout is
+# the formatter's, not a reviewer's, so a wrapped call is never hand-tuned.
 # Line length mirrors .editorconfig's repo-wide 100-column cap.
 line-length = 100
 
@@ -9,7 +11,6 @@ src = ["scripts"]
 # Groups proven clean by a full run before being enabled here; a new group
 # must pass on the tree before its selector lands. Deliberately not selected:
 # - T20 (print): these are CLI harnesses; stdout is the product.
-# - SIM / RET / PTH: style churn with no defect signal in this tree yet.
 # - BLE (blind except): every hit is a teardown or quarantine boundary that
 #   must log-and-continue so a failed cleanup never masks the real result, the
 #   same rationale as S110 below. Select it once those handlers narrow.
@@ -38,6 +39,9 @@ select = [
     "DTZ",  # naive datetimes in measurement/log-parsing code
     "EXE",  # executable/shebang hygiene
     "S",    # flake8-bandit security rules (minus scoped ignores below)
+    "SIM",  # simplifiable control flow (nested ifs, suppressable try/except/pass)
+    "RET",  # return-value handling (useless assignments, unreachable returns)
+    "PTH",  # pathlib over the os.path / os module equivalents
     "FURB", # refurb modernizations
     "RUF",  # ruff-specific (stale noqa directives, etc.)
     "PERF", # per-call loops that should be comprehensions

@@ -86,6 +86,7 @@ acceptance (`docs/FEATURES.md` fidelity checks).
 | `shellcheck -x scripts/*.sh` | `make lint` | a shell script has a lint violation | fix the script |
 | `ruff check scripts/` (config in `ruff.toml`) | `make lint` | a Python script has a lint violation (undefined name, unused binding, over-long line, import order) | fix the script; rule groups are added only once the tree passes them |
 | `mypy scripts/` (config in `mypy.ini`) | `make lint` | a Python script fails type checking (missing/contradictory annotations, unreachable code) | fix the annotations or the code they contradict; stricter flags are added only once the tree passes them |
+| `ruff format --check scripts/` | `make lint` | a Python script is not in `ruff format` output | run `ruff format scripts/` and commit the result; the formatter is the layout authority, so do not hand-tune the wrapping it rewrites |
 | `python3 -m compileall scripts` | `make check-scripts` | a script has a syntax error | fix the script |
 | `dotnet restore --locked-mode` | `make unit` (both package graphs) | you changed a `PackageReference` without regenerating the lockfile | run plain `dotnet restore Source/EfficientServer.Tests` or `dotnet restore Source/EfficientServer` and commit the regenerated `packages.lock.json` with the csproj change |
 | config harness (`Source/EfficientServer.Tests`) | `make unit` | a `Config.cs` behavior change broke a pinned check | change the code or update the check together; never delete a check to pass |
