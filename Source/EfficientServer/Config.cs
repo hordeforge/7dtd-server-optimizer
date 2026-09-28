@@ -537,9 +537,13 @@ namespace EfficientServer
         // backslash. Control characters and zero-width/bidi formatting marks
         // survive that intact, so "Ena\nbled" splits one warning into two log
         // lines and a zero-width joiner makes two different keys read
-        // identically to the operator grepping for them. Map exactly those to
-        // U+FFFD (the same marker the decode path already uses for a byte it
-        // cannot represent) so each key stays one line and one name.
+        // identically to the operator grepping for them. A `\uD800` escape
+        // survives too, and it is the sharpest case of the same defect: the
+        // half is not a character at all, so the encoder replacing it with
+        // U+FFFD at the sink turns every lone-surrogate key into the same
+        // rendered name, whatever half it carried. Map exactly those to U+FFFD
+        // (the same marker the decode path already uses for a byte it cannot
+        // represent) so each key stays one line and one name.
         const char UnrepresentableChar = (char)0xFFFD;
 
         // Code points, not literal characters: the mcs fallback backend compiles
@@ -553,9 +557,29 @@ namespace EfficientServer
             || c == 0xFEFF;                   // BOM, zero-width no-break space
 
         /// <summary>
+        /// Whether the UTF-16 unit at <paramref name="i"/> cannot appear in a
+        /// log line, in a form that keeps the key distinguishable.
+        /// </summary>
+        /// <remarks>
+        /// Indexed, not per-character, because a surrogate is only a unit of a
+        /// character: a matched pair is one astral code point and is printed
+        /// as it stands, while an unmatched half stands for no code point at
+        /// all and is replaced here rather than by the encoder downstream.
+        /// </remarks>
+        static bool IsUnrepresentableInKey(string key, int i)
+        {
+            char c = key[i];
+            if (char.IsHighSurrogate(c))
+                return i + 1 >= key.Length || !char.IsLowSurrogate(key[i + 1]);
+            if (char.IsLowSurrogate(c))
+                return i == 0 || !char.IsHighSurrogate(key[i - 1]);
+            return IsUnprintableInKey(c);
+        }
+
+        /// <summary>
         /// Key path as it may be written to a log line: the operator's spelling
-        /// with unprintable characters replaced, so one key is one line and one
-        /// visible name.
+        /// with unrepresentable characters replaced, so one key is one line and
+        /// one visible name.
         /// </summary>
         internal static string PrintableKey(string key)
         {
@@ -563,7 +587,7 @@ namespace EfficientServer
             int first = -1;
             for (int i = 0; i < key.Length; i++)
             {
-                if (!IsUnprintableInKey(key[i])) continue;
+                if (!IsUnrepresentableInKey(key, i)) continue;
                 first = i;
                 break;
             }
@@ -573,7 +597,7 @@ namespace EfficientServer
             StringBuilder sb = new StringBuilder(key.Length + 8);
             sb.Append(key, 0, first);
             for (int i = first; i < key.Length; i++)
-                sb.Append(IsUnprintableInKey(key[i]) ? UnrepresentableChar : key[i]);
+                sb.Append(IsUnrepresentableInKey(key, i) ? UnrepresentableChar : key[i]);
             return sb.ToString();
         }
 

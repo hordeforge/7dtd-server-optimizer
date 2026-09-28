@@ -49,8 +49,13 @@ scripts/measure_es_onoff.py; run via that script).
 """
 
 APM_LINE_RE = re.compile(
-    r"APM updates=(\d+) gmUpdateAvg=([0-9.]+)ms tickAvg=([0-9.]+)ms spikes=(\d+)"
+    r"APM updates=([0-9]+) gmUpdateAvg=([0-9.]+)ms tickAvg=([0-9.]+)ms spikes=([0-9]+)"
 )
+# [0-9] everywhere in this pattern, never \d: Python's \d matches every Unicode
+# decimal digit, and int() accepts them, so a line carrying Arabic-Indic or
+# fullwidth digits parsed as a real cumulative counter instead of as the
+# unreadable line it is. These counters are the input to `windowed`, so a line
+# read as data there becomes a fabricated A/B verdict.
 
 # The bridge prints cumulative averages rounded to two decimals
 # (ToString("F2")), so every parsed value carries up to this much rounding

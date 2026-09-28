@@ -253,7 +253,13 @@ def _security_version_fails(text: str, shipped: str) -> list[str]:
     )
     if m is None:
         return ["SECURITY.md has no `## Supported versions` section"]
-    claimed = {norm(tok) for tok in re.findall(r"(?<![-\w.])(\d+\.\d+\.\d+)\b", m.group("body"))}
+    # ASCII digits, spelled [0-9] rather than \d: Python's \d matches every
+    # Unicode decimal digit and int() converts them, so a version claim written
+    # with fullwidth or Arabic-Indic digits read as a real claim here. A gate
+    # that a contributor can spell around is not a gate.
+    claimed = {
+        norm(tok) for tok in re.findall(r"(?<![-\w.])([0-9]+\.[0-9]+\.[0-9]+)\b", m.group("body"))
+    }
     shipped_version = norm(shipped)
     if shipped_version not in claimed:
         return [
@@ -549,7 +555,7 @@ def main() -> int:
         ]:
             txt = f.read_text(encoding="utf-8", errors="replace")
             body = txt.split("## Changelog", 1)[0]
-            for m in re.finditer(r"v1\.(\d+)", body):
+            for m in re.finditer(r"v1\.([0-9]+)", body):
                 minor = int(m.group(1))
                 if minor > shipped[1]:
                     fails.append(f"{f.name}: claims v1.{minor} > shipped {mi}")

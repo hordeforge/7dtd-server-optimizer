@@ -2066,6 +2066,21 @@ namespace EfficientServer.Tests
                 + " spelling stays readable and the key stays distinguishable");
 
             EsLog.Warnings.Clear();
+            // A JSON string may spell half a surrogate ("\uD800"), which is not
+            // a character at all. The encoder replaces it with U+FFFD at the log
+            // sink, so every lone-half key rendered as the same name and the
+            // operator could not tell them apart in the log. Replaced on the way
+            // in, by the same rule as the zero-width joiner above, and a
+            // MATCHED pair is still printed as the one astral character it is
+            // (pinned by the visibleKey case above).
+            LoadTempFile(WriteTempBytes(System.Text.Encoding.UTF8.GetBytes(
+                "{\"En\\ud800abled\":1}")));
+            Check(EsLog.Warnings.Count == 1
+                && EsLog.Warnings[0].Contains("'En" + (char)0xFFFD + "abled'"),
+                "a lone surrogate half in a key name is shown as U+FFFD instead of"
+                + " being replaced downstream, so the key stays one distinguishable name");
+
+            EsLog.Warnings.Clear();
             // JSON forbids a raw control character in a string, so the key
             // below carries the ESCAPED newline. Newtonsoft decodes it to a
             // real LF inside the name, which used to reach the warning line

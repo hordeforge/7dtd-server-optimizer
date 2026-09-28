@@ -61,18 +61,23 @@ never an entry point of its own use; the live harnesses import the parsers.
 HALF_QUANTUM_MS = 0.005
 
 # Bounded numeric fields, so a matching line always converts. A bare [0-9.]+
-# accepts "." and "1.2.3", which float() then rejects, and an unbounded \d+
-# accepts a 10_000-digit count, which int() rejects on Python 3.11+ (the
+# accepts "." and "1.2.3", which float() then rejects, and an unbounded digit
+# run accepts a 10_000-digit count, which int() rejects on Python 3.11+ (the
 # int/str conversion limit). Both raise out of a parser that runs once per poll
 # second on a file nobody in this repo wrote, so the bound is in the PATTERN:
 # a line outside these widths is not understood, and not-understood is the
 # documented fail-soft answer. Real values are small: a count fits in int64 and
 # an average in F2 milliseconds.
+# ASCII digits, spelled [0-9] rather than \d, which in Python matches every
+# Unicode decimal digit: int() and float() both convert a run of Arabic-Indic
+# or fullwidth digits, so a line carrying them read as real counters and then as
+# a real measurement. The bridge writes ASCII, so such a line is unreadable, and
+# unreadable is the answer the parser owes here.
 _COUNTER_DIGITS = 18
 _MS_INTEGER_DIGITS = 12
 _MS_FRACTION_DIGITS = 6
-_INT_FIELD = rf"\d{{1,{_COUNTER_DIGITS}}}"
-_MS_FIELD = rf"\d{{1,{_MS_INTEGER_DIGITS}}}(?:\.\d{{1,{_MS_FRACTION_DIGITS}}})?"
+_INT_FIELD = rf"[0-9]{{1,{_COUNTER_DIGITS}}}"
+_MS_FIELD = rf"[0-9]{{1,{_MS_INTEGER_DIGITS}}}(?:\.[0-9]{{1,{_MS_FRACTION_DIGITS}}})?"
 
 APM_LINE_RE = re.compile(
     rf"APM updates=({_INT_FIELD}) gmUpdateAvg=({_MS_FIELD})ms tickAvg=({_MS_FIELD})ms "
@@ -327,7 +332,7 @@ def windowed(a: ApmCounters, b: ApmCounters) -> ApmWindow | None:
 
 
 _ANIM_ROW_RE = re.compile(
-    rf"(\d{{1,{_COUNTER_DIGITS}}})\s+(\S+):.*?en=(\w+).*?cull=(\S+)"
+    rf"([0-9]{{1,{_COUNTER_DIGITS}}})\s+(\S+):.*?en=(\w+).*?cull=(\S+)"
     rf".*?vel=({_MS_FIELD}).*?dp=({_MS_FIELD})"
 )
 _ANIM_LOOSE_RE = re.compile(rf"cull=(\S+).*?vel=({_MS_FIELD}).*?dp=({_MS_FIELD})")
@@ -398,7 +403,8 @@ _FUZZ_MAX_ROUND_S = 5.0
 # "." and "1.2.3" are the pair the old [0-9.]+ accepted and float() then
 # rejected; the digit runs are counts int() refuses past the Python 3.11
 # conversion limit; the Arabic-Indic digits are the shape str.isdigit() calls a
-# number and int() refuses. Every one of them is a line the parser must not
+# number and int() CONVERTS (it has always accepted them), so only the pattern
+# can keep them out. Every one of them is a line the parser must not
 # understand, and none of them may raise.
 _HOSTILE_NUMBERS = (
     ".",
@@ -786,6 +792,30 @@ def _selftest() -> int:
         "apm: an over-long count is not understood",
         APM_LINE_RE.search(_apm_line(1, 1.0, 1.0, 1).replace("updates=1", "updates=" + "9" * 5000))
         is None,
+    )
+    # int() and float() both convert a run of Arabic-Indic digits, so a line
+    # carrying them read as a real counter under \d and windowed() then turned
+    # it into a real measurement.
+    arabic = "".join(chr(0x0660 + d) for d in (1, 2, 3))
+    t.check(
+        "apm: a count in non-ASCII digits is not understood",
+        APM_LINE_RE.search(_apm_line(1, 1.0, 1.0, 1).replace("updates=1", "updates=" + arabic))
+        is None,
+    )
+    t.check(
+        "apm: a magnitude in non-ASCII digits is not understood",
+        APM_LINE_RE.search(
+            _apm_line(1, 1.0, 1.0, 1).replace("gmUpdateAvg=1.00", "gmUpdateAvg=" + arabic)
+        )
+        is None,
+    )
+    t.check(
+        "animstate: an id in non-ASCII digits is not a row id",
+        [
+            r.get("entityId")
+            for r in parse_animstate(arabic + " z: cull=CullCompletely vel=0.5 dp=0.25")
+        ]
+        == [None],
     )
     t.check(
         "animstate: a malformed magnitude is skipped whole",

@@ -77,7 +77,12 @@ DEFAULT_KEEP = 14
 STAMP_FORMAT = "%Y%m%d_%H%M%S"
 # A snapshot dir is the stamp, plus "_N" for the Nth copy taken inside that
 # second. Both halves are parsed for ordering; see _snapshot_order.
-_SNAPSHOT_NAME = re.compile(r"(\d{8}_\d{6})(?:_(\d+))?")
+# ASCII digits only, spelled [0-9] rather than \d: Python's \d matches every
+# Unicode decimal digit, so a name spelled with fullwidth or Arabic-Indic
+# digits parsed as a stamp here, ordered like one (see _snapshot_order), and
+# was accepted as a --restore argument. Same rule as
+# es_cfg_guard._OWNER_PID_RE.
+_SNAPSHOT_NAME = re.compile(r"([0-9]{8}_[0-9]{6})(?:_([0-9]+))?")
 # Width of the same-second collision suffix, so directory names sort in
 # creation order (see snapshot's suffix loop and snapshot_dirs).
 STAMP_SUFFIX_DIGITS = 3
@@ -443,19 +448,26 @@ def snapshot(
     return target, []
 
 
-def _snapshot_order(name: str) -> tuple[str, int]:
+def _snapshot_order(name: str) -> tuple[int, str, int]:
     """Chronological order key: the stamp first, then the same-second counter.
 
     Sorting on the raw name is wrong once a second holds ten or more copies:
     `..._101500_10` orders before `..._101500_2` bytewise, so prune would treat
-    the ninth copy as the oldest and delete the tenth instead. A name this tool
-    did not write keeps its own name as the leading key so the order stays
-    total.
+    the ninth copy as the oldest and delete the tenth instead.
+
+    A name this tool did not write keeps its own name as its key, but sorts
+    AFTER every stamped directory instead of by raw name against the stamps.
+    The destination is the operator's own directory, and a directory there
+    holding a config and a manifest is a candidate whatever it is called: a
+    name spelled with fullwidth or Arabic-Indic digits collates after every
+    ASCII stamp, so `prune(keep=2)` read it as the newest copy and rmtree'd two
+    REAL snapshots to keep it. Stamped first, undated last, so every consumer
+    that wants the newest DATABLE entry gets one.
     """
     m = _SNAPSHOT_NAME.fullmatch(name)
     if m is None:
-        return (name, 0)
-    return (m.group(1), int(m.group(2) or 0))
+        return (1, name, 0)
+    return (0, m.group(1), int(m.group(2) or 0))
 
 
 def snapshot_dirs(dest: Path) -> list[Path]:
@@ -480,9 +492,18 @@ def snapshot_dirs(dest: Path) -> list[Path]:
 
 
 def prune(dest: Path, keep: int) -> list[Path]:
-    """Delete all but the `keep` newest snapshots; return the ones removed."""
-    dirs = snapshot_dirs(dest)
-    removed = dirs[:-keep] if keep < len(dirs) else []
+    """Delete all but the `keep` newest snapshots; return the ones removed.
+
+    Only a directory named like this tool's stamp is ever deleted. The
+    destination belongs to the operator (a synced folder, a shared volume), and
+    a snapshot-shaped directory there that carries no stamp is one this tool
+    cannot date, cannot restore by name, and cannot prove it wrote: retiring
+    the retention window against it costs a real snapshot and buys nothing.
+    Undated directories are reported by `--verify` as undated, which is where
+    an operator decides what they are.
+    """
+    stamped = [p for p in snapshot_dirs(dest) if _SNAPSHOT_NAME.fullmatch(p.name)]
+    removed = stamped[:-keep] if keep < len(stamped) else []
     for old in removed:
         shutil.rmtree(old)
     return removed
@@ -509,6 +530,12 @@ def verify(dest: Path) -> list[str]:
         return [f"cannot bound snapshots against the template: {exc}"]
     problems: list[str] = []
     for d in dirs:
+        # A directory this tool cannot name, it cannot restore either: --restore
+        # takes the directory name, so an undated one is a snapshot-shaped
+        # directory that only an operator can account for. `prune` leaves those
+        # alone, so naming them here is where they get seen.
+        if _SNAPSHOT_NAME.fullmatch(d.name) is None:
+            problems.append(f"{d.name}: not a snapshot name; --restore takes it as typed")
         manifest_path = d / MANIFEST_NAME
         try:
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -572,22 +599,29 @@ def _verify_serverconfigs(d: Path, manifest: object) -> list[str]:
 
 
 def newest_age_hours(dest: Path, now: datetime | None = None) -> float | None:
-    """Age of the newest snapshot in hours, or None when it cannot be dated.
+    """Age of the newest DATABLE snapshot in hours, or None when none is.
 
     A backup job that stopped running leaves a directory full of snapshots that
     all verify, which is exactly the failure `--verify` on its own cannot see.
+
+    The newest entry of `snapshot_dirs` is not that snapshot when the
+    destination also holds a directory this tool did not stamp, or one stamped
+    with a date that does not exist (a hand-copied `99999999_999999`): walk
+    back to the newest entry that carries a date. None is returned only when
+    nothing under the destination does, which `_staleness` reports as a failure
+    rather than passing quietly.
     """
-    dirs = snapshot_dirs(dest)
-    if not dirs:
-        return None
-    match = _SNAPSHOT_NAME.fullmatch(dirs[-1].name)
-    if match is None:
-        return None
-    try:
-        taken = datetime.strptime(match.group(1), STAMP_FORMAT).replace(tzinfo=timezone.utc)
-    except ValueError:
-        return None
-    return ((now or datetime.now(timezone.utc)) - taken).total_seconds() / 3600.0
+    now = now or datetime.now(timezone.utc)
+    for d in reversed(snapshot_dirs(dest)):
+        m = _SNAPSHOT_NAME.fullmatch(d.name)
+        if m is None:
+            continue
+        try:
+            taken = datetime.strptime(m.group(1), STAMP_FORMAT).replace(tzinfo=timezone.utc)
+        except ValueError:
+            continue
+        return (now - taken).total_seconds() / 3600.0
+    return None
 
 
 def restore(
@@ -946,6 +980,43 @@ def _selftest() -> int:
             _snapshot_order("20260928_101500_10") > _snapshot_order("20260928_101500_9")
             and sorted(["20260928_101500_10", "20260928_101500_9"], key=_snapshot_order)
             == ["20260928_101500_9", "20260928_101500_10"],
+        )
+
+        # A directory in the destination that this tool did not stamp. The
+        # destination is the operator's own (a synced folder, a shared volume),
+        # and a name spelled with fullwidth digits (`\d` in Python matches
+        # every Unicode decimal digit, and these collate after every ASCII
+        # stamp) is one prune used to read as the newest snapshot, keeping it
+        # and deleting a real one, while --max-age-hours lost the real newest
+        # and reported the whole set as undated.
+        fullwidth = str.maketrans("0123456789", "".join(chr(0xFF10 + d) for d in range(10)))
+        odd = td / "odd"
+        older, _ = snapshot(srv, odd, now=t0)
+        newer, _ = snapshot(srv, odd, now=t1)
+        alien = odd / t0.strftime(STAMP_FORMAT).translate(fullwidth)
+        shutil.copytree(older, alien)
+        t.check(
+            "an unstamped directory sorts after every real snapshot",
+            snapshot_dirs(odd)[-1].name == alien.name,
+        )
+        t.check(
+            "prune retires the oldest real snapshot, never the unstamped one",
+            prune(odd, 1) == [older]
+            and {p.name for p in odd.iterdir()} == {newer.name, alien.name},
+        )
+        t.check(
+            "an unstamped directory is reported rather than ignored",
+            any(alien.name in p for p in verify(odd)),
+        )
+        try:
+            restore(odd, alien.name, td / "alien-out.json")
+            refused = False
+        except BackupError:
+            refused = True
+        t.check("--restore refuses an unstamped directory name", refused)
+        t.check(
+            "the age gate reads the newest real snapshot beside an unstamped one",
+            newest_age_hours(odd, now=t1 + timedelta(hours=30)) == 30.0,
         )
 
         # The same inversion through the real suffix loop: a second holding more
