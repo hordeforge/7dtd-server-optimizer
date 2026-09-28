@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using UnityEngine;
 
 namespace EfficientServer
@@ -9,7 +10,7 @@ namespace EfficientServer
     /// Operator console command (auto-discovered by the game's console from loaded
     /// assemblies). Every patch reads the live config object per call, so a file
     /// reload takes effect immediately - no restart. Usage (console or telnet):
-    ///   es status   - print active lever values plus live counters
+    ///   es status   - print the config file in use, active lever values, live counters
     ///   es reload   - re-read Config/efficientserver.json and apply it
     ///   diagnostics - animoff | animon | animstate | rigoff | rigon | benchgod on|off
     /// </summary>
@@ -130,6 +131,11 @@ namespace EfficientServer
         {
             ServerPerfConfig c = ModApi.Config;
             if (c == null) { SdtdConsole.Instance.Output(EsLog.LogPrefix + "no config"); return; }
+            // The file every value below was read from, first line: a knob that
+            // does not match the file the operator has open is otherwise a guess
+            // between a stale reload, a rejected file, and a shadowed copy.
+            SdtdConsole.Instance.Output(
+                $"{EsLog.LogPrefix}config={ModApi.ConfigPath} enabledFile={File.Exists(ModApi.ConfigPath)}");
             SdtdConsole.Instance.Output(
                 $"{EsLog.LogPrefix}enabled={c.Enabled} dedicatedOnly={c.DedicatedOnly} | "
                 + $"aiLod={c.AiLod.Enabled}(midStride={c.AiLod.MidTickStride}) | "

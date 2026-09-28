@@ -170,7 +170,7 @@ state that is NOT regenerable is what an operator edits on the server host:
 
 | State | Where | Regenerable |
 |---|---|---|
-| Live config (tuning) | `<DS>/Mods/EfficientServer/Config/efficientserver.json` | No. The repo copy is the shipped default; the host copy holds the tuned values |
+| Live config (tuning) | `<DS>/Mods/EfficientServer/Config/efficientserver.json`, or the file `$ES_CONFIG_PATH` names | No. The repo copy is the shipped default; the host copy holds the tuned values |
 | Guard backup | `.../Config/efficientserver.json.swap-bak` | No. Only exists mid-bench-run; crash recovery for a killed swap |
 | Installed DLL | `<DS>/Mods/EfficientServer/` | Yes: `make build && make install` |
 | Server logs | `server/logs/server_<UTC>.log` (default) | No, but expendable: restart writes a new one |

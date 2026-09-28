@@ -665,12 +665,61 @@ namespace EfficientServer
             return normalized;
         }
 
+        /// <summary>
+        /// Environment override for the config file, consulted ahead of the two
+        /// beside-assembly locations. It exists for the operator who does not
+        /// want to tune inside a Steam install tree: config management, a
+        /// read-only game install, or one file driving several installs.
+        /// </summary>
+        public const string ConfigPathEnvVar = "ES_CONFIG_PATH";
+
+        /// <summary>
+        /// Config path precedence, highest first: <c>$ES_CONFIG_PATH</c>, then
+        /// <c>Config/efficientserver.json</c> beside the assembly, then a
+        /// sibling <c>efficientserver.json</c> beside it, then the built-in
+        /// defaults (Load's missing-file branch). A file that exists but loses
+        /// the chain is named in a warning: it parses fine and does nothing,
+        /// which is the one misconfiguration the winning file cannot explain.
+        /// </summary>
         public static string DefaultPathBesideAssembly()
         {
             string dir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? ".";
-            string a = Path.Combine(dir, "Config", "efficientserver.json");
-            if (File.Exists(a)) return a;
-            return Path.Combine(dir, "efficientserver.json");
+            string inSubdir = Path.Combine(dir, "Config", "efficientserver.json");
+            string sibling = Path.Combine(dir, "efficientserver.json");
+
+            // var, not an annotated local: this file is also compiled by the mcs
+            // fallback backend at -langversion:7.2, where NRT annotations are
+            // unavailable, and `string?` does not exist there.
+            var fromEnv = Environment.GetEnvironmentVariable(ConfigPathEnvVar);
+            if (fromEnv != null)
+            {
+                string named = fromEnv.Trim();
+                if (named.Length > 0)
+                {
+                    WarnUnread(inSubdir);
+                    WarnUnread(sibling);
+                    return named;
+                }
+                // Set-but-empty (a mistyped `ES_CONFIG_PATH=` in a unit file, a
+                // variable exported without its value) is a misconfiguration, and
+                // falling through unremarked would read a config nobody named.
+                EsLog.Emit(LogLevel.Error, ConfigPathEnvVar + " is set but empty; "
+                    + "ignoring it and searching beside the assembly");
+            }
+            if (File.Exists(inSubdir))
+            {
+                WarnUnread(sibling);
+                return inSubdir;
+            }
+            return sibling;
+        }
+
+        static void WarnUnread(string path)
+        {
+            if (!File.Exists(path)) return;
+            EsLog.Emit(LogLevel.Warn, "config file present but NOT read: " + PrintableKey(path)
+                + " (precedence: $" + ConfigPathEnvVar + " > Config/efficientserver.json"
+                + " > efficientserver.json, each beside the mod DLL); edits to it have no effect");
         }
 
         /// <summary>

@@ -81,6 +81,16 @@ chosen up front:
   1.18.0 added; the default (false) is what refuses a fresh install.
 
 ### Added
+- `ES_CONFIG_PATH` overrides where the config file is read from, so tuning can
+  live outside the game install (config management, a read-only install, one
+  file driving several installs). It outranks the two beside-assembly
+  locations, and a config file that exists but loses the precedence chain is now
+  named in a WARNING instead of being ignored in silence. An `ES_CONFIG_PATH`
+  set to an empty or whitespace value is an ERROR, not a silent fallthrough to
+  a config nobody named. `es status` opens with the file the live values came
+  from (`config=<path> enabledFile=<bool>`). The operator tooling
+  (`backup_config.py`, the bench config guard) still acts on the installed
+  `Config/efficientserver.json`; see `docs/CONFIG.md`.
 - The game-type-free harness (config load, normalize, config-path discovery)
   now also runs on a Windows CI runner, so the README's claim that the shipped
   DLL is OS-neutral managed code is exercised on the host OS a dedicated

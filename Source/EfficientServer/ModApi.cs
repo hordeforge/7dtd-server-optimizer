@@ -31,6 +31,13 @@ namespace EfficientServer
             private set { ConfigPublication.Current = value; }
         }
         public static string ModPath { get; private set; } = "";
+        // The path the live config was actually read from, recorded at the same
+        // moment the config object is swapped. `es status` prints it, so a knob
+        // that does not match the file the operator has open is diagnosable from
+        // the console alone. Re-resolving at print time would answer with
+        // whatever the search finds NOW, which is a different file if the live
+        // one was deleted or a shadow copy appeared mid-session.
+        public static string ConfigPath { get; private set; } = "";
         static volatile bool _active;
         public static bool Active { get { return _active; } }
         static Harmony _harmony;
@@ -68,6 +75,7 @@ namespace EfficientServer
                 string cfgPath = ServerPerfConfig.DefaultPathBesideAssembly();
                 bool cfgFound = File.Exists(cfgPath);
                 Config = ServerPerfConfig.Load(cfgPath);
+                ConfigPath = cfgPath;
                 EsLog.Emit(LogLevel.Info, cfgFound
                     ? "config: " + cfgPath
                     : "NO CONFIG FILE at " + cfgPath + " - built-in defaults applied");
@@ -139,6 +147,8 @@ namespace EfficientServer
         {
             string path = ServerPerfConfig.DefaultPathBesideAssembly();
             ServerPerfConfig loaded = ServerPerfConfig.Load(path);
+            // A rejected file is not recorded below, so `es status` keeps naming
+            // the file the live config really came from.
             if (ServerPerfConfig.LastLoadFailed)
             {
                 // A rejected file is not a config. Swapping it in would revert every
@@ -150,6 +160,7 @@ namespace EfficientServer
                 return false;
             }
             Config = loaded;
+            ConfigPath = path;
             // A probe armed through the console is process state, not config state:
             // it outlives the config edit that armed it, and a bench harness that
             // was killed before its own restore (or an operator taking the opt-in

@@ -351,13 +351,16 @@ namespace EfficientServer.Tests
             return type.EndsWith("Exception", StringComparison.Ordinal) && type.Length > "Exception".Length;
         }
 
-        // Discovery precedence of DefaultPathBesideAssembly: the packaged
-        // Config/efficientserver.json must win over a legacy sibling file, and
-        // with neither present the sibling path is returned so Load takes the
-        // missing-file branch. Both candidates resolve next to THIS test binary
-        // (the method walks its own assembly), so the fixtures are created and
-        // removed around each probe; any pre-existing files are saved and put
-        // back, so a crashed earlier run cannot wedge or pollute the harness.
+        // Discovery precedence of DefaultPathBesideAssembly: $ES_CONFIG_PATH
+        // first, then the packaged Config/efficientserver.json, then a legacy
+        // sibling file, and with none present the sibling path is returned so
+        // Load takes the missing-file branch. Every losing copy that exists is
+        // named in a log line, and a set-but-empty override is an ERROR rather
+        // than a silent fallthrough. Both candidates resolve next to THIS test
+        // binary (the method walks its own assembly), so the fixtures are
+        // created and removed around each probe; any pre-existing files and the
+        // prior override are saved and put back, so a crashed earlier run cannot
+        // wedge or pollute the harness.
         static void CheckDefaultPathDiscovery()
         {
             string asmDir = Path.GetDirectoryName(typeof(ServerPerfConfig).Assembly.Location) ?? ".";
@@ -366,11 +369,14 @@ namespace EfficientServer.Tests
             string sibPath = Path.Combine(asmDir, "efficientserver.json");
             byte[]? subBefore = File.Exists(subPath) ? File.ReadAllBytes(subPath) : null;
             byte[]? sibBefore = File.Exists(sibPath) ? File.ReadAllBytes(sibPath) : null;
+            string? envBefore = Environment.GetEnvironmentVariable(ServerPerfConfig.ConfigPathEnvVar);
+            string envPath = Path.Combine(asmDir, "env-named-config.json");
             bool weMadeSubDir = false;
             try
             {
                 if (subBefore != null) File.Delete(subPath);
                 if (sibBefore != null) File.Delete(sibPath);
+                Environment.SetEnvironmentVariable(ServerPerfConfig.ConfigPathEnvVar, null);
                 Check(ServerPerfConfig.DefaultPathBesideAssembly() == sibPath,
                     "DefaultPathBesideAssembly: no config anywhere -> sibling fallback path");
 
@@ -381,14 +387,50 @@ namespace EfficientServer.Tests
                 // consulted, so probe the CONTENT that actually wins too.
                 File.WriteAllText(subPath, "{\"Server\":{\"TargetFps\":111}}");
                 File.WriteAllText(sibPath, "{\"Server\":{\"TargetFps\":112}}");
+                EsLog.Warnings.Clear();
                 Check(ServerPerfConfig.DefaultPathBesideAssembly() == subPath,
                     "DefaultPathBesideAssembly: Config/efficientserver.json preferred over sibling");
+                Check(EsLog.Warnings.Count == 1 && EsLog.Warnings[0].Contains(sibPath),
+                    "DefaultPathBesideAssembly: the shadowed sibling file is named in a warning");
                 Check(ServerPerfConfig.Load(ServerPerfConfig.DefaultPathBesideAssembly()).Server.TargetFps == 111,
                     "DefaultPathBesideAssembly: the Config/ copy's values are the ones loaded");
+
+                // The env override outranks both beside-assembly copies, and both
+                // losers are named: an operator editing either of them is editing a
+                // file that parses cleanly and does nothing.
+                File.WriteAllText(envPath, "{\"Server\":{\"TargetFps\":113}}");
+                Environment.SetEnvironmentVariable(ServerPerfConfig.ConfigPathEnvVar, envPath);
+                EsLog.Warnings.Clear();
+                Check(ServerPerfConfig.DefaultPathBesideAssembly() == envPath,
+                    "DefaultPathBesideAssembly: $ES_CONFIG_PATH outranks the beside-assembly copies");
+                Check(EsLog.Warnings.Count == 2
+                    && EsLog.Warnings.Any(w => w.Contains(subPath))
+                    && EsLog.Warnings.Any(w => w.Contains(sibPath)),
+                    "DefaultPathBesideAssembly: both shadowed copies are named under an env override");
+                Check(ServerPerfConfig.Load(ServerPerfConfig.DefaultPathBesideAssembly()).Server.TargetFps == 113,
+                    "DefaultPathBesideAssembly: the env-named file's values are the ones loaded");
+
+                // Set-but-empty is a misconfiguration, not "unset": it must say so
+                // and fall back to the documented search, never read a config the
+                // operator did not name with no word about the empty variable.
+                Environment.SetEnvironmentVariable(ServerPerfConfig.ConfigPathEnvVar, "   ");
+                EsLog.Warnings.Clear();
+                EsLog.Errors.Clear();
+                Check(ServerPerfConfig.DefaultPathBesideAssembly() == subPath,
+                    "DefaultPathBesideAssembly: an empty $ES_CONFIG_PATH falls back to the search");
+                Check(EsLog.Errors.Count == 1
+                    && EsLog.Errors[0].Contains(ServerPerfConfig.ConfigPathEnvVar),
+                    "DefaultPathBesideAssembly: an empty $ES_CONFIG_PATH is an ERROR, not a silent fallthrough");
+
+                Environment.SetEnvironmentVariable(ServerPerfConfig.ConfigPathEnvVar, null);
+                File.Delete(envPath);
                 File.Delete(subPath);
 
+                EsLog.Warnings.Clear();
                 Check(ServerPerfConfig.DefaultPathBesideAssembly() == sibPath,
                     "DefaultPathBesideAssembly: sibling file picked up once Config/ copy is gone");
+                Check(EsLog.Warnings.Count == 0,
+                    "DefaultPathBesideAssembly: a lone copy is read, so nothing is reported as ignored");
                 Check(ServerPerfConfig.Load(ServerPerfConfig.DefaultPathBesideAssembly()).Server.TargetFps == 112,
                     "DefaultPathBesideAssembly: the sibling's values are the ones loaded");
                 File.Delete(sibPath);
@@ -399,6 +441,8 @@ namespace EfficientServer.Tests
             }
             finally
             {
+                Environment.SetEnvironmentVariable(ServerPerfConfig.ConfigPathEnvVar, envBefore);
+                if (File.Exists(envPath)) File.Delete(envPath);
                 if (subBefore != null) File.WriteAllBytes(subPath, subBefore);
                 else if (File.Exists(subPath)) File.Delete(subPath);
                 if (sibBefore != null) File.WriteAllBytes(sibPath, sibBefore);

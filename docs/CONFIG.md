@@ -19,6 +19,32 @@ case-insensitively (Newtonsoft's rule), so a recased key is a bind, not a typo.
 Typos in the shipped template are caught before packaging by
 `scripts/check_config_doc.py`.
 
+**Which file is read**, highest precedence first:
+
+1. `$ES_CONFIG_PATH` - an absolute or relative path to any config file. For an
+   operator who does not tune inside the game install: config management, a
+   read-only install, or one file driving several installs. A missing file there
+   is a MISSING file, so the mod runs on built-in defaults and says so.
+2. `Config/efficientserver.json` beside the mod DLL (where `make install`
+   puts it, and what the backup/restore tooling reads and writes).
+3. `efficientserver.json` beside the mod DLL (legacy single-file layout).
+4. Built-in defaults, when none of the three exists.
+
+A file that exists but loses this chain is named in a WARNING
+(`config file present but NOT read: <path> (precedence: ...)`): the usual cause
+is editing the `Config/` copy while an env override is in force, or editing a
+sibling copy the packaged one already shadows. `ES_CONFIG_PATH` set to an empty
+or whitespace value is an ERROR (`ES_CONFIG_PATH is set but empty; ignoring it
+...`), not a silent fallthrough: a mistyped `ES_CONFIG_PATH=` in a unit file
+would otherwise read a config nobody named. `es reload` re-resolves the path, so
+exporting or unexporting the variable takes effect without a restart.
+
+The operator tooling does not follow the override: `scripts/backup_config.py`
+and the bench config guard (`scripts/es_cfg_guard.py`) snapshot, restore and
+swap the INSTALLED `Config/efficientserver.json`, because that is the file an
+install owns and its atomic-rename guard writes a `.swap-bak` beside. With an
+env override in force, keep a copy of the file it names yourself.
+
 A file that is present but unreadable (malformed JSON, wrong type for a knob, a
 document that is JSON `null`) is REJECTED: one ERROR line (`Config load failed
 [<type>], using defaults: ...` or the JSON null line), plus `CONFIG FILE REJECTED
@@ -508,7 +534,9 @@ their defaults, so a fresh install refuses.
 
 ## Console command (`es`, v1.13.1+)
 
-`es status` prints every active lever value plus runtime lines: uptime, governor
+`es status` prints the config file the values came from and whether it still
+exists (`config=<path> enabledFile=<bool>`), every active lever value, plus
+runtime lines: uptime, governor
 tier, tick EMA, the replication/graph cadences actually in force after the
 governor derives them, lifetime shed/drop counters from the silent hot-path
 gates, the lifetime engagement counts of the cadence throttles

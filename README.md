@@ -154,7 +154,11 @@ supported retarget: rebuild with `make build` and reinstall.
   `Config/efficientserver.json` and applies it live, no restart needed. A
   restart applies the same file if console access is unavailable. Reinstall
   preserves a user-edited `efficientserver.json` across upgrades (differs from
-  the shipped default), so edits survive.
+  the shipped default), so edits survive. If the log says
+  `config file present but NOT read: <path>`, the file you edited lost the
+  precedence chain: `$ES_CONFIG_PATH` (if set) beats `Config/` beside the mod
+  DLL, which beats a legacy sibling file. The init line `config: <path>` names
+  the one in effect.
 - EAC: C# mods (and therefore this one) need EAC disabled on the server.
 
 See [`docs/PRODUCTION.md`](docs/PRODUCTION.md) for the full deploy/operate
