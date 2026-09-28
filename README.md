@@ -144,6 +144,11 @@ supported retarget: rebuild with `make build` and reinstall.
   restore is not hash-locked (the .NET 8 SDK the repo pins has no tool lock
   file), so it needs the network and a reviewed version bump. `make test` does
   not use it
+- The lint gate fetches ruff and mypy at the exact `RUFF_VERSION` /
+  `MYPY_VERSION` in the [Makefile](Makefile), and `make lint` refuses any
+  other version, but their transitive dependencies resolve from PyPI at install
+  time and are not hash-pinned. They lint the source only; nothing they produce
+  ships
 
 **Troubleshooting (from the mod's own log lines):**
 - `MISSING TARGET: <Patch> matched no game method (version drift?) - this

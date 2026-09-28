@@ -23,7 +23,7 @@ workflow, and every change to the console arm gates named under B2.
 | R4 | Console actor can degrade or disable live gameplay with one command | B2 console to mod | The bench-god and fidelity-probe arms are refused unless the operator opted in (`ConsoleCmdEfficientServer.cs:392,204`). Where the opt-in is on, any console-level actor gets global damage immunity for every player (`Patches/BenchGodPatch.cs:32`) or enemy animation and rig disable, unconfirmed and unscoped. Partly mitigated since the last review: revoking the opt-in in the config now stops the damage immunity on the next reload and per-damage-frame re-read (`Patches/BenchGodPatch.cs:32-33`), and a reload without the probe opt-in releases armed animator/rig probes (`ModApi.cs:160-168`). The arm itself is still one console command away, and neither is persisted across restart, so a restart re-applies nothing while a kill mid-bench leaves the arm hot until a reload |
 | R5 | Config-file self-denial-of-service paths | B1 filesystem to mod | Clamped maxima are still potent: `TickGuard` despawns living enemies once the tick EMA stays past `ShedAboveMs` for `WindowTicks` (`Patches/TickGuardPatch.cs:134`) and `Governor.AnimatorEmergency` engages itself past `EmergencyOverMs` (`Patches/GovernorPatch.cs:147`); both default off, both config-enableable. A stale measurement cannot survive a world change: both re-base their interval EMA and window counters on every world change (`Patches/TickGuardPatch.cs:43-47`, `Patches/GovernorPatch.cs:172-174`, driven by `Patches/GameStartPatch.cs:38-39`) and drop the average whenever their gate is closed, so an `es reload` that re-enables a lever cannot fire a shed on the new world's spawn load alone. The heap-growing GC megapause probe that used to sit here was removed after tag `v1.19.0` and is unreleased (recorded under `Breaking` in `CHANGELOG.md`) |
 | R6 | Inherited telnet exposure | B7 network to console | The shipped serverconfig template enables telnet on port 8082 with an empty password (`serverconfig.optimized.xml:33-35`); safety depends entirely on the game's loopback fallback and failed-login limit, not on this repo |
-| R7 | The mod project's NuGet hashes are recorded and now enforced, with a first-lookup residual | B4 build to runtime | `Source/EfficientServer/packages.lock.json` is committed and carries a `contentHash` for both reference-assembly packages, so the graph is reviewable. Both are declared in `Source/EfficientServer/EfficientServer.csproj` with an exact range: the parent `Microsoft.NETFramework.ReferenceAssemblies` had to be declared explicitly, because the SDK adds it as a bare `Version="1.0.3"`, which NuGet normalizes to the open range `[1.0.3, )`, and the SDK skips its implicit reference when a `PackageReference` with that identity already exists. Before that it was the one range in the fetched graph that could float. The hash is now checked: `make build` (`scripts/build.sh`) restores the mod project with `--locked-mode`, and `make test` restores it too (`Makefile`, `unit`), so a lock file that drifts fails a gate instead of being rewritten in place. Restore needs no game install, because the game assemblies are bound as build-time references. The residual is what no graph can close: both restores still resolve a name from nuget.org first, so a feed that answered the very first lookup of a fresh cache could serve a package the lock file then rejects. The packages supply reference assemblies only, so they cannot change the emitted IL. `README.md`, `SECURITY.md` and `NuGet.config` updated with the behavior |
+| R7 | The mod project's NuGet hashes are recorded and now enforced, with a first-lookup residual | B4 build to runtime | `Source/EfficientServer/packages.lock.json` is committed and carries a `contentHash` for both reference-assembly packages, so the graph is reviewable. Both are declared in `Source/EfficientServer/EfficientServer.csproj` with an exact range: the parent `Microsoft.NETFramework.ReferenceAssemblies` had to be declared explicitly, because the SDK adds it as a bare `Version="1.0.3"`, which NuGet normalizes to the open range `[1.0.3, )`, and the SDK skips its implicit reference when a `PackageReference` with that identity already exists. Before that it was the one range in the fetched graph that could float. The hash is now checked: `make build` (`scripts/build.sh`) restores the mod project with `--locked-mode`, and `make test` restores it too (`Makefile`, `unit`), so a lock file that drifts fails a gate instead of being rewritten in place. Restore needs no game install, because the game assemblies are bound as build-time references. The residual is what no graph can close: both restores still resolve a name from nuget.org first, so a feed that answered the very first lookup of a fresh cache could serve a package the lock file then rejects. The packages supply reference assemblies only, so they cannot change the emitted IL. Publisher signatures cannot close the gap: all three packages are author-signed, but the two reference-assembly packages carry a certificate that expired 2023-10-05, so `signatureValidationMode` in `require` mode fails their restore and stays off; the contentHash is what verifies the bytes. `README.md`, `SECURITY.md` and `NuGet.config` updated with the behavior |
 | R8 | Repo tooling writes the live config and moves it off-host | B1 tooling to install | `scripts/es_cfg_guard.py` rewrites managed keys of the installed config in place and unlinks stranded temp files beside it; `scripts/backup_config.py` copies the live config to an operator-named destination outside the install tree and can restore over the live file. Both are the R3 write position held by a script, so both are in the blast radius of anything that can run them |
 
 Not risks here: the mod opens no sockets, spawns no processes, stores no
@@ -196,13 +196,14 @@ write APIs under `Source/EfficientServer/`; the only file read is
   (`NuGet.config`: nuget.org only, inherited feeds cleared) and the test
   project's graph is exact-pinned and hash-pinned in a committed lock file,
   restored `--locked-mode` (`Makefile:205-206`, `Source/EfficientServer.Tests/packages.lock.json`).
-  The mod project adds one fetched package,
-  `Microsoft.NETFramework.ReferenceAssemblies.net48` at exact range `[1.0.3]`
-  (`Source/EfficientServer/EfficientServer.csproj`), recorded with a
+  The mod project adds two fetched packages,
+  `Microsoft.NETFramework.ReferenceAssemblies` and its `.net48` leaf, each at
+  exact range `[1.0.3]`
+  (`Source/EfficientServer/EfficientServer.csproj`), each recorded with a
   `contentHash` in the committed `Source/EfficientServer/packages.lock.json`
   and restored `--locked-mode` by both `make build` (`scripts/build.sh`) and
-  `make test`. The package provides reference metadata
-  only (`PrivateAssets="all"`), so it cannot alter the emitted IL.
+  `make test`. The packages provide reference metadata
+  only (`PrivateAssets="all"`), so they cannot alter the emitted IL.
 - Spoofing (supply chain): CI actions are commit-pinned with a stated reason
   (`.github/workflows/ci.yml:27,36`, `.github/workflows/release.yml`), the
   release job runs on a `v*` tag with a read-only token and a 5-minute timeout,
@@ -212,7 +213,15 @@ write APIs under `Source/EfficientServer/`; the only file read is
   Newtonsoft.Json only, exact-pinned (`[13.0.4]`) and hash-pinned; the
   `dotnet-coverage` local tool is version-pinned (`.config/dotnet-tools.json`)
   but not hash-pinned, so `make coverage` fetches an unhashed tool graph.
-  Dependabot watches the dependency surfaces (`.github/dependabot.yml`).
+  The lint toolchain is a third unhashed fetch surface: the optimizer job
+  installs ruff and mypy from PyPI at the exact versions in the Makefile
+  (`RUFF_VERSION`, `MYPY_VERSION`, read back by
+  `.github/workflows/ci.yml`), but `uv tool install` resolves their transitive
+  dependencies at run time and no requirements file with hashes is committed,
+  and Dependabot has no ecosystem entry for it. They gate the shipped source
+  only, and `make test` refuses any other version than the pinned one, so a
+  substituted build fails the gate instead of passing it. Dependabot watches
+  the NuGet and action surfaces (`.github/dependabot.yml`).
 - Stale install: `run_server.sh` never builds or installs. It execs whatever
   `Mods/EfficientServer` the server tree already holds (`scripts/install.sh`
   is the only writer), so a launch can run a DLL that no longer matches the

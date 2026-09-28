@@ -18,10 +18,13 @@
     <Deterministic>true</Deterministic>
     <DebugType Condition="'$(Configuration)' == 'Release'">none</DebugType>
     <!-- Records the restore graph in packages.lock.json (contentHash per
-         package) next to the test project's, so the one NuGet input this build
-         fetches is hash-pinned once the file is committed. A fresh tree has no
-         lock file yet: restore writes one, which is then committed like any
-         other reviewed dependency change. -->
+         package) next to the test project's, so the NuGet inputs this build
+         fetches are hash-pinned. The lock file is committed and enforced:
+         `make build` (scripts/build.sh) and `make test` (Makefile, unit) both
+         restore in locked mode, so a PackageReference bumped without a
+         regenerated lock file fails the gate instead of floating. Regenerate
+         with a plain `dotnet restore Source/EfficientServer` and commit the
+         result like any other reviewed dependency change. -->
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
   </PropertyGroup>
   <ItemGroup>

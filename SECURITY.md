@@ -94,6 +94,12 @@ What ships and how it is protected:
   transitive graph from nuget.org at run time. It is CI-only and never touches
   a shipped artifact. Dependabot watches it weekly
   (`.github/dependabot.yml`), the same as the packages above.
+- The lint toolchain is fetched too, and is the one surface with no hash and
+  no automated watch: the CI optimizer job installs ruff and mypy from PyPI at
+  the exact versions in the Makefile (`RUFF_VERSION`, `MYPY_VERSION`), but
+  `uv tool install` resolves their transitive dependencies at run time and no
+  hashed requirements file is committed. They gate the shipped source only,
+  and `make test` rejects any version other than the pinned one.
 - Packaging is reproducible (`make verify-reproducible`);
   `SOURCE_DATE_EPOCH` normalizes timestamps so two builds of the same tree
   zip byte-identically.

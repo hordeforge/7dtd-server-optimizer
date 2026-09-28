@@ -1,13 +1,18 @@
-# Three dependency surfaces, one update entry each: the test project's NuGet
+# Three dependency surfaces, one update entry each: the two C# projects' NuGet
 # packages (hash-pinned in packages.lock.json), the dotnet-coverage local tool
 # manifest restored by `make coverage`, and the SHA-pinned CI actions.
-# The main mod project declares no package: its game references resolve from
-# the dedicated server's own Managed/ directory, so there is nothing to watch.
+# The mod project's only game references (Assembly-CSharp, 0Harmony, Unity,
+# Newtonsoft.Json from the server's own Managed/ directory) stay out of NuGet,
+# but its net48 reference-assemblies packages are fetched, so it is watched
+# like any other.
 version: 2
 updates:
   - package-ecosystem: nuget
     directories:
       - /Source/EfficientServer.Tests
+      # The net48 reference-assembly packages the mod project declares with an
+      # exact range and records in its own committed lock file.
+      - /Source/EfficientServer
       # dotnet-coverage, restored by `make coverage` and by the coverage-badge
       # job. The tool manifest is a fetch surface like any other: it ships
       # unpinned tooling into CI, so it gets the same weekly watch.
