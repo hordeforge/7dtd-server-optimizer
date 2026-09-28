@@ -360,7 +360,12 @@ throttling can fix, never below `MinEnemiesKept`. Farthest first, lowest entity 
 inside a distance tie, so a replayed run sheds the same ids in the same order. Validated live: with the governor,
 drove a 522-zombie overload (3.5x the capacity ceiling) back from 167 to 56 ms/frame
 autonomously. Default off because it removes entities - a real gameplay trade
-(thinner horde at 20 TPS instead of a full horde at 3 TPS). See
+(thinner horde at 20 TPS instead of a full horde at 3 TPS). The shed window and
+the tick-interval average are re-based on a new world and on every tick while the
+guard is disabled, so a window counted against the previous world's ticks (or the
+whole disabled period) cannot complete on the new world's spawn load; both
+windows describe the load, and shedding is the one decision here that removes
+entities. See
 [`RESULTS.md`](RESULTS.md) §3j and [`CONFIG.md`](CONFIG.md).
 
 ## Adaptive load governor (v1.12.0, default ON since v1.13.0; tier 2 in v1.16.0)
@@ -409,7 +414,13 @@ describe the world that just unloaded, and a standing tier-2 emergency names rig
 this world never had. The saved culling modes are dropped with the old world
 rather than restored (there is nothing to restore into) and the emergency flag
 goes with them, so a fresh world is never frozen into an emergency it was never
-put into. The new world re-escalates on its own ticks if it is over budget.
+put into. The tick-interval average is re-seeded too, on every world change and
+not only when a tier happens to be standing: the gap spanning the world load is
+not a tick, and averaging it would spike the EMA ~20x the idle interval for tens
+of ticks, which is long enough to escalate a baseline governor on the new world's
+spawn load alone. The same re-seed runs while the governor is disabled, so
+re-enabling it via `es reload` cannot average the whole disabled period as one
+gap. The new world re-escalates on its own ticks if it is over budget.
 
 **Stays default-off** (policy, bench lever): uses `Animator.cullingMode =
 CullCompletely` (keeps `enabled=true`, so the old enabled-toggle root-motion

@@ -1384,6 +1384,59 @@ namespace EfficientServer.Tests
             Check(actualCross == expectedCross && actualCross > 0,
                 "tick EMA crosses OverBudgetMs on advance " + actualCross + " (predicted " + expectedCross + ")");
 
+            // World-change re-base (TickIntervalEma.Reseed). The gap between the
+            // last UpdateTick of the outgoing world and the first of the incoming
+            // one is the whole world load, not a tick. Left in the recurrence it
+            // adds gap/32 to the average in ONE step, and the alpha-1/32 memory
+            // then needs tens of ticks to relax; both the governor's tier machine
+            // and the tick guard's shed window count ticks, so a carried-over
+            // spike can escalate (or shed) on the new world's spawn load. Reseed
+            // must return the instance to exactly its seeded state, so both gates
+            // re-base on the same hook and a post-reseed trace equals a fresh one.
+            const double WorldLoadMs = 30000.0;
+            const double LastOldWorldTickMs = 1000.0 + 199 * 50.0;
+            var carriedOver = new EfficientServer.Patches.TickIntervalEma();
+            var rebasePaired = new EfficientServer.Patches.TickIntervalEma();
+            for (int i = 1; i <= 200; i++)
+            {
+                carriedOver.Advance(i * 50.0);
+                rebasePaired.Advance(i * 50.0);
+            }
+            // The pause-for-rebase hook fires with the world already swapped; the
+            // load itself sits in the gap before the next tick, so a re-based
+            // instance must not average it.
+            rebasePaired.Reseed();
+            double carried = carriedOver.Advance(LastOldWorldTickMs + WorldLoadMs);
+            double rebased = rebasePaired.Advance(LastOldWorldTickMs + WorldLoadMs);
+            Check(carried > govCfg.OverBudgetMs && carried > govCfg.EmergencyOverMs,
+                "a carried-over 30 s world-load gap spikes the EMA past both governor bands (got "
+                    + carried.ToString("F1", CultureInfo.InvariantCulture) + "ms)");
+            Check(rebased == 50.0 && rebasePaired.Value == 50.0,
+                "Reseed returns the EMA to the vanilla 50 ms seed, and the first tick of the new "
+                    + "world records a baseline instead of the load gap (got "
+                    + rebased.ToString("F1", CultureInfo.InvariantCulture) + "ms)");
+            Check(rebasePaired.Advance(LastOldWorldTickMs + WorldLoadMs + 50.0) < govCfg.OverBudgetMs,
+                "the second tick after a reseed already measures the real interval, not the load (got "
+                    + rebasePaired.Value.ToString("F1", CultureInfo.InvariantCulture) + "ms)");
+            // Equivalence: a reseeded instance and a fresh one are the same machine,
+            // so the governor and the tick guard (separate instances, one reseed
+            // call each) cannot drift apart across a world change.
+            var freshTwin = new EfficientServer.Patches.TickIntervalEma();
+            var seededTwin = new EfficientServer.Patches.TickIntervalEma();
+            seededTwin.Reseed();
+            bool reseedParity = true;
+            for (int i = 1; i <= 500; i++)
+            {
+                seededTwin.Advance(i * 73.0);
+                if (seededTwin.Value != freshTwin.Advance(i * 73.0))
+                {
+                    reseedParity = false;
+                    break;
+                }
+            }
+            Check(reseedParity,
+                "a reseeded EMA is indistinguishable from a fresh one on the new world's ticks");
+
             // ShedOrder: which entity ids one tick-guard batch removes. Distance is
             // not a total order (co-located enemies share a distSq exactly), so a
             // batch boundary landing in a tie group must not be cut by

@@ -27,11 +27,16 @@ namespace EfficientServer.Patches
                 EsLog.Emit(LogLevel.Info, "world loaded at uptime "
                     + ModApi.UptimeSeconds.ToString("F0", CultureInfo.InvariantCulture)
                     + "s; start-time knobs applying (fps, job workers, mesh budgets, dedicated skips, GC)");
-                // First: a world just loaded, so nothing the governor derived from
-                // the previous world's ticks (its tier, and a standing tier-2
-                // animator emergency over rigs that no longer exist) may carry
-                // into this one.
+                // First: a world just loaded, so nothing the load-dependent gates
+                // derived from the previous world's ticks may carry into this one.
+                // The governor and the tick guard each keep a tick-interval average
+                // plus escalation windows; every one of those spans the world load
+                // itself unless it is re-based, and the shed/tier decisions they
+                // drive are not reversible. For the governor that includes its tier
+                // and a standing tier-2 animator emergency over rigs that no longer
+                // exist.
                 GovernorPatch.OnWorldChanged();
+                TickGuardPatch.OnWorldChanged();
                 DynamicMeshBudgetPatch.ApplyBudgets();
                 DedicatedSkipPatch.ApplyOptional();
                 GcIncremental.Apply();

@@ -83,7 +83,18 @@ namespace EfficientServer.Patches
             ServerPerfConfig config = ModApi.Config;
             GovernorConfig cfg = config != null ? config.Governor : null;
             if (!ModApi.ShouldRun(config) || cfg == null || !cfg.Enabled)
+            {
+                // The gate is closed, so no tick is being measured. Drop the
+                // average rather than carry it: the UpdateTick postfix still fires
+                // on every frame while the governor is off, and the first tick after
+                // an `es reload` turns it back on would otherwise average the entire
+                // closed period as ONE gap. A governor disabled for an hour opens
+                // with the EMA near 40000 ms and then escalates to tier 1 (and to
+                // tier 2 rig culling, if authorized) on a server that was never
+                // over budget, spending the ~32-tick memory relaxing back down.
+                TickEma.Reseed();
                 return;
+            }
 
             double emaMs = TickEma.Advance();
             if (Tiers.Advance(cfg, emaMs))
@@ -147,11 +158,20 @@ namespace EfficientServer.Patches
         /// freeze managed animator updates for enemies that were never culled. Both
         /// are dropped instead of carried over, and the new world re-escalates on
         /// its own ticks if it turns out to be over budget.
+        ///
+        /// The measurement itself is re-based on EVERY world change, not only when a
+        /// tier happens to be standing at the time: the gap spanning the world load is
+        /// not a tick, and averaging it (see <see cref="TickIntervalEma.Reseed"/>)
+        /// would drive the EMA far above any budget for tens of ticks, so a governor
+        /// at baseline could escalate to throttled on the new world's first few
+        /// seconds of spawn load alone. The tier/emergency block keeps its old
+        /// "nothing to undo" early-out because there is nothing to undo at baseline.
         /// Main-thread only (the lifecycle hook fires on the same thread as the
         /// UpdateTick postfix).
         /// </summary>
         public static void OnWorldChanged()
         {
+            TickEma.Reseed();
             if (Tiers.Level == 0 && !AnimatorEmergency.Active) return;
             Tiers.ResetForNewWorld();
             EsLog.Emit(LogLevel.Info, "new world: governor re-based to baseline "

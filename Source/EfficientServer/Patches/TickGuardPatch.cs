@@ -27,6 +27,26 @@ namespace EfficientServer.Patches
         static int _overTicks;
         static int _cooldown;
 
+        // Re-base the shed window when a NEW world loads (called from the
+        // GameStartDone hook, next to GovernorPatch.OnWorldChanged). Both counters
+        // and the EMA describe the tick history of the world that just unloaded:
+        // the interval average spans the whole world load (see
+        // TickIntervalEma.Reseed), and the over-budget window is counted in ticks of
+        // that world. Carried over, they can complete a shed window on the new
+        // world's spawn load alone - the most irreversible decision the mod makes,
+        // removing entities, fired before anyone has even seen the new world - and
+        // a cooldown from the old world would suppress the new world's first
+        // legitimate shed. ShedTotal is deliberately NOT reset: it is a lifetime
+        // count an operator reads from `es status` and the log, not window state.
+        // Main-thread only (the lifecycle hook fires on the same thread as the
+        // UpdateTick postfix).
+        public static void OnWorldChanged()
+        {
+            TickEma.Reseed();
+            _overTicks = 0;
+            _cooldown = 0;
+        }
+
         // Reusable census scratch: (distSq, entityId) per living enemy, never the
         // entity itself, so a shed at least CooldownTicks apart pins nothing
         // between batches - a strong-reference scratch would hold up to
@@ -43,7 +63,16 @@ namespace EfficientServer.Patches
             ServerPerfConfig config = ModApi.Config;
             TickGuardConfig cfg = config != null ? config.TickGuard : null;
             if (!ModApi.ShouldRun(config) || cfg == null || !cfg.Enabled)
+            {
+                // Same re-base the governor does (see GovernorPatch.Postfix): no
+                // tick is being measured while the gate is closed, so the average
+                // must not span the closed period. Here the consequence is the
+                // worst one the mod can produce - an `es reload` re-enabling the
+                // guard after a long disable would open with the EMA far past
+                // ShedAboveMs and shed living enemies on the very first window.
+                TickEma.Reseed();
                 return;
+            }
 
             double emaMs = TickEma.Advance();
             if (_cooldown > 0) { _cooldown--; return; }
