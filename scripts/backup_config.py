@@ -30,6 +30,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import shutil
 import sys
 from datetime import datetime, timezone
@@ -49,6 +50,9 @@ CONFIG_NAME = "efficientserver.json"
 # copies costs nothing and bounds how far back a restore can reach.
 DEFAULT_KEEP = 14
 STAMP_FORMAT = "%Y%m%d_%H%M%S"
+# A snapshot dir is the stamp, plus "_N" for the Nth copy taken inside that
+# second. Both halves are parsed for ordering; see _snapshot_order.
+_SNAPSHOT_NAME = re.compile(r"(\d{8}_\d{6})(?:_(\d+))?")
 
 # The game's own reader (Config.Load) decodes the config as UTF-8 with a leading
 # BOM tolerated, so a BOM is a legal config here too; utf-8-sig is a strict
@@ -99,9 +103,11 @@ def read_config(path: Path) -> dict[str, object]:
     try:
         doc = json.loads(path.read_text(encoding=CFG_ENCODING))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise BackupError(f"unreadable config {path}: {exc}") from exc
+        msg = f"unreadable config {path}: {exc}"
+        raise BackupError(msg) from exc
     if not isinstance(doc, dict):
-        raise BackupError(f"config {path} is a {type(doc).__name__}, not a JSON object")
+        msg = f"config {path} is a {type(doc).__name__}, not a JSON object"
+        raise BackupError(msg)
     return doc
 
 
@@ -133,11 +139,12 @@ def _resolve_outside_install(dest: Path, server_root: Path) -> Path:
     dest_r = dest.resolve()
     srv_r = server_root.resolve()
     if dest_r == srv_r or srv_r in dest_r.parents:
-        raise BackupError(
+        msg = (
             f"--dest {dest_r} is inside the server install tree {srv_r};"
             " a lost disk would take the backup with the config."
             " Point it at another disk, a synced directory or another host."
         )
+        raise BackupError(msg)
     return dest_r
 
 
@@ -155,14 +162,16 @@ def snapshot(
     unloadable is an error: an empty snapshot dir would look like a healthy backup.
     """
     if keep < 1:
-        raise BackupError(f"--keep must be at least 1, got {keep}")
+        msg = f"--keep must be at least 1, got {keep}"
+        raise BackupError(msg)
     dest = _resolve_outside_install(dest, server_root)
     live = live_config(server_root)
     if not live.is_file():
-        raise BackupError(
+        msg = (
             f"no live config at {live}; nothing to snapshot"
             " (install the mod with `make install DS=...` first)"
         )
+        raise BackupError(msg)
     doc = read_config(live)
     stray = unknown_keys(doc)
     if stray:
@@ -199,8 +208,23 @@ def snapshot(
     return target, []
 
 
+def _snapshot_order(name: str) -> tuple[str, int]:
+    """Chronological order key: the stamp first, then the same-second counter.
+
+    Sorting on the raw name is wrong once a second holds ten or more copies:
+    `..._101500_10` orders before `..._101500_2` bytewise, so prune would treat
+    the ninth copy as the oldest and delete the tenth instead. A name this tool
+    did not write keeps its own name as the leading key so the order stays
+    total.
+    """
+    m = _SNAPSHOT_NAME.fullmatch(name)
+    if m is None:
+        return (name, 0)
+    return (m.group(1), int(m.group(2) or 0))
+
+
 def snapshot_dirs(dest: Path) -> list[Path]:
-    """Snapshot dirs, oldest first (the UTC stamp sorts chronologically)."""
+    """Snapshot dirs, oldest first (see `_snapshot_order`)."""
     if not dest.is_dir():
         return []
     found = [
@@ -208,7 +232,7 @@ def snapshot_dirs(dest: Path) -> list[Path]:
         for p in dest.iterdir()
         if p.is_dir() and (p / CONFIG_NAME).is_file() and (p / MANIFEST_NAME).is_file()
     ]
-    return sorted(found, key=lambda p: p.name)
+    return sorted(found, key=lambda p: _snapshot_order(p.name))
 
 
 def prune(dest: Path, keep: int) -> list[Path]:
@@ -264,12 +288,15 @@ def restore(dest: Path, stamp: str, to: Path, *, force: bool = False) -> Path:
     src = dest / stamp
     if not (src / CONFIG_NAME).is_file():
         available = ", ".join(p.name for p in snapshot_dirs(dest)) or "none"
-        raise BackupError(f"no snapshot '{stamp}' under {dest} (have: {available})")
+        msg = f"no snapshot '{stamp}' under {dest} (have: {available})"
+        raise BackupError(msg)
     problems = verify(dest)
     if any(p.startswith(f"{src.name}:") for p in problems):
-        raise BackupError(f"snapshot {src.name} does not verify: " + "; ".join(problems))
+        msg = f"snapshot {src.name} does not verify: " + "; ".join(problems)
+        raise BackupError(msg)
     if to.exists() and not force:
-        raise BackupError(f"{to} exists; pass --force to overwrite it")
+        msg = f"{to} exists; pass --force to overwrite it"
+        raise BackupError(msg)
     to.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(src / CONFIG_NAME, to)
     return to
@@ -327,9 +354,8 @@ def _dispatch(args: argparse.Namespace) -> int:
         return 0
     server_root = default_server_root()
     if not str(server_root):
-        raise BackupError(
-            "no server install root: set SEVENDTD_DS_DIR (or DS) to the dedicated install"
-        )
+        msg = "no server install root: set SEVENDTD_DS_DIR (or DS) to the dedicated install"
+        raise BackupError(msg)
     target, _ = snapshot(server_root, dest, keep=args.keep)
     print(f"Snapshot -> {target}")
     print(f"  verify: python3 {Path(sys.argv[0]).name} --dest {dest} --verify")
@@ -368,7 +394,13 @@ def _selftest() -> int:
         except BackupError:
             t.check("fails loud on a missing live config", True)
 
-        first, _ = snapshot(srv, dest)
+        # Fixed clock: the ordering checks below depend on which stamp a
+        # snapshot got, so wall-clock time would make them pass or fail
+        # depending on where the run crossed a second boundary.
+        t0 = datetime(2026, 9, 28, 10, 15, 0, tzinfo=timezone.utc)
+        t1 = datetime(2026, 9, 28, 10, 15, 1, tzinfo=timezone.utc)
+
+        first, _ = snapshot(srv, dest, now=t0)
         t.check(
             "snapshot holds the live bytes",
             (first / CONFIG_NAME).read_bytes() == live.read_bytes(),
@@ -378,7 +410,7 @@ def _selftest() -> int:
         # An operator edit must survive the next snapshot, and a second copy
         # inside the same second must not overwrite the first.
         live.write_text(json.dumps({"DedicatedOnly": False}), encoding="utf-8")
-        second, _ = snapshot(srv, dest)
+        second, _ = snapshot(srv, dest, now=t0)
         t.check(
             "a same-second snapshot does not clobber the first",
             first.exists() and second.exists(),
@@ -391,13 +423,20 @@ def _selftest() -> int:
         t.check("a stray directory is not counted as a snapshot", len(snapshot_dirs(dest)) == 2)
         t.check("an empty dest reports a failure, not a pass", verify(td / "nothing-here") != [])
 
-        # Retention: keep 2 of 4.
-        for _ in range(2):
-            snapshot(srv, dest, keep=2)
-        t.check("prune retains the requested count", len(snapshot_dirs(dest)) == 2)
+        # Retention: keep 2 of 4, with the last stamped a second later.
+        third, _ = snapshot(srv, dest, keep=2, now=t0)
+        fourth, _ = snapshot(srv, dest, keep=2, now=t1)
+        kept = [p.name for p in snapshot_dirs(dest)]
+        t.check("prune retains the requested count", len(kept) == 2)
+        t.check("prune keeps the newest snapshots", kept[-1] == fourth.name)
+        t.check("prune drops the oldest snapshots", first.name not in kept)
+        t.check("a same-second copy survives the later stamp", third.name in kept)
+        # A same-second counter past nine is where a name sort inverts.
         t.check(
-            "prune keeps the newest snapshots",
-            snapshot_dirs(dest)[-1].name.startswith(second.name[:15]),
+            "a same-second counter past nine keeps its order",
+            _snapshot_order("20260928_101500_10") > _snapshot_order("20260928_101500_9")
+            and sorted(["20260928_101500_10", "20260928_101500_9"], key=_snapshot_order)
+            == ["20260928_101500_9", "20260928_101500_10"],
         )
 
         # Corruption is the disaster this catches, so it must be detected.

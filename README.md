@@ -145,9 +145,12 @@ supported retarget: rebuild with `make build` and reinstall.
   LogLibrary, AstarPathfindingProject) resolve from the installed game; a
   missing managed DLL fails the build with a clear reference error
 - The test project's one NuGet dependency is hash-pinned in the committed
-  `packages.lock.json` and restored in locked mode by `make test`; the restore
-  source list is pinned in-repo by [`NuGet.config`](NuGet.config) (nuget.org
-  only, inherited machine/user feeds cleared)
+  `packages.lock.json` and restored in locked mode by `make test`; the mod
+  project fetches only the net48 reference assemblies the SDK would otherwise
+  pull in implicitly, declared there with an exact version range and recorded
+  in its own `packages.lock.json`. The restore source list is pinned in-repo by
+  [`NuGet.config`](NuGet.config) (nuget.org only, inherited machine/user feeds
+  cleared)
 - `make coverage` additionally fetches the `dotnet-coverage` local tool pinned
   by version in [`.config/dotnet-tools.json`](.config/dotnet-tools.json); that
   restore is not hash-locked (the .NET 8 SDK the repo pins has no tool lock

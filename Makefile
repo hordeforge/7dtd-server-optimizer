@@ -34,21 +34,30 @@ endif
 # install (the old implicit default target, build, did exactly that).
 .DEFAULT_GOAL := help
 
-# Exact ruff pin, mirrored by the two `uv tool install ruff==` steps in
-# .github/workflows/ci.yml. make test refuses other versions so lint rule
-# behavior cannot silently diverge between a green local run and a red
-# remote one (or vice versa). Bump = reviewed change of this line plus both
-# ci.yml steps plus README.md, like global.json's SDK pin.
+# Exact ruff pin. make test refuses other versions so lint rule behavior
+# cannot silently diverge between a green local run and a red remote one (or
+# vice versa). .github/workflows/ci.yml installs it from `make ruff-version`
+# rather than repeating the number, so the gate cannot drift from this line.
+# Bump = reviewed change of this line plus README.md, like global.json's pin.
 RUFF_VERSION := 0.16.4
 
-# Exact mypy pin, mirrored by the `uv tool install mypy==` step in
-# .github/workflows/ci.yml. Same rationale as RUFF_VERSION: checker behavior
-# diverges between versions, so the type gate must be identical on both sides.
+# Exact mypy pin. Same rationale as RUFF_VERSION: checker behavior diverges
+# between versions, so the type gate must be identical on both sides.
 MYPY_VERSION := 2.1.0
 
 .PHONY: help build build-mcs test lint unit unit-list check-scripts preflight-lint preflight-unit \
 	preflight-scripts scratch coverage install uninstall run clean package verify-reproducible \
-	backup-config
+	backup-config ruff-version mypy-version
+
+# Read by .github/workflows/ci.yml (`make -s ruff-version`) so the pinned
+# version has one source of truth. Printing it here beats a second literal in
+# ci.yml, which silently installs a different linter than the one make test
+# demands and fails with a version error nobody reads.
+ruff-version:
+	@echo "$(RUFF_VERSION)"
+mypy-version:
+	@echo "$(MYPY_VERSION)"
+
 # Every gate that can reach Python's tempfile, .NET's Path.GetTempPath or
 # mktemp depends on this. A nonexistent TMPDIR is silently ignored by each of
 # them, and Python's tempfile.gettempdir() then falls back to the stock /tmp,
@@ -235,6 +244,10 @@ backup-config:
 	$(ROOT)/scripts/backup_config.py --dest "$(ES_CONFIG_BACKUP_DEST)"
 run:
 	$(ROOT)/scripts/run_server.sh
+# TestResults/ holds the coverage XML the badge job reads; leaving it behind
+# means a rerun of coverage_badge.py after a failed `make coverage` can publish
+# a stale report as if it were current.
 clean:
-	rm -rf $(ROOT)/dist $(ROOT)/Source/EfficientServer/bin $(ROOT)/Source/EfficientServer/obj \
+	rm -rf $(ROOT)/dist $(ROOT)/TestResults \
+	       $(ROOT)/Source/EfficientServer/bin $(ROOT)/Source/EfficientServer/obj \
 	       $(ROOT)/Source/EfficientServer.Tests/bin $(ROOT)/Source/EfficientServer.Tests/obj

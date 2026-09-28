@@ -63,6 +63,12 @@ version 1.17.0; every release after them takes its number from the tag.
   and the selection moved to a game-type-free seam (`ShedOrder.Select`) the unit
   harness drives directly. The batch scratch also holds ids instead of entity
   references, so a horde is no longer pinned between sheds.
+- `scripts/backup_config.py` ordered snapshots by directory name, so the
+  same-second `_N` counter sorted bytewise (`..._101500_10` before
+  `..._101500_9`) and `--keep` could prune the newest snapshot as the oldest
+  once a second held ten or more copies. Ordering is now the parsed stamp plus
+  the counter, and the selftest runs on a fixed clock instead of wall time,
+  which had made `make test` fail on roughly one run in three.
 - `scripts/install.sh` ignored the `DS=` spelling it documents: only
   `SEVENDTD_DS_DIR` resolved the target, so `DS=/path scripts/install.sh` fell
   through to the stock Steam path and installed (and `rm -rf`'d the mod folder

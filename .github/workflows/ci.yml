@@ -37,14 +37,21 @@ jobs:
         with:
           cache: true
           cache-dependency-path: Source/EfficientServer.Tests/packages.lock.json
-      # Runners ship shellcheck + python3 but not ruff or mypy. Pinned to the
-      # exact versions used locally so rule/checker behavior cannot diverge
-      # between a green local run and a red remote one (and vice versa).
+      # Runners ship shellcheck + python3 but not ruff or mypy. The versions
+      # come from the Makefile, which preflight-lint compares against, so a
+      # local bump of RUFF_VERSION/MYPY_VERSION cannot leave CI installing a
+      # different linter than `make test` demands.
       # SHA-pinned like checkout/setup-dotnet above: a moved v5 tag must not be
       # able to inject code into the pipeline.
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
-      - run: uv tool install ruff==0.16.4
-      - run: uv tool install mypy==2.1.0
+      - name: Read the pinned linter versions
+        id: versions
+        run: |
+          set -euo pipefail
+          echo "ruff=$(make -s ruff-version)" >> "$GITHUB_OUTPUT"
+          echo "mypy=$(make -s mypy-version)" >> "$GITHUB_OUTPUT"
+      - run: uv tool install ruff==${{ steps.versions.outputs.ruff }}
+      - run: uv tool install mypy==${{ steps.versions.outputs.mypy }}
       - run: make test
 
   coverage-badge:

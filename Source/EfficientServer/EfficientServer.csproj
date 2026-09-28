@@ -17,7 +17,23 @@
          absolute build paths in metadata. -->
     <Deterministic>true</Deterministic>
     <DebugType Condition="'$(Configuration)' == 'Release'">none</DebugType>
+    <!-- Records the restore graph in packages.lock.json (contentHash per
+         package) next to the test project's, so the one NuGet input this build
+         fetches is hash-pinned once the file is committed. A fresh tree has no
+         lock file yet: restore writes one, which is then committed like any
+         other reviewed dependency change. -->
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
   </PropertyGroup>
+  <ItemGroup>
+    <!-- The SDK pulls this in implicitly for a net48 target on a non-Windows
+         host, with a version the SDK chooses, so every `make build` fetches
+         whatever nuget.org currently serves. Declaring it here with an exact
+         range (brackets, like Newtonsoft.Json in the test project) makes the
+         reference assemblies a reviewed, pinned input instead of a float. It
+         supplies reference metadata only, so it cannot change the emitted IL.
+         Bump = reviewed change of this string, like global.json's SDK pin. -->
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies.net48" Version="[1.0.3]" PrivateAssets="all" />
+  </ItemGroup>
   <ItemGroup>
     <Reference Include="Assembly-CSharp">
       <HintPath>$(GameManagedDir)/Assembly-CSharp.dll</HintPath>
