@@ -49,7 +49,9 @@ Packaged builds are attached to GitHub releases (see the Releases page;
 `<version>` is the tag without its leading `v` (`git describe`, or a `-dirty`
 suffix on a modified tree) and must match the `Version` in
 [`Source/EfficientServer/ModInfo.xml`](Source/EfficientServer/ModInfo.xml),
-since the game reads the mod version from the manifest; what changed per
+since the game reads the mod version from the manifest. A tree past the newest
+tag names no release, so it falls back to the short commit id and skips that
+check; what changed per
 release: [`CHANGELOG.md`](CHANGELOG.md)). Packaging is
 reproducible on the `dotnet` backend: sorted entries, normalized
 mtimes/permissions, no owner data; timestamps honor `SOURCE_DATE_EPOCH`
