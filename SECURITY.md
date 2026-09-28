@@ -56,7 +56,10 @@ What ships and how it is protected:
 - The single NuGet dependency (`Newtonsoft.Json` for the test harness) is
   exact-pinned in the csproj, hash-pinned in a committed
   `packages.lock.json`, and restored with `dotnet restore --locked-mode` by
-  `make test`, so a changed dependency fails instead of floating.
+  `make test`, so a changed dependency fails instead of floating. Restore
+  sources are pinned in-repo by `NuGet.config` (nuget.org only, with inherited
+  machine- and user-level feeds cleared), so a feed added outside this repo
+  cannot satisfy the package.
 - Packaging is reproducible (`make verify-reproducible`);
   `SOURCE_DATE_EPOCH` normalizes timestamps so two builds of the same tree
   zip byte-identically.

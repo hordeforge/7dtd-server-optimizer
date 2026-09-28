@@ -136,7 +136,9 @@ write APIs under `Source/EfficientServer/`; only config reads,
   who wants integrity must diff hashes by hand.
 - Spoofing (supply chain): CI actions are commit-pinned with a stated reason
   (`.github/workflows/ci.yml:24,33`), NuGet restore is locked-mode
-  (`Makefile:70`), push trigger scoped to main (`.github/workflows/ci.yml:6`).
+  (`Makefile:70`) against an in-repo source list (`NuGet.config`: nuget.org
+  only, inherited feeds cleared), push trigger scoped to main
+  (`.github/workflows/ci.yml:6`).
   Dependency surface is small: Newtonsoft.Json comes from the game's own
   Managed folder for the mod; test deps are lock-pinned
   (`Source/EfficientServer.Tests/packages.lock.json`).
@@ -201,7 +203,7 @@ write APIs under `Source/EfficientServer/`; only config reads,
 | Severity-split logging channels (INFO/WARN/ERROR) | triage of config corrections vs failures | `EsLog.cs:15-45` |
 | Emergency levers log as WARNING when engaged | B1/B3 unnoticed combat degradation or entity sheds | `Patches/GovernorPatch.cs:108`, `Patches/TickGuardPatch.cs:94` |
 | Commit-pinned CI actions, unpersisted read-only token, main-scoped push | B6 supply chain | `.github/workflows/ci.yml:6,10,24,29` |
-| Locked-mode restore, SDK pin | B4/B6 dependency drift | `Makefile:70`, `global.json` |
+| Locked-mode restore from an in-repo source list, SDK pin | B4/B6 dependency drift | `NuGet.config`, `Makefile:70`, `global.json` |
 | Reproducible package build (sorted entries, epoch mtimes, rebuilt from scratch) | B4 artifact diffing | `scripts/package.sh:16` |
 | Reproducibility proof target | B4 rebuild-equals-release claim | `Makefile:45`, `scripts/verify_reproducible.sh` |
 | Command-execution logging kept on (game setting) | B2 repudiation | `server/serverconfig.optimized.xml:49` (template default) |

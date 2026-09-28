@@ -25,6 +25,13 @@ So `EfficientServer-0.1.0.zip` logging `mod=1.17.0` is correct, not drift.
 
 ## [Unreleased]
 
+- Restore sources are now pinned in-repo (`NuGet.config`, nuget.org only with
+  inherited machine and user feeds cleared) instead of coming from whatever
+  feed the host machine happens to configure.
+- The .NET SDK pin is exact within its band: `global.json` moves from
+  `rollForward: latestFeature` to `latestPatch`, so a new 8.0.5xx SDK can no
+  longer be picked up silently. Bump `version` there to move bands.
+
 ## [1.19.0] - 2026-09-20
 
 Artifact: `EfficientServer-1.19.0.zip`, containing mod version 1.19.0.

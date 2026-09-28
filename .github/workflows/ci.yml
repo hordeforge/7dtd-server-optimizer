@@ -27,7 +27,7 @@ jobs:
         # with it for the job's lifetime.
         with:
           persist-credentials: false
-      # SDK pinned by global.json (rollForward latestFeature); setup-dotnet
+      # SDK pinned by global.json (rollForward latestPatch); setup-dotnet
       # reads it when dotnet-version is omitted. Cache NuGet packages keyed
       # on the locked dependency graph so restore stops re-downloading.
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0

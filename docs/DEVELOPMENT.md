@@ -116,7 +116,9 @@ NuGet dependencies are hash-pinned by the committed
 `Source/EfficientServer.Tests/packages.lock.json`; `make test` restores in
 locked mode, so bumping a `PackageReference` requires regenerating that file
 with `dotnet restore Source/EfficientServer.Tests` (plain, not locked) and
-committing it together with the version change.
+committing it together with the version change. Restore sources are pinned in
+`NuGet.config` (nuget.org only, inherited machine and user feeds cleared);
+add a source there, in the same change that needs it.
 
 `make package` must run on a machine with the game installed: `build.sh`
 compiles against the shipped `Assembly-CSharp.dll`, which the repo does not

@@ -124,7 +124,7 @@ supported retarget: rebuild with `make build` and reinstall.
 
 **Toolchain:**
 - .NET SDK pinned by [`global.json`](global.json) (8.0.4xx band,
-  `rollForward: latestFeature`; CI installs exactly that), target framework
+  `rollForward: latestPatch`; CI installs exactly that), target framework
   `net48`; `build.sh` prefers `DOTNET_ROOT` or `~/.cache/dotnet-sdk`
 - Fallback backend `SEVENDTD_BUILD_BACKEND=mcs` (Mono `mcs`) when no SDK is present
 - Host OS: the build/run/package tooling targets **Linux** hosts (Steam library
@@ -140,7 +140,9 @@ supported retarget: rebuild with `make build` and reinstall.
   LogLibrary, AstarPathfindingProject) resolve from the installed game; a
   missing managed DLL fails the build with a clear reference error
 - The test project's one NuGet dependency is hash-pinned in the committed
-  `packages.lock.json` and restored in locked mode by `make test`
+  `packages.lock.json` and restored in locked mode by `make test`; the restore
+  source list is pinned in-repo by [`NuGet.config`](NuGet.config) (nuget.org
+  only, inherited machine/user feeds cleared)
 
 **Troubleshooting (from the mod's own log lines):**
 - `MISSING TARGET: <Patch> matched no game method (version drift?) - this
