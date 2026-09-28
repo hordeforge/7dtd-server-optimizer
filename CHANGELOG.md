@@ -59,8 +59,28 @@ version 1.17.0; every release after them takes its number from the tag.
   existing `es benchgod on` gate. The restore commands (`es animon`,
   `es rigon`) and `es animstate` stay ungated. `es status` shows the switch as
   `probeAllow=`.
+- Every line the mod writes is now one record, one physical line, stamped with
+  the mod's uptime: `EsLog.Emit` renders through `LogLine.Format`, which renders
+  an embedded break (a concatenated exception's stack trace) as ` | ` and
+  appends `uptimeS=<seconds>`, the same field `es status` prints. A stack trace
+  used to reach the server log as several untimestamped continuation lines, and
+  a governor or `TickGuard` line could not be placed against the uptime the
+  server is at now. The world-load anchor line keeps its `world loaded` text;
+  its inline `at uptime Ns` is the new trailing field, not a separate one.
 
 ### Fixed
+- A failure to read whether the host is a dedicated server failed closed and
+  silent. That read gates EVERY patch prefix, so a host where it kept throwing
+  left the whole mod unpatched, and `es status` showed it only as
+  `modActive=false`, indistinguishable from a disabled config. It now announces
+  once on the WARNING channel and registers as `dedicatedGate` on the
+  `degraded=` line, so the count reads as how long the server has run unpatched.
+- A mod line that failed to reach the game log said nothing about it. The
+  fallback wrote the line to stdout and dropped the reason, so a server whose
+  `Log` static rejected writes had an aging `[EfficientServer]` tail in the log
+  file and no clue why. The first failure now names the exception and states
+  that later lines reach the console only; the per-line stdout fallback is
+  unchanged.
 - The config structure fuzz treated the static `ServerPerfConfig.LastLoadFailed`
   load outcome as a knob, so it mutated a leaf the serializer never writes and
   the suite failed on `leaf 'LastLoadFailed' present in serialized defaults`.

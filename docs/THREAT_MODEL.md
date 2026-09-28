@@ -113,10 +113,10 @@ write APIs under `Source/EfficientServer/`; the only file read is
   new world's spawn load. Residual: an operator who sets both levers at their
   clamped maxima still has an armed despawn path while the tick is over budget.
 - Repudiation: corrections and parse failures are logged by severity through
-  `EsLog.Emit` (`EsLog.cs:26`); ERROR is reserved for the outcomes that leave
+  `EsLog.Emit` (`EsLog.cs:34-47`); ERROR is reserved for the outcomes that leave
   the server on knobs nobody chose. Reload apply failures are surfaced rather
   than swallowed, so no success echo covers a partial apply
-  (`ModApi.cs:194`).
+  (`ModApi.cs:200`).
 
 ### B2: console actor to mod commands
 
@@ -448,7 +448,7 @@ Checked the docs against the code; results:
 
 - Audit trail available for investigation: everything logs through
   `[EfficientServer]`-prefixed lines into the game log (`EsLog.Emit`,
-  `EsLog.cs:18,26`) across three severity channels, including config
+  `EsLog.cs:21,34-47`) across three severity channels, including config
   corrections, parse failures, rejected reloads, patch failures, MISSING TARGET
   summaries, engaged emergency levers, entity sheds, released probes, and (via
   the console `Output` choke point) every state-changing console command and

@@ -38,6 +38,10 @@
     <!-- Fail-open degradation registry: announce-once, count-every, and the
          `es status` summary format the console command renders. -->
     <Compile Include="../EfficientServer/Degrade.cs" />
+    <!-- Log record shape shared by the real EsLog and the stub above: one line
+         per record (an embedded exception must not split into untimestamped
+         continuations) and the uptime stamp every record carries. -->
+    <Compile Include="../EfficientServer/LogLine.cs" />
     <!-- Game-type-free clock seam: the EMA the governor and tick guard key off,
          driven here with explicit timestamps instead of a live Stopwatch. -->
     <Compile Include="../EfficientServer/Patches/TickIntervalEma.cs" />

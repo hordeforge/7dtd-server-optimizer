@@ -35,16 +35,14 @@ namespace EfficientServer
         public static bool Active { get { return _active; } }
         static Harmony _harmony;
 
-        // Process uptime, the correlation key between a log line and a later
-        // `es status` capture. The server log has wall-clock timestamps but the
-        // mod has no marker for "this world started here", so an operator reading
-        // a governor or gc line has no way to say how long ago it fired relative
-        // to now. Every runtime line the mod emits carries the same clock.
-        static readonly System.Diagnostics.Stopwatch UptimeClock =
-            System.Diagnostics.Stopwatch.StartNew();
-
-        /// <summary>Seconds since the mod loaded; the shared age stamp.</summary>
-        public static double UptimeSeconds { get { return UptimeClock.Elapsed.TotalSeconds; } }
+        /// <summary>
+        /// Seconds since the mod loaded; the shared age stamp. The clock itself
+        /// lives in <see cref="LogLine"/> next to the line renderer that stamps
+        /// every record with it, so the log line and this number cannot be two
+        /// different clocks. Read it from here in mod code; nothing else should
+        /// start its own stopwatch for correlation purposes.
+        /// </summary>
+        public static double UptimeSeconds { get { return LogLine.UptimeSeconds; } }
 
         public void InitMod(Mod _modInstance)
         {
@@ -306,7 +304,11 @@ namespace EfficientServer
         // (~7 sends x entities x players per tick), so repeating the singleton
         // read + exception scaffolding each time is pure overhead. A failed read
         // is NOT cached: early during boot the game singleton may not exist yet,
-        // and the gate must stay fail-closed until a real answer exists.
+        // and the gate must stay fail-closed until a real answer exists. That is
+        // also why the failure is announce-once through Degrade: a host whose
+        // singleton read keeps throwing would otherwise re-raise per patch call
+        // (far more expensive than the report itself) with nothing logged.
+        internal const string DedicatedGateDegradeKey = "dedicatedGate";
         // volatile publication: ShouldRun is the one gate every patch prefix
         // calls, including surfaces whose caller set could grow off-main (the
         // ARCHITECTURE concurrency rule reserves plain statics for proven
@@ -342,9 +344,21 @@ namespace EfficientServer
                         _isDedicated = GameManager.IsDedicatedServer;
                         _dedicatedResolved = true;
                     }
-                    catch
+                    catch (Exception ex)
                     {
                         // Fail closed: unknown host must not activate server-only patches.
+                        // Reported rather than swallowed: this is the one gate every
+                        // patch prefix calls, so a persistent failure here leaves the
+                        // WHOLE mod inert, and `es status` would show it only as
+                        // modActive=false, which reads the same as a disabled config.
+                        // A read that keeps throwing is retried on the next call (the
+                        // answer is not cached from a failed read), so the count on
+                        // the degraded line is how long the server has been silently
+                        // unpatched.
+                        if (Degrade.Report(DedicatedGateDegradeKey, "dedicated-host read failed ["
+                                + ex.GetType().Name + "]: " + ex.Message
+                                + " - the host type is unknown, so EVERY lever is INACTIVE until restart"))
+                            EsLog.Emit(LogLevel.Warn, Degrade.FirstReport(DedicatedGateDegradeKey));
                         return false;
                     }
                 }

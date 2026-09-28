@@ -296,6 +296,13 @@ namespace EfficientServer.Tests
             }
             Check(Regex.IsMatch(src, @"static\s+void\s+Emit\s*\(\s*LogLevel\s+\w+\s*,\s*string\s+\w+\s*\)"),
                 "real EsLog.Emit keeps the (LogLevel, string) signature Config.cs calls");
+            // The stub runs every message through LogLine (see the check group
+            // below), so the shipped logger has to do the same or the harness
+            // would pin a record shape the server log never produces. Grepped
+            // rather than imported: the real class cannot be loaded here (it
+            // calls the game's Log static).
+            Check(Regex.IsMatch(src, @"LogPrefix\s*\+\s*LogLine\.Format\("),
+                "real EsLog.Emit renders through LogLine, the shared record shape (uptime stamp, one line per record)");
         }
 
         // A JSON document naming EVERY public property of ServerPerfConfig and of
@@ -823,6 +830,84 @@ namespace EfficientServer.Tests
             EfficientServer.Degrade.Reset();
             Check(EfficientServer.Degrade.Summary() == "none",
                 "degrade registry: reset returns the process view to clean");
+        }
+
+        // The log record shape every EsLog.Emit produces. Two properties, both
+        // about what an operator's log tooling sees: a record is ONE line (a
+        // caught exception concatenated into a message embeds "\n   at ...",
+        // which the server log would split into several untimestamped records),
+        // and it carries `uptimeS=`, the same field `es status` prints, so a log
+        // line and a status capture join on one number.
+        static void CheckLogLineFormat()
+        {
+            const string StampPattern = @" uptimeS=[0-9]+$";
+
+            string plain = EfficientServer.LogLine.Format("Governor: restored baseline");
+            Check(plain.StartsWith("Governor: restored baseline", StringComparison.Ordinal)
+                && Regex.IsMatch(plain, StampPattern),
+                "log line: message text is untouched and the uptime stamp is appended");
+
+            // The case the shape exists for: what a call site gets from
+            // "catch (Exception ex) { Emit(..., ex) }" on a real exception.
+            string fromException = EfficientServer.LogLine.Format(
+                "InitMod failed: System.InvalidOperationException: boom\n"
+                + "   at EfficientServer.ModApi.InitMod()\n"
+                + "   at GameManager.Start()");
+            Check(fromException.IndexOf('\n') < 0 && fromException.IndexOf('\r') < 0,
+                "log line: a multi-line exception message stays ONE line");
+            Check(fromException.Contains("System.InvalidOperationException: boom | ")
+                && fromException.Contains("at EfficientServer.ModApi.InitMod() | ")
+                && Regex.IsMatch(fromException, @"at GameManager\.Start\(\)" + StampPattern),
+                "log line: line breaks inside the message become readable separators, stack frames intact");
+
+            string crlf = EfficientServer.LogLine.Format("first\r\nsecond");
+            Check(crlf.StartsWith("first | second", StringComparison.Ordinal),
+                "log line: a CRLF pair is one break, not an empty segment between two separators");
+
+            string trailing = EfficientServer.LogLine.Format("record\n");
+            Check(trailing.StartsWith("record uptimeS=", StringComparison.Ordinal),
+                "log line: a trailing break does not leave a separator dangling at the end");
+
+            Check(EfficientServer.LogLine.Format("").StartsWith(" uptimeS=", StringComparison.Ordinal),
+                "log line: an empty message still yields a stamped record rather than a bare field");
+
+            // Invariant numerics, same convention as the governor and es status
+            // lines: a comma-decimal host locale must not reformat the stamp, or
+            // the field a log scraper matches stops matching there.
+            CultureInfo saved = CultureInfo.CurrentCulture;
+            try
+            {
+                CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("de-DE");
+                string invariant = EfficientServer.LogLine.Format("locale probe");
+                Check(Regex.IsMatch(invariant, StampPattern),
+                    "log line: the uptime stamp is integral and comma-decimal locales cannot reformat it (got: "
+                    + invariant + ")");
+            }
+            finally { CultureInfo.CurrentCulture = saved; }
+
+            double first = EfficientServer.LogLine.UptimeSeconds;
+            string stamped = EfficientServer.LogLine.Format("clock probe", 42.6);
+            Check(stamped.EndsWith(" uptimeS=43", StringComparison.Ordinal),
+                "log line: whole seconds, matching the es status field, and a caller-supplied clock is honored");
+
+            string later = EfficientServer.LogLine.Format("clock probe");
+            var laterStamp = Regex.Match(later, StampPattern);
+            Check(laterStamp.Success
+                && long.Parse(laterStamp.Value.Substring(" uptimeS=".Length),
+                    CultureInfo.InvariantCulture) >= (long)first,
+                "log line: the stamp advances with process uptime (the correlation key into es status uptimeS)");
+
+            // The shipping entry point, through the stub that shares LogLine with
+            // the real logger: a captured record is the string the server log
+            // would carry, on the channel the caller chose.
+            EsLog.Warnings.Clear();
+            EsLog.Errors.Clear();
+            EsLog.Emit(LogLevel.Warn, "probe warn\nwith a break");
+            EsLog.Emit(LogLevel.Error, "probe error");
+            Check(EsLog.Warnings.Count == 1 && EsLog.Errors.Count == 1
+                && EsLog.Warnings[0].StartsWith("probe warn | with a break uptimeS=", StringComparison.Ordinal)
+                && Regex.IsMatch(EsLog.Errors[0], StampPattern),
+                "log line: Emit records one stamped single-line entry per call, on the right channel");
         }
 
         static int RunChecks()
@@ -1556,6 +1641,7 @@ namespace EfficientServer.Tests
             CheckUnreadableFileFailSoft();
             CheckCrossThreadConfigPublication();
             CheckDegradeRegistry();
+            CheckLogLineFormat();
 
             // Fuzz: the config file is the mod's untrusted-input surface, so a
             // deterministic target hammers Load. Structure-aware mutations of the
@@ -1881,11 +1967,16 @@ namespace EfficientServer.Tests
                 "{\"Enabld\":false,\"Pathfinding\":{\"GraphUpdateEveryTick\":9},\"Server\":{\"TargetFps\":20}}");
             Check(typoed.Enabled && typoed.Pathfinding.GraphUpdateEveryTicks == 4 && typoed.Server.TargetFps == 20,
                 "unknown keys are ignored without losing the keys around them");
+            // The record carries a trailing uptime stamp, so the warning text is
+            // matched as a prefix: what this pins is WHICH key each warning names
+            // and that it is its own line, not the absence of a field after it.
             Check(EsLog.Warnings.Count == 2
-                && EsLog.Warnings.Contains("config unknown key 'Enabld' ignored;"
-                    + " that knob keeps its default (names are case-insensitive, spelling is not)")
-                && EsLog.Warnings.Contains("config unknown key 'Pathfinding.GraphUpdateEveryTick' ignored;"
-                    + " that knob keeps its default (names are case-insensitive, spelling is not)"),
+                && EsLog.Warnings.Any(w => w.StartsWith("config unknown key 'Enabld' ignored;"
+                    + " that knob keeps its default (names are case-insensitive, spelling is not)",
+                    StringComparison.Ordinal))
+                && EsLog.Warnings.Any(w => w.StartsWith("config unknown key 'Pathfinding.GraphUpdateEveryTick' ignored;"
+                    + " that knob keeps its default (names are case-insensitive, spelling is not)",
+                    StringComparison.Ordinal)),
                 "each unknown key is named on its own warning line, with its section path");
 
             EsLog.Warnings.Clear();

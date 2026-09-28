@@ -9,7 +9,10 @@ namespace EfficientServer
     /// The one logging surface of the mod: every diagnostic line goes through
     /// here so the prefix and the three severity channels stay uniform. Kept
     /// separate from <see cref="ModApi"/> so low-level modules (Config) can log
-    /// without depending on the mod orchestrator.
+    /// without depending on the mod orchestrator. The line's SHAPE (one record
+    /// per line, uptime stamp) is <see cref="LogLine"/>'s, so the guarantee
+    /// holds for every caller of <see cref="Emit"/> rather than depending on each
+    /// one wrapping its own message.
     /// </summary>
     internal static class EsLog
     {
@@ -32,17 +35,40 @@ namespace EfficientServer
         static readonly Action<string> WarnSink = global::Log.Warning;
         static readonly Action<string> ErrorSink = global::Log.Error;
 
+        // Banner guard, not a gate: the first sink failure explains itself, and
+        // every later one is silent because the explanation is already on the
+        // only sink that still works. Volatile because Emit is called from the
+        // LiteNetLib receive thread as well as the main thread.
+        static volatile bool _sinkFailureReported;
+
         public static void Emit(LogLevel severity, string msg)
         {
             Action<string> sink = severity == LogLevel.Warn ? WarnSink
                 : severity == LogLevel.Error ? ErrorSink
                 : InfoSink;
-            string line = LogPrefix + msg;
+            // Rendered here rather than at each call site: several sites report a
+            // caught exception by concatenating it, and an unwrapped ToString()
+            // would put the continuation lines of one record into the log as
+            // separate untimestamped records (see LogLine).
+            string line = LogPrefix + LogLine.Format(msg);
             try { sink(line); }
             // The game Log static is the only sink that reaches the dedicated log
             // file, and it is unavailable very early in init; a line the operator
             // would need is worth more on stdout than the reason it failed here.
-            catch { Console.WriteLine(line); }
+            // The FIRST failure also names the cause, because a mod whose lines
+            // have stopped reaching the log file is otherwise invisible: the
+            // operator sees an old last-written timestamp and no explanation.
+            catch (Exception ex)
+            {
+                if (!_sinkFailureReported)
+                {
+                    _sinkFailureReported = true;
+                    Console.WriteLine(LogPrefix + "game log sink unavailable [" + ex.GetType().Name
+                        + "]: " + ex.Message + " - from here on this mod's lines go to the console ONLY,"
+                        + " not to the server log file (first line: " + line + ")");
+                }
+                Console.WriteLine(line);
+            }
         }
     }
 }

@@ -29,13 +29,13 @@ Two projects under `Source/`. The mod (`net48`) cannot build without a game inst
 |---|---|
 | `EfficientServer/ModApi.cs` | `IModApi` entry point and composition root: the only place patches are enumerated (`RequiredGroups`), and the only place that installs, reloads, and re-bases the governor |
 | `EfficientServer/Config.cs` | Config model: one sealed section class per config block, `ServerPerfConfig` with `Load` / `Normalize` / `FeatureActive`, and the pure `ShouldRunFor` / `BenchGodArmAllowed` policy the tests exercise |
-| `EfficientServer/EsLog.cs` | The single logging surface; the `LogLevel` enum lives here so low-level modules log without depending on `ModApi` |
+| `EfficientServer/EsLog.cs`, `LogLine.cs` | The single logging surface; the `LogLevel` enum lives here so low-level modules log without depending on `ModApi`. `LogLine` owns the record shape `Emit` renders: one physical line per record (a reported exception's breaks become ` | `) plus the `uptimeS=` stamp shared with the `es status` runtime line |
 | `EfficientServer/ConsoleCmdEfficientServer.cs` | The `es` console command; reads the live config, never owns state |
 | `EfficientServer/GcIncremental.cs`, `BoehmNative.cs` | One-shot Boehm mode flip and the only P/Invoke surface into it |
 | `EfficientServer/Patches/` | Harmony patches plus the shared types they call. The `*Patch` suffix marks a class that participates in Harmony patching, but not all of them are processed the same way: `[HarmonyPatch]`-annotated classes go through Harmony's class processor from `ModApi.RequiredGroups` and MUST match a game method, while `GameStartPatch`, `DynamicMeshBudgetPatch` and `DedicatedSkipPatch` install their patches imperatively from the `ModEvents.GameStartDone` hook instead (a missing target there logs its own status, it does not fail the group). Non-suffixed files here (`TickClock`, `TickIntervalEma`, `ShedOrder`, `AiAlertGate`, `AnimatorEmergency`) are support types, never patched at all |
 | `EfficientServer.Tests/` | Assert harness (no test framework, so it builds offline) over a hand-picked, game-type-free subset of the mod, listed as `<Compile Include>` paths in its csproj |
 
-**Getting new code under test:** the harness compiles real production files by path rather than referencing the mod assembly, because the mod needs the game DLLs. A new module is testable only if it references no game type, and it gets zero coverage until its path is added to that csproj. `EsLog` is the one production type the harness re-declares as a stub, because the real one calls the game's `global::Log`.
+**Getting new code under test:** the harness compiles real production files by path rather than referencing the mod assembly, because the mod needs the game DLLs. A new module is testable only if it references no game type, and it gets zero coverage until its path is added to that csproj. `EsLog` is the one production type the harness re-declares as a stub, because the real one calls the game's `global::Log`; the stub runs messages through the real `LogLine`, and a check greps the shipped `EsLog.cs` to pin that it does the same.
 
 ## Patch groups
 

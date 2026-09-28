@@ -58,20 +58,33 @@ Apply config edits live: `es reload` (telnet/console). `es status` shows active 
     zombie animators culled (`CullCompletely`) during extreme overload (~40% frame
     recovery; combat timing degrades, nothing despawns).
   - `TickGuard: ... shed N farthest enemies` = past throttling; expect thinner hordes.
-  - `world loaded at uptime Ns` = the world-load anchor; one per world load. It
-    carries the same clock as the `uptimeS=` field on `es status`, so a log line
-    and a later status capture are correlatable.
+  - `world loaded` = the world-load anchor; one per world load. Every line this
+    mod writes ends in `uptimeS=<seconds>`, the same field `es status` prints,
+    so any log line and a status capture join on one number, and after a 6-day
+    uptime with three world loads this line is what says which world a later
+    line belongs to.
   - `SPIKE gmUpdateDuration=...` = frame spikes, logged by the APM bridge
     (rate-limited to 1/5 s).
+  - `game log sink unavailable [...]` (console only, never the log file) = the
+    game's `Log` static rejected a write, so from that point every mod line goes
+    to the server console and NOT to the log file. A log file whose last
+    `[EfficientServer]` line is older than expected with nothing new in it is
+    this, not a mod that stopped talking.
+
+  Every mod line is ONE line: a reported exception has its breaks rendered as
+  ` | ` (`LogLine.Format`), so a stack trace never arrives as several
+  untimestamped records, and a line-oriented grep or log shipper sees one event
+  per event.
 - **Degradations (`es status`, `degraded=` line)**: every fail-open path in the mod
   (AI alert probe, CheckDespawn fallback, LOD cloth toggle, client-list snapshot,
-  GC ceiling, target-fps apply, an absent dedicated-skip target) announces itself
-  ONCE in the log and then stays silent, because those paths fire per tick or per
-  connection request. The `degraded=` line is the standing record: `none` is
-  healthy, otherwise `key=count` pairs in occurrence order, where `count` is how
-  many times that path hit its fail-open branch. Entries persist until restart
-  (they are game-API drift, not config; `es reload` cannot repair them). A
-  non-`none` value means some lever is running degraded right now.
+  GC ceiling, target-fps apply, the dedicated-host read, an absent dedicated-skip
+  target) announces itself ONCE in the log and then stays silent, because those
+  paths fire per tick or per connection request. The `degraded=` line is the
+  standing record: `none` is healthy, otherwise `key=count` pairs in occurrence
+  order, where `count` is how many times that path hit its fail-open branch.
+  Entries persist until restart (they are game-API drift, not config; `es reload`
+  cannot repair them). A non-`none` value means some lever is running degraded
+  right now.
 - **Throttle engagement (`es status`, runtime line)**: `replicationSkipped`,
   `graphUpdatesSkipped` and `collisionOffTicks` are lifetime counts of work the
   silent cadence levers actually took off the tick. A configured cadence with a
@@ -124,6 +137,13 @@ scrubbed (cmdline/exe redacted, home path replaced).
   no ceiling replaced it. Set `Gc.SafetyCollectAboveMB` explicitly. It also shows
   as `gcGuardCeiling` on the `es status` `degraded=` line, so a boot-time warning
   is still visible hours later.
+- Every lever doing nothing at once: `es status` shows `modActive=false` and the
+  `degraded=` line names `dedicatedGate` = the mod could not read whether the
+  host is a dedicated server, so the gate that every patch prefix calls fails
+  closed and NOTHING is patched. The read is retried per call, so the count on
+  that key is how long the server has run unpatched; the cause is in the single
+  WARNING line at first failure. Restart after fixing the underlying host
+  problem: the degradation, like every other one, does not clear on reload.
 - A lever configured but doing nothing: check the `es status` runtime counters for
   that lever (`pathDropped*` for path admission, `tasksSkippedFar` /
   `tasksStridedOff` for AI LOD, `replicationSkipped`, `graphUpdatesSkipped`,

@@ -1,5 +1,4 @@
 using System;
-using System.Globalization;
 
 namespace EfficientServer.Patches
 {
@@ -21,12 +20,12 @@ namespace EfficientServer.Patches
                 // re-basing, mesh budgets, skips) floats in a stream that an
                 // operator cannot anchor to a session: after a 6-day uptime with
                 // three world loads there is nothing to tell which world a given
-                // tick-EMA line belongs to. One line per world load, carrying the
-                // uptime the runtime status uses, so a log line and a later
-                // `es status` share a clock.
-                EsLog.Emit(LogLevel.Info, "world loaded at uptime "
-                    + ModApi.UptimeSeconds.ToString("F0", CultureInfo.InvariantCulture)
-                    + "s; start-time knobs applying (fps, job workers, mesh budgets, dedicated skips, GC)");
+                // tick-EMA line belongs to. One line per world load; the clock it
+                // used to carry inline is now on every line as `uptimeS=`
+                // (EsLog -> LogLine), so it and an `es status` capture still join
+                // on the same number.
+                EsLog.Emit(LogLevel.Info, "world loaded; start-time knobs applying "
+                    + "(fps, job workers, mesh budgets, dedicated skips, GC)");
                 // First: a world just loaded, so nothing the load-dependent gates
                 // derived from the previous world's ticks may carry into this one.
                 // The governor and the tick guard each keep a tick-interval average
