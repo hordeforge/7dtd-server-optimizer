@@ -6,7 +6,8 @@ namespace EfficientServer
     /// <summary>
     /// Registry of subsystems that failed OPEN and are running degraded. Every
     /// fail-open path in the mod (AI alert probe, CheckDespawn fallback, LOD cloth
-    /// toggle, client-list snapshot, GC ceiling, target-fps apply) used to carry its
+    /// toggle, client-list snapshot, GC ceiling, target-fps apply, an absent
+    /// dedicated-skip target) used to carry its
     /// own one-shot log flag, so the degradation was announced once at the moment it
     /// happened and then became invisible: nothing in the log and nothing in
     /// <c>es status</c> could say "AI LOD striding has been inactive since 09:14".

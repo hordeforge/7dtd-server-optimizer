@@ -455,9 +455,9 @@ horde.
 ## Diagnostics
 
 The former GC megapause probe (`GcMegapauseTest` + `WarmupSeconds` +
-`GrowSeconds`) is deleted in the unreleased `[Unreleased]` section of the
-CHANGELOG and never shipped: a config that still carries those keys parses fine
-but nothing reads them, so delete them.
+`GrowSeconds`) shipped from v1.5.1 through v1.19.0 and is deleted in the
+unreleased `[Unreleased]` section of the CHANGELOG: a config that still carries
+those keys parses fine but nothing reads them, so delete them.
 RESULTS.md keeps the evidence the probe produced (measured 479 ms forced
 collect at 6.9 GB). Remaining knobs:
 

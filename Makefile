@@ -99,7 +99,7 @@ help:
 	@echo "  make unit FILTER='Governor*'   Only matching checks; no match exits 1"
 	@echo "  make unit-list                  List the check names a FILTER can match"
 	@echo
-	@echo "  make clean             Remove dist/ and bin/obj build outputs"
+	@echo "  make clean             Remove dist/, TestResults/ and bin/obj build outputs"
 	@echo "  make coverage          Run the unit suite under dotnet-coverage into"
 	@echo "                         TestResults/coverage.cobertura.xml"
 	@echo
