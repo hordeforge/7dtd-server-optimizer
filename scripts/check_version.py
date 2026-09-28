@@ -2,8 +2,9 @@
 """Regression gate: the shipped mod version must be consistent across sources.
 
 Checks that:
-1. Source/EfficientServer/ModInfo.xml and dist/EfficientServer/ModInfo.xml
-   carry the same version.
+1. Source/EfficientServer/ModInfo.xml and, when dist/ has been packaged,
+   dist/EfficientServer/ModInfo.xml carry the same version (a tree that has
+   never packaged has no dist copy to compare, so that half is skipped).
 2. AssemblyInfo.cs AssemblyVersion matches ModInfo (ModInfo "1.17.0" ==
    Assembly "1.17.0.0", trailing ".0" parts ignored).
 3. docs/ claim no version newer than the shipped one (catches the v1.18

@@ -4,10 +4,12 @@
 # The zip contains the EfficientServer/ mod folder at its top level, so
 # unzipping it inside <server>/Mods installs the mod (Mods/EfficientServer/).
 #
-# Reproducible by construction: entry order is sorted, every mtime is set to
-# SOURCE_DATE_EPOCH (falling back to the last commit time), permissions are
-# normalized, and owner/group data is stripped (-X). Two builds from the same
-# tree produce byte-identical zips.
+# Reproducible on the dotnet backend: entry order is sorted, every mtime is set
+# to SOURCE_DATE_EPOCH (falling back to the last commit time), permissions are
+# normalized, and owner/group data is stripped (-X). Two dotnet-backend builds
+# from the same tree produce byte-identical zips. The mcs fallback backend
+# stamps a random MVID and ignores -deterministic, so it cannot reproduce (see
+# build.sh); it exists for hosts without an SDK, not for releases.
 #
 # Version: taken from the newest git tag (vX.Y.Z -> X.Y.Z), or overridden
 # with VERSION=x.y.z. Requires a local game install: build.sh compiles

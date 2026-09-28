@@ -130,12 +130,14 @@ state that is NOT regenerable is what an operator edits on the server host:
 ### RPO and RTO
 
 - **RPO for the live config: 0 across a reinstall or an uninstall.** `install.sh`
-  and `uninstall.sh` both copy `<DS>/Mods/EfficientServer/Config/` out before
-  touching the mod folder, and `uninstall.sh` prints the restore command.
-  Against host loss, disk loss, or a deleted instance the RPO is unbounded:
-  nothing in this repo copies that file off the host. Copy it into version
-  control (or anywhere off-host) yourself if the tuning is worth more than a
-  re-derivation from `docs/CONFIG.md` plus the measured defaults.
+  holds the installed `Config/efficientserver.json` in a temp file across the
+  `rm -rf` and restores it on success (kept, with its path printed, if the
+  install fails); `uninstall.sh` copies the whole `Config/` directory to a
+  timestamped backup and prints the restore command. Against host loss, disk
+  loss, or a deleted instance the RPO is unbounded: nothing in this repo copies
+  that file off the host. Copy it into version control (or anywhere off-host)
+  yourself if the tuning is worth more than a re-derivation from
+  `docs/CONFIG.md` plus the measured defaults.
 - **RTO for a config restore: under a minute** (one `cp` plus `es reload`; no
   restart). **RTO for a full mod reinstall: one `make install`.** Neither path
   needs a rebuild once `dist/` is present.

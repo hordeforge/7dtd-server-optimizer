@@ -211,7 +211,9 @@ filter mode) through the existing O(1) `ClientInfoCollection.ForEntityId` map, t
 reuses the game's own per-client enqueue (`ClientInfo.SendPackage`). Provably
 equivalent to vanilla: `entityId` is unique per client, so vanilla also enqueues to
 exactly one client, giving the identical send-queue refcount (one
-`RegisterSendQueue` + one `AddToSendQueue`). Every other filter mode (all-but,
+`RegisterSendQueue` + one `AddToSendQueue` + one `SendQueueHandled`; the closing
+decrement runs in a `finally`, or a throw would strand the count above zero and
+leak the package out of the game's pool). Every other filter mode (all-but,
 in-range, only-attached/not-attached) falls through to vanilla untouched.
 
 Config: `Network.FastSingleTargetSend` (default **true**: the send is provably
@@ -323,6 +325,20 @@ opt-in, so a console-level actor alone cannot enable it on a live server (the
 refusal is echoed and logged; `es benchgod off` always works). Never enable on a
 real dedicated server.
 
+## Rig-visual bench diagnostic (console only)
+
+`es rigoff` / `es rigon` disable and restore the unguarded visual `Behaviour`
+components on entity rigs (eyelid blink, gaze, feather flutter, held-light
+raycast, drone lights/beam; `RagdollWhenHit` is excluded, it touches physics).
+Purpose: to size those components' per-frame cost (RE sweep 3n; measured: no
+resolvable cost at saturation variance). `rigoff` is an additive sweep, so
+repeating it converges to the same state and one `rigon` undoes it all;
+components whose rig despawned while disabled are pruned, since they can never
+be restored. Arming `rigoff` requires `Diagnostics.AllowFidelityProbes: true`;
+`es rigon` is never gated, so an armed probe can always be walked back.
+`es animoff` / `es animon` / `es animstate` share that same gate (the animator
+probe is a tier-2 gameplay probe, not a rig probe). Not config-persisted.
+
 ## TickGuard emergency load-shedding (v1.13.0, default off)
 
 `TickGuardPatch` (config `TickGuard.*`) sheds the farthest-from-any-player enemies
@@ -348,8 +364,10 @@ the hysteresis ordering (`HealthyMs` stays below `OverBudgetMs`), not the 50 ms
 figure (see [CONFIG](CONFIG.md)).
 
 **Tier 2 (v1.16.0, `Governor.AnimatorEmergency`, default off):** when throttling has
-not recovered the tick and the EMA exceeds `EmergencyOverMs` (80), cull ALL zombie
-animators (`Animator.cullingMode = CullCompletely`, `enabled` left true - see the
+not recovered the tick and the EMA exceeds `EmergencyOverMs` (80), cull every
+LIVING enemy animator (corpses are skipped on both the cull and the restore
+sweep, so death poses are left alone) via
+`Animator.cullingMode = CullCompletely`, `enabled` left true - see the
 v1.17.0 mechanism below; the original `enabled=false` form is refuted, RESULTS 3s).
 The animator burden is measured at **~40% of the saturated 64-player frame** (the
 fence check: at 64p it is mostly main-thread JOB-FENCE waiting, which triples per
@@ -461,7 +479,8 @@ onto the spawn that inherited its ID. Still default-off
 ## Lifecycle
 
 Post-start setup (dynamic-mesh reapply, optional dedicated skips, GC incremental
-enable) runs via the sanctioned `ModEvents.GameStartDone` hook - **not** a
+enable, target fps, job workers) runs via the sanctioned
+`ModEvents.GameStartDone` hook - **not** a
 Harmony patch on `StartGame`, since no IL match is needed just for "run after
 startup" timing. `ModApi` loads configuration, applies each Harmony patch group
 independently (logging the exact matched game methods and failing visibly if a

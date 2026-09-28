@@ -44,11 +44,15 @@ elif [[ -x "$HOME/.cache/dotnet-sdk/dotnet" ]]; then
   export DOTNET_ROOT="$HOME/.cache/dotnet-sdk"
   export PATH="$DOTNET_ROOT:$PATH"
 fi
-SRV="${SEVENDTD_DS_DIR:-${DS:-$HOME/.local/share/Steam/steamapps/common/7 Days to Die Dedicated Server}}"
 # DS is the second accepted spelling (see --help above and install.sh, which
-# hands its resolved path to this script); an exported-but-empty one must fail
-# instead of silently resolving to the stock default, so the compile never
-# happens against a different install than the operator named.
+# hands its resolved path to this script); SEVENDTD_DS_DIR wins so an explicit
+# env override beats the Makefile's DS=. Same resolution order in uninstall.sh
+# and run_server.sh.
+SRV="${SEVENDTD_DS_DIR:-${DS:-$HOME/.local/share/Steam/steamapps/common/7 Days to Die Dedicated Server}}"
+# An exported-but-empty one must fail instead of silently resolving to the stock
+# default, so the compile never happens against a different install than the
+# operator named. Both spellings are checked, because either one being empty is
+# what a mistyped `DS=` leaves behind.
 for _var in SEVENDTD_DS_DIR DS; do
   if [[ -n "${!_var+x}" && -z "${!_var}" ]]; then
     echo "ERROR: $_var is set but empty; pass a real install dir or unset it." >&2

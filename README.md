@@ -49,9 +49,12 @@ Packaged builds are attached to GitHub releases (see the Releases page;
 `<version>` is the tag without its leading `v` (`git describe`, or a `-dirty`
 suffix on a modified tree); what changed per
 release: [`CHANGELOG.md`](CHANGELOG.md)). Packaging is
-reproducible: sorted entries, normalized mtimes/permissions, no owner data;
-timestamps honor `SOURCE_DATE_EPOCH` (falling back to the last commit time),
-so two builds of the same tree zip byte-identically. `make verify-reproducible`
+reproducible on the `dotnet` backend: sorted entries, normalized
+mtimes/permissions, no owner data; timestamps honor `SOURCE_DATE_EPOCH`
+(falling back to the last commit time), so two builds of the same tree zip
+byte-identically. (The `mcs` fallback backend for SDK-less hosts stamps a
+random MVID and cannot reproduce; it is not used for releases.)
+`make verify-reproducible`
 proves it by rebuilding from scratch at a second path and comparing hashes.
 CI runs `make test` on every PR and on pushes to main.
 

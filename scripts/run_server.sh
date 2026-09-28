@@ -21,7 +21,8 @@ overrides SEVENDTD_DS_DIR, which overrides DS.
 Flags:
   --ds PATH      dedicated install root (overrides SEVENDTD_DS_DIR / DS)
   -h, --help     show this help and exit
-  Anything after --ds is passed to the server binary unchanged.
+                 --ds is recognized only as the FIRST argument; every argument
+                 after it is passed to the server binary unchanged
 
 Environment:
   SEVENDTD_DS_DIR / DS   Dedicated install root (default: ~/.local/share/Steam/

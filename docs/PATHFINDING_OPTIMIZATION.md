@@ -212,7 +212,7 @@ per-tick maintenance.
 
 ## 5. Validation
 
-Load: the canonical heavy standard (`plans/profile.canonical.json`, 64 players +
+Load: the canonical heavy standard (`7dtd-server-apm/plans/profile.canonical.json`, 64 players +
 ~300 zombies) - where `UpdateGraphs` was the top section. Measure with
 `7dtd-server-apm capture --reset-bridge`: `AstarManager.UpdateGraphs` section ms, tick
 p99, gross alloc MB/s + `InitScan` large-alloc frequency; `apm compare` before/

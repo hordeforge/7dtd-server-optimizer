@@ -38,7 +38,8 @@ no locks anywhere. The confinement rules below are the invariant new patches
 must preserve:
 
 - **Main-thread confined:** `GameManager.UpdateTick` postfixes (Governor,
-  TickGuard, TargetFps), the GcGuard transpile callback inside `gmUpdate`,
+  TickGuard, TargetFps) and the `TickClock` prefix on the same method, the
+  GcGuard transpile callback inside `gmUpdate`,
   `World.EntityActivityUpdate`,
   `EntityAlive.updateTasks`, every `EntityAlive.FindPath` caller (all EAI/UAI
   task leaves), `NetEntityDistribution.OnUpdateEntities` (from UpdateTick),
@@ -68,9 +69,11 @@ must preserve:
 - **Rule for new patches:** static mutable fields are only safe if the patched
   method is proven main-thread (trace callers in the game IL first); anything
   reached from A* workers, DynamicMesh threads, LiteNet reader/writer threads,
-  or Unity job workers needs its own synchronization. The two cadence levers
-  (`AstarGraphThrottlePatch`, `EntityDistributionStridePatch`) read slot
-  ownership from the shared `TickClock` counter, which advances once per
+  or Unity job workers needs its own synchronization. The striping gates
+  (`AstarGraphThrottlePatch`, `EntityDistributionStridePatch`,
+  `UpdateTasksLodPatch` mid band, `PathAdmissionPatch` budget window,
+  `CrowdCollisionLodPatch` resolve stagger, `AnimatorLodPatch` far stride) read
+  slot ownership from the shared `TickClock` counter, which advances once per
   GameManager.UpdateTick invocation on the main loop.
 - **The one intentional receive-thread surface:** `ClientListSnapshotPatch`
   transpiles the connection-request duplicate-IP scan, which LiteNetLib dispatches

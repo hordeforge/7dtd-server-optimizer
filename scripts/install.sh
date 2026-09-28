@@ -40,13 +40,15 @@ esac
 # uninstall.sh printed `make install DS="$SRV"` in its restore hint, and
 # --help above documents both, so `DS=/path scripts/install.sh` must resolve to
 # that path. It used to fall through to the stock default and wipe a DIFFERENT
-# install's mod folder than the operator named.
-SRV="${SEVENDTD_DS_DIR:-${DS:-$HOME/.local/share/Steam/steamapps/common/7 Days to Die Dedicated Server}}"
-# Exported-but-empty must fail, not fall through to the stock default in the
-# expression above: the rm -rf below would then wipe a DIFFERENT install's mod
-# folder than the operator named. Both spellings are checked, because either
-# one being empty is what a mistyped `DS=` leaves behind. Same guard in
+# install's mod folder than the operator named. SEVENDTD_DS_DIR wins so an
+# explicit env override beats the Makefile's DS=. Same resolution order in
 # uninstall.sh and run_server.sh.
+SRV="${SEVENDTD_DS_DIR:-${DS:-$HOME/.local/share/Steam/steamapps/common/7 Days to Die Dedicated Server}}"
+# An exported-but-empty value must fail, not fall through to the stock default
+# in the expression above: the rm -rf below would then wipe a DIFFERENT
+# install's mod folder than the operator named. Both spellings are checked,
+# because either one being empty is what a mistyped `DS=` leaves behind. Same
+# guard in uninstall.sh and run_server.sh.
 for _var in SEVENDTD_DS_DIR DS; do
   if [[ -n "${!_var+x}" && -z "${!_var}" ]]; then
     echo "ERROR: $_var is set but empty; pass a real install dir or unset it." >&2

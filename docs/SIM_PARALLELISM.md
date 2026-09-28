@@ -509,7 +509,7 @@ Grounded in [`ARCHITECTURE.md`](ARCHITECTURE.md) lag list and EfficientServer pa
 |---|---|---|---|---|
 | `EntityActivityUpdate` | Bands → scale 1.0 / 0.3 / 0.1 | Tighter bands, lower far scale | No | **Shipping** `AiLodPatch` |
 | `EntityAlive.updateTasks` | Delay then EAI + path follow | Skip far non-alert | No | **Shipping** `UpdateTasksLodPatch` |
-| Path **requests** | Enqueue via `EntityAlive.FindPath` → `PathFinderThread.FindPath` (per-entityId dict coalesce) | Cap / priority / drop far | Protect queue | **Candidate** admission |
+| Path **requests** | Enqueue via `EntityAlive.FindPath` → `PathFinderThread.FindPath` (per-entityId dict coalesce) | Cap / priority / drop far | Protect queue | **Shipping** `PathAdmissionPatch` (both knobs default 0 = vanilla) |
 | Path **compute** | V3.0.1: **ASPPathFinderThread** + **coroutine**; MoveNext drains **≤8** paths then yields; AStar OS thread exists but not installed by Init | Hierarchy / shared goals (Mid/Far); enqueue admission vs fixed drain | Off entity tick | Research / Ops |
 | Path **apply** | Every `updateTasks`: GetPath + nav + move/look even when EAI delayed | Far skip whole updateTasks (stronger); or leave stock | Main | ES far skip |
 | **MoveHelper** | `EntityMoveHelper.UpdateMoveHelper` **1236 IL** every updateTasks | Far skip; measure under BM | Main | Research |
@@ -540,7 +540,8 @@ Highest ROI: **fewer requests + cheaper AI**, not a second path engine.
 | Hot path | Optim | Threads? | EfficientServer |
 |---|---|---|---|
 | `DynamicMeshManager` | Per-frame budgets, player areas | Budget, not new pool | **Shipping** `DynamicMeshBudgetPatch` |
-| Music / splash / env audio / cloth | Skip on dedicated | No | **Shipping** optional `DedicatedSkipPatch` |
+| Music / splash / env audio / ambient spectrum | Skip on dedicated | No | **Shipping** optional `DedicatedSkipPatch` |
+| Cloth / jiggle-bone sim | Level-triggered distance toggle, so it needs `AiLod.Enabled` | No | **Shipping** `AiLodPatch` |
 
 ### 7.5 Blocks, falling, TE
 

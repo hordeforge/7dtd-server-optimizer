@@ -12,8 +12,8 @@ CI will pass: it runs exactly `make test` on every PR and on pushes to main
   automatically; otherwise put `dotnet` on `PATH`
 - `shellcheck`, `ruff`, `mypy`, and Python 3 (`make test`)
 - A dedicated server install ("7 Days to Die Dedicated Server") only for
-  build/install/run/package: the mod compiles against the game's shipped DLLs,
-  which this repo does not redistribute
+  build/install/run/package/verify-reproducible: the mod compiles against the
+  game's shipped DLLs, which this repo does not redistribute
 
 ## First run
 
