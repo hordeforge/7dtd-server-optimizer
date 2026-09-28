@@ -287,12 +287,13 @@ namespace EfficientServer.Tests
         // untested. Self-skipping outside the source tree, like the checks above.
         static void CheckHarnessCoverageMap()
         {
-            var dir = new DirectoryInfo(FindRepoDir("Source", "EfficientServer") ?? "");
-            if (!dir.Exists)
+            string? srcDir = FindRepoDir("Source", "EfficientServer");
+            if (srcDir == null)
             {
                 Console.WriteLine("SKIP: harness coverage map (no source tree above this binary)");
                 return;
             }
+            var dir = new DirectoryInfo(srcDir);
             string[] compiled;
             var csproj = FindRepoFile("Source", "EfficientServer.Tests", "EfficientServer.Tests.csproj");
             if (csproj == null)
