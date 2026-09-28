@@ -20,6 +20,15 @@ namespace EfficientServer.Patches
     [HarmonyPatch(typeof(NetEntityDistribution), "OnUpdateEntities")]
     public static class EntityDistributionStridePatch
     {
+        // Lifetime skip count for `es status`. The stride is silent by design (one
+        // skipped replication pass per stride window, forever, would flood), so
+        // this total is how an operator tells "the lever is engaged" from "the
+        // stride is configured but the tick slot never crossed". A governor-driven
+        // doubling shows up here too, which is what makes the throttle visible
+        // without reading the governor's tier transitions.
+        static long _skippedTotal;
+        public static long SkippedTotal { get { return _skippedTotal; } }
+
         static bool Prefix()
         {
             NetworkConfig cfg = ModApi.Config != null ? ModApi.Config.Network : null;
@@ -33,8 +42,10 @@ namespace EfficientServer.Patches
             if (stride <= 1) return true;
             // OnUpdateEntities runs once per UpdateTick invocation; id 0 keeps
             // the Nth-run crossing, fail open to vanilla before the clock livers.
-            return !TickClock.Alive
-                || TickClock.OwnsSlot(0, TickClock.Ticks, stride);
+            if (!TickClock.Alive || TickClock.OwnsSlot(0, TickClock.Ticks, stride))
+                return true;
+            _skippedTotal++;
+            return false;
         }
     }
 }

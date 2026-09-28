@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Reflection;
 using System.Reflection.Emit;
-using System.Threading;
 using HarmonyLib;
 
 namespace EfficientServer.Patches
@@ -64,8 +63,12 @@ namespace EfficientServer.Patches
 
         static bool Prepare() => TargetMethod() != null;
 
-        // Set by the snapshot's fail-open catch; 0 until that first fallback.
-        static int _snapshotFallbackWarned;
+        // Registry key for the snapshot's fail-open catch; see <see cref="Degrade"/>.
+        // The catch fires on the receive thread for every connection request, so
+        // the log line is one-per-process, while the registry keeps counting every
+        // fallback and `es status` shows the total: a single occurrence and a
+        // persistent copy failure under join churn are the same one log line.
+        internal const string DegradeKey = "clientListSnapshot";
 
         static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
         {
@@ -139,11 +142,13 @@ namespace EfficientServer.Patches
                 // way to learn the guard degraded. One line per process (this
                 // runs on the receive thread for every connection request, so a
                 // per-hit line would flood the log under join churn), naming the
-                // failure so the cause is greppable.
-                if (Interlocked.Exchange(ref _snapshotFallbackWarned, 1) == 0)
-                    EsLog.Emit(LogLevel.Warn, "client-list snapshot failed [" + ex.GetType().Name
+                // failure so the cause is greppable. Degrade.Report both
+                // announces-once and counts every hit, so the rate is readable
+                // from `es status` instead of inferred from one line.
+                if (Degrade.Report(DegradeKey, "client-list snapshot failed [" + ex.GetType().Name
                         + "]: " + ex.Message + " - duplicate-IP check falls open for that "
-                        + "request (this line is printed once per process)");
+                        + "request (announced once; per-hit count in 'es status')"))
+                    EsLog.Emit(LogLevel.Warn, Degrade.FirstReport(DegradeKey));
                 return Generic(Empty());
             }
             // Belt and suspenders across host BCL variations: drop any torn tail slot

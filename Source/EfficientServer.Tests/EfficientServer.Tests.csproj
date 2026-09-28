@@ -35,6 +35,9 @@
          no coverage until it is added here, and nothing fails when it is
          forgotten. Keep it in step with any new game-type-free file. -->
     <Compile Include="../EfficientServer/Config.cs" />
+    <!-- Fail-open degradation registry: announce-once, count-every, and the
+         `es status` summary format the console command renders. -->
+    <Compile Include="../EfficientServer/Degrade.cs" />
     <!-- Game-type-free clock seam: the EMA the governor and tick guard key off,
          driven here with explicit timestamps instead of a live Stopwatch. -->
     <Compile Include="../EfficientServer/Patches/TickIntervalEma.cs" />

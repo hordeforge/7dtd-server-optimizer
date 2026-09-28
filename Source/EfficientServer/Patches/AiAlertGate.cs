@@ -9,12 +9,14 @@ namespace EfficientServer.Patches
     /// alerted, or non-passive-sleeper entities always run at full rate and always
     /// admit their paths. One copy so the two levers cannot drift apart on who
     /// counts as combat-priority. Probe failure is API drift; callers fail OPEN
-    /// (everything counts as alerted -> throttling inactive), warned once because
-    /// this fires per entity per tick.
+    /// (everything counts as alerted -> throttling inactive), announced once
+    /// because this fires per entity per tick, and the degradation stays visible
+    /// in <c>es status</c> as <c>aiAlertProbe</c> until restart.
     /// </summary>
     internal static class AiAlertGate
     {
-        static bool _probeWarned;
+        /// <summary>Registry key for this fail-open; see <see cref="Degrade"/>.</summary>
+        internal const string DegradeKey = "aiAlertProbe";
 
         public static bool IsAlertedOrBusy(EntityAlive entity)
         {
@@ -28,13 +30,10 @@ namespace EfficientServer.Patches
             }
             catch (Exception ex)
             {
-                if (!_probeWarned)
-                {
-                    _probeWarned = true;
-                    EsLog.Emit(LogLevel.Warn, "AI alert check failed [" + ex.GetType().Name + "]: " + ex.Message
+                if (Degrade.Report(DegradeKey, "AI alert check failed [" + ex.GetType().Name + "]: " + ex.Message
                         + " - every entity now counts as alerted; AI LOD striding/skips and"
-                        + " path admission are INACTIVE until restart");
-                }
+                        + " path admission are INACTIVE until restart"))
+                    EsLog.Emit(LogLevel.Warn, Degrade.FirstReport(DegradeKey));
                 return true; // API drift -> fail open rather than break AI
             }
         }

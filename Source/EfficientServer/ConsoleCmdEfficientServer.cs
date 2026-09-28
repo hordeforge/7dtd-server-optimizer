@@ -59,7 +59,8 @@ namespace EfficientServer
                     {
                         Output("reload FAILED [" + ex.GetType().Name + "]: " + ex.Message
                             + " - the new config file is LIVE but some levers did not apply; "
-                            + "see the mod's ERROR line in the server log for the full cause");
+                            + "see the mod's ERROR line in the server log for the full cause",
+                            LogLevel.Error);
                         Status();
                         break;
                     }
@@ -105,9 +106,12 @@ namespace EfficientServer
         /// state-changing commands (animprobe, rigprobe, benchgod) leave an audit
         /// trail in the server log for incident investigation. Read-only bulk
         /// output (status, animstate dumps) stays on SdtdConsole only.
-        /// Pass text WITHOUT the mod prefix; both sinks get exactly one.
+        /// The severity is the caller's, not a fixed Info: a refused arming and
+        /// a failed reload are what an operator greps for at WARNING/ERROR, and
+        /// filing them at Info is what let a failed `es reload` read as a plain
+        /// echo. Pass text WITHOUT the mod prefix; both sinks get exactly one.
         /// </summary>
-        static void Output(string message)
+        static void Output(string message, LogLevel severity = LogLevel.Info)
         {
             try
             {
@@ -119,7 +123,7 @@ namespace EfficientServer
             {
                 EsLog.Emit(LogLevel.Warn, "console output failed [" + ex.GetType().Name + "]: " + ex.Message);
             }
-            EsLog.Emit(LogLevel.Info, message);
+            EsLog.Emit(severity, message);
         }
 
         static void Status()
@@ -183,7 +187,8 @@ namespace EfficientServer
                 else
                     Output(
                         "animprobe: emergency STILL ARMED - no world loaded, so no rig "
-                        + "could be restored; rerun 'es animon' once the world is up");
+                        + "could be restored; rerun 'es animon' once the world is up",
+                        LogLevel.Warn);
             }
         }
 
@@ -201,7 +206,8 @@ namespace EfficientServer
                 sub + " REFUSED (flag stays OFF): this probe degrades combat timing and "
                 + "rig visuals server-wide; arming it requires "
                 + "Diagnostics.AllowFidelityProbes=true in Config/efficientserver.json "
-                + "+ es reload; see docs/CONFIG.md");
+                + "+ es reload; see docs/CONFIG.md",
+                LogLevel.Warn);
             return false;
         }
 
@@ -376,7 +382,8 @@ namespace EfficientServer
                     Output(
                         "benchgod REFUSED (flag stays OFF): arming global player damage immunity "
                         + "requires Diagnostics.AllowBenchGod=true in Config/efficientserver.json "
-                        + "+ es reload; see docs/CONFIG.md");
+                        + "+ es reload; see docs/CONFIG.md",
+                        LogLevel.Warn);
                     return;
                 }
                 Patches.BenchGodPatch.BenchGod = true;
@@ -410,6 +417,7 @@ namespace EfficientServer
                 : "n/a";
             SdtdConsole.Instance.Output(
                 $"{EsLog.LogPrefix}runtime: modActive={modActive} "
+                + $"uptimeS={ModApi.UptimeSeconds.ToString("F0", CultureInfo.InvariantCulture)} "
                 + $"governorTier={Patches.GovernorPatch.Level} tickEmaMs={tickEma} "
                 + $"animatorEmergency={Patches.AnimatorEmergency.Active} | "
                 + $"inForce(replication /{Patches.GovernorPatch.EffectiveEntityStride()}, "
@@ -421,6 +429,24 @@ namespace EfficientServer
                 + " pathDroppedFar=" + Patches.PathAdmissionPatch.DroppedFarTotal
                 + " | tasksSkippedFar=" + Patches.UpdateTasksLodPatch.SkippedFarTotal
                 + " tasksStridedOff=" + Patches.UpdateTasksLodPatch.StridedOffTotal);
+            // Throttle engagement: the cadence levers are silent per skipped call
+            // (that is what makes them cheap), so without these totals a server
+            // that is running every lever and one where a lever never fired look
+            // identical. Each is a lifetime count of work the lever actually took
+            // off the tick, so a zero with a non-zero configured cadence is the
+            // signal that the patch is inert, not merely idle.
+            SdtdConsole.Instance.Output(
+                EsLog.LogPrefix + "runtime: replicationSkipped=" + Patches.EntityDistributionStridePatch.SkippedTotal
+                + " graphUpdatesSkipped=" + Patches.AstarGraphThrottlePatch.SkippedTotal
+                + " collisionOffTicks=" + Patches.CrowdCollisionLodPatch.OffTickTotal);
+            // Degradations: every fail-open path in the mod announces itself once in
+            // the log and then stays silent forever, so this line is the ONLY place
+            // an operator can see that, say, the AI alert probe has been failing
+            // and AI LOD striding is inactive. `none` is the healthy answer;
+            // otherwise key=count pairs in occurrence order, where count is how
+            // many times the path hit its fail-open branch.
+            SdtdConsole.Instance.Output(
+                EsLog.LogPrefix + "runtime: degraded=" + Degrade.Summary());
         }
     }
 }

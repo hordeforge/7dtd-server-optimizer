@@ -504,9 +504,14 @@ their defaults, so a fresh install refuses.
 
 ## Console command (`es`, v1.13.1+)
 
-`es status` prints every active lever value plus a runtime line (governor tier,
-tick EMA, the replication/graph cadences actually in force after the governor
-derives them, lifetime shed/drop counters from the silent hot-path gates);
+`es status` prints every active lever value plus runtime lines: uptime, governor
+tier, tick EMA, the replication/graph cadences actually in force after the
+governor derives them, lifetime shed/drop counters from the silent hot-path
+gates, the lifetime engagement counts of the cadence throttles
+(`replicationSkipped`, `graphUpdatesSkipped`, `collisionOffTicks`), and a
+`degraded=` line listing every fail-open path currently active as `key=count`
+pairs (`none` when healthy). See [`PRODUCTION.md`](PRODUCTION.md) for what each
+degradation key means.
 `es reload`
 re-reads `efficientserver.json` and applies it LIVE (all patches read the config
 object per call - no restart needed). A reload whose apply step fails prints

@@ -35,9 +35,11 @@ namespace EfficientServer.Patches
         public static long StridedOffTotal { get { return _stridedOffTotal; } }
 
         // The CheckDespawn fallback failing is API drift: without it far entities
-        // would never despawn. Fall back to full-rate AI and say so ONCE (this
-        // fires per entity per tick, so per-call logging would flood).
-        static bool _despawnWarned;
+        // would never despawn. Fall back to full-rate AI and announce it once (this
+        // fires per entity per tick, so per-call logging would flood); the
+        // degradation stays listed in `es status` as updateTasksDespawn until
+        // restart.
+        internal const string DegradeKey = "updateTasksDespawn";
 
         static bool Prefix(EntityAlive __instance)
         {
@@ -89,12 +91,9 @@ namespace EfficientServer.Patches
             catch (Exception ex)
             {
                 // API drift -> let stock run rather than leak; say so once.
-                if (!_despawnWarned)
-                {
-                    _despawnWarned = true;
-                    EsLog.Emit(LogLevel.Warn, "AI LOD CheckDespawn failed [" + ex.GetType().Name + "]: " + ex.Message
-                        + " - falling back to full stock updateTasks for all entities until restart");
-                }
+                if (Degrade.Report(DegradeKey, "AI LOD CheckDespawn failed [" + ex.GetType().Name + "]: " + ex.Message
+                        + " - falling back to full stock updateTasks for all entities until restart"))
+                    EsLog.Emit(LogLevel.Warn, Degrade.FirstReport(DegradeKey));
                 return true;
             }
             if (far) _skippedFarTotal++; else _stridedOffTotal++;

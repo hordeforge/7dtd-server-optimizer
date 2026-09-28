@@ -715,6 +715,93 @@ namespace EfficientServer.Tests
                 "the new world escalates on its own over-budget ticks");
         }
 
+        // The degradation registry every fail-open path in the mod reports to.
+        // The contract that matters operationally is two-sided: the log gets
+        // exactly ONE line per degradation no matter how often the fail-open
+        // branch runs (these paths fire per tick or per connection request), and
+        // `es status` keeps showing the key with a count, so a degradation
+        // announced hours ago is still visible without re-grepping the log.
+        static void CheckDegradeRegistry()
+        {
+            EfficientServer.Degrade.Reset();
+            Check(EfficientServer.Degrade.Summary() == "none",
+                "degrade registry: clean process reports degraded=none");
+            Check(EfficientServer.Degrade.Count("neverReported") == 0,
+                "degrade registry: unreported key counts zero");
+
+            Check(EfficientServer.Degrade.Report("aiAlertProbe", "first explanation"),
+                "degrade registry: the first report of a key is the announce");
+            bool anyRepeatReannounced = false;
+            for (int i = 0; i < 999; i++)
+                if (EfficientServer.Degrade.Report("aiAlertProbe", "repeats must not re-announce"))
+                    anyRepeatReannounced = true;
+            Check(!anyRepeatReannounced,
+                "degrade registry: a per-tick fail-open path re-announces never, however often it fires");
+            Check(EfficientServer.Degrade.Count("aiAlertProbe") == 1000,
+                "degrade registry: every repeat is counted, not just the first");
+            Check(EfficientServer.Degrade.FirstReport("aiAlertProbe") == "first explanation",
+                "degrade registry: the announced explanation is the first one, not the latest");
+            Check(EfficientServer.Degrade.Summary() == "aiAlertProbe=1000",
+                "degrade registry: `es status` summary is key=count");
+
+            // Two keys, in occurrence order, space-free: the summary is
+            // machine-scraped console output like the animstate fields.
+            EfficientServer.Degrade.Report("skip:WaterSplashCubes.Update", "type not found");
+            EfficientServer.Degrade.Report("clientListSnapshot", "copy raced");
+            Check(EfficientServer.Degrade.Summary()
+                    == "aiAlertProbe=1000|skip:WaterSplashCubes.Update=1|clientListSnapshot=1",
+                "degrade registry: summary lists every key in occurrence order, pipe-separated");
+            Check(EfficientServer.Degrade.Summary().IndexOf(' ') < 0,
+                "degrade registry: summary carries no spaces (machine-scraped console field)");
+
+            // A null/empty key must not become an entry: the callers all pass
+            // constants, and a nameless row in the status line would be
+            // unattributable to any subsystem.
+            EfficientServer.Degrade.Report(null!, "nameless");
+            EfficientServer.Degrade.Report("", "nameless");
+            Check(!EfficientServer.Degrade.Report("", "nameless"),
+                "degrade registry: an empty key never announces");
+            Check(EfficientServer.Degrade.Summary().IndexOf("nameless") < 0
+                && EfficientServer.Degrade.Count("") == 0,
+                "degrade registry: an empty key is not recorded");
+
+            // Cross-thread use is the production shape: the client-list snapshot
+            // reports from the LiteNetLib receive thread while the console drains
+            // on the main thread. Hammer both and assert no count is lost and the
+            // summary stays consistent, which is what a data race here would
+            // break (dropped increments, torn list, an entry per report).
+            EfficientServer.Degrade.Reset();
+            const int perThread = 5000;
+            Exception? raceError = null;
+            var racers = new Thread[4];
+            for (int t = 0; t < racers.Length; t++)
+            {
+                int id = t;
+                racers[t] = new Thread(() =>
+                {
+                    try
+                    {
+                        for (int i = 0; i < perThread; i++)
+                            EfficientServer.Degrade.Report("sharedKey", "worker " + id);
+                    }
+                    catch (Exception ex) { raceError = ex; }
+                });
+                racers[t].Start();
+            }
+            for (int t = 0; t < racers.Length; t++) racers[t].Join();
+            Check(raceError == null, "degrade registry: concurrent reporters do not throw ("
+                + (raceError?.GetType().Name ?? "none") + ")");
+            Check(EfficientServer.Degrade.Count("sharedKey") == perThread * racers.Length,
+                "degrade registry: concurrent reporters lose no counts (got "
+                + EfficientServer.Degrade.Count("sharedKey") + ")");
+            Check(EfficientServer.Degrade.Summary() == "sharedKey=" + (perThread * racers.Length),
+                "degrade registry: summary is consistent after concurrent reporting");
+
+            EfficientServer.Degrade.Reset();
+            Check(EfficientServer.Degrade.Summary() == "none",
+                "degrade registry: reset returns the process view to clean");
+        }
+
         static int RunChecks()
         {
             // Defaults.
@@ -1395,6 +1482,7 @@ namespace EfficientServer.Tests
             CheckDefaultPathDiscovery();
             CheckUnreadableFileFailSoft();
             CheckCrossThreadConfigPublication();
+            CheckDegradeRegistry();
 
             // Fuzz: the config file is the mod's untrusted-input surface, so a
             // deterministic target hammers Load. Structure-aware mutations of the

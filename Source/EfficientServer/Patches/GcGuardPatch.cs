@@ -27,8 +27,10 @@ namespace EfficientServer.Patches
         // calls MaybeCollect about once per ~120 s, so both the counter and the
         // per-fire log are bounded and cheap.
         static int _safetyCollects;
-        static bool _ceilingWarned;
         public static int SafetyCollects { get { return _safetyCollects; } }
+
+        // Registry key for an unresolvable heap ceiling; see <see cref="Degrade"/>.
+        internal const string CeilingDegradeKey = "gcGuardCeiling";
 
         static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
         {
@@ -77,14 +79,14 @@ namespace EfficientServer.Patches
                 // net with no floor: the forced collect is suppressed AND nothing
                 // replaces it, so a long-lived server can grow unbounded with no log
                 // to say so. Say it once - the caller cadence is the ~120 s vanilla
-                // timer, but a repeated identical line adds nothing.
-                if (!_ceilingWarned)
-                {
-                    _ceilingWarned = true;
-                    EsLog.Emit(LogLevel.Warn, "gc guard ceiling unresolved (host RAM unknown) - forced "
+                // timer, but a repeated identical line adds nothing. The registry
+                // keeps it listed in `es status`, because the operator who has to
+                // notice this is usually reading status during an incident, not
+                // grepping the boot log afterwards.
+                if (Degrade.Report(CeilingDegradeKey, "gc guard ceiling unresolved (host RAM unknown) - forced "
                         + "GC.Collect() suppressed with NO heap ceiling; set Gc.SafetyCollectAboveMB "
-                        + "to restore the safety net");
-                }
+                        + "to restore the safety net"))
+                    EsLog.Emit(LogLevel.Warn, Degrade.FirstReport(CeilingDegradeKey));
                 return;
             }
             long heapBytes = GC.GetTotalMemory(false);

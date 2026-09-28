@@ -31,6 +31,14 @@ namespace EfficientServer.Patches
     [HarmonyPatch(typeof(AstarManager), "UpdateGraphs", new[] { typeof(float) })]
     public static class AstarGraphThrottlePatch
     {
+        // Lifetime skip count for `es status`: this is the top managed section
+        // under load, so "is the cadence actually costing us the graphs' refresh"
+        // is the first question when a server feels stale, and the throttle is
+        // silent per skipped call by design. A governor-driven doubling of the
+        // cadence lands here too.
+        static long _skippedTotal;
+        public static long SkippedTotal { get { return _skippedTotal; } }
+
         // Return false to skip the original UpdateGraphs on non-Nth ticks.
         static bool Prefix()
         {
@@ -44,8 +52,10 @@ namespace EfficientServer.Patches
             // UpdateGraphs runs once per UpdateTick invocation, so the shared
             // TickClock index is a valid cadence cursor; id 0 holds the Nth
             // run crossing. Fail open to vanilla until the clock driver fires.
-            return !TickClock.Alive
-                || TickClock.OwnsSlot(0, TickClock.Ticks, every);
+            if (!TickClock.Alive || TickClock.OwnsSlot(0, TickClock.Ticks, every))
+                return true;
+            _skippedTotal++;
+            return false;
         }
     }
 }

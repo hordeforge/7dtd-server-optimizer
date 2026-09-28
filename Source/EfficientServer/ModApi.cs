@@ -35,6 +35,17 @@ namespace EfficientServer
         public static bool Active { get { return _active; } }
         static Harmony _harmony;
 
+        // Process uptime, the correlation key between a log line and a later
+        // `es status` capture. The server log has wall-clock timestamps but the
+        // mod has no marker for "this world started here", so an operator reading
+        // a governor or gc line has no way to say how long ago it fired relative
+        // to now. Every runtime line the mod emits carries the same clock.
+        static readonly System.Diagnostics.Stopwatch UptimeClock =
+            System.Diagnostics.Stopwatch.StartNew();
+
+        /// <summary>Seconds since the mod loaded; the shared age stamp.</summary>
+        public static double UptimeSeconds { get { return UptimeClock.Elapsed.TotalSeconds; } }
+
         public void InitMod(Mod _modInstance)
         {
             try

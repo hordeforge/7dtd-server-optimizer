@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 
 namespace EfficientServer.Patches
 {
@@ -15,6 +16,17 @@ namespace EfficientServer.Patches
         {
             try
             {
+                // World-load anchor. Without it the log has no marker saying a
+                // world finished loading, so every later line (governor
+                // re-basing, mesh budgets, skips) floats in a stream that an
+                // operator cannot anchor to a session: after a 6-day uptime with
+                // three world loads there is nothing to tell which world a given
+                // tick-EMA line belongs to. One line per world load, carrying the
+                // uptime the runtime status uses, so a log line and a later
+                // `es status` share a clock.
+                EsLog.Emit(LogLevel.Info, "world loaded at uptime "
+                    + ModApi.UptimeSeconds.ToString("F0", CultureInfo.InvariantCulture)
+                    + "s; start-time knobs applying (fps, job workers, mesh budgets, dedicated skips, GC)");
                 // First: a world just loaded, so nothing the governor derived from
                 // the previous world's ticks (its tier, and a standing tier-2
                 // animator emergency over rigs that no longer exist) may carry
@@ -88,9 +100,10 @@ namespace EfficientServer.Patches
         // Same shape as ApplyJobWorkers' guard: an engine setter failing must not
         // escape. This apply is ALSO re-run every ~200 frames by TargetFpsPatch
         // inside the game's UpdateTick postfix, where an unhandled exception would
-        // propagate into the tick loop - hence warn ONCE (per-tick rate forbids
-        // per-call logs), matching the AiLodPatch hot-path convention.
-        static bool _fpsWarned;
+        // propagate into the tick loop - hence announce ONCE (per-tick rate
+        // forbids per-call logs), matching the AiLodPatch hot-path convention. The
+        // registry keeps the degradation listed in `es status` as targetFps.
+        internal const string FpsDegradeKey = "targetFps";
 
         // Persistent form of `settargetfps` (which does not survive restarts).
         // Frame rate is NOT the tick rate - the full entity tick stays ~20 Hz at
@@ -112,12 +125,9 @@ namespace EfficientServer.Patches
             }
             catch (Exception ex)
             {
-                if (!_fpsWarned)
-                {
-                    _fpsWarned = true;
-                    EsLog.Emit(LogLevel.Warn, "target fps apply failed [" + ex.GetType().Name + "]: " + ex.Message
-                        + " - vanilla frame rate kept");
-                }
+                if (Degrade.Report(FpsDegradeKey, "target fps apply failed [" + ex.GetType().Name + "]: " + ex.Message
+                        + " - vanilla frame rate kept"))
+                    EsLog.Emit(LogLevel.Warn, Degrade.FirstReport(FpsDegradeKey));
             }
         }
 

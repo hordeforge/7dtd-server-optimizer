@@ -45,6 +45,13 @@ namespace EfficientServer.Patches
         // provably disjoint.
         const int NoStrip = int.MinValue;
 
+        // Lifetime off-tick count for `es status`: the lever is silent per entity
+        // per tick (that is the whole point of the stripe), so this is how an
+        // operator confirms neighbors really are being stripped on off-ticks
+        // rather than the patch being matched-but-inert.
+        static long _offTickTotal;
+        public static long OffTickTotal { get { return _offTickTotal; } }
+
         static void Prefix(Entity __instance, out int __state)
         {
             __state = NoStrip;
@@ -79,6 +86,7 @@ namespace EfficientServer.Patches
             // the saved mask must already be in place when the mutation happens.
             __state = mask;
             motor.CollidableLayers = mask & ~AliveEntityLayerBit;
+            _offTickTotal++;
         }
 
         static void Finalizer(Entity __instance, int __state)

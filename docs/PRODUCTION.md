@@ -58,8 +58,24 @@ Apply config edits live: `es reload` (telnet/console). `es status` shows active 
     zombie animators culled (`CullCompletely`) during extreme overload (~40% frame
     recovery; combat timing degrades, nothing despawns).
   - `TickGuard: ... shed N farthest enemies` = past throttling; expect thinner hordes.
+  - `world loaded at uptime Ns` = the world-load anchor; one per world load. It
+    carries the same clock as the `uptimeS=` field on `es status`, so a log line
+    and a later status capture are correlatable.
   - `SPIKE gmUpdateDuration=...` = frame spikes, logged by the APM bridge
     (rate-limited to 1/5 s).
+- **Degradations (`es status`, `degraded=` line)**: every fail-open path in the mod
+  (AI alert probe, CheckDespawn fallback, LOD cloth toggle, client-list snapshot,
+  GC ceiling, target-fps apply, an absent dedicated-skip target) announces itself
+  ONCE in the log and then stays silent, because those paths fire per tick or per
+  connection request. The `degraded=` line is the standing record: `none` is
+  healthy, otherwise `key=count` pairs in occurrence order, where `count` is how
+  many times that path hit its fail-open branch. Entries persist until restart
+  (they are game-API drift, not config; `es reload` cannot repair them). A
+  non-`none` value means some lever is running degraded right now.
+- **Throttle engagement (`es status`, runtime line)**: `replicationSkipped`,
+  `graphUpdatesSkipped` and `collisionOffTicks` are lifetime counts of work the
+  silent cadence levers actually took off the tick. A configured cadence with a
+  zero count means the patch is inert, not merely idle.
 - **Telemetry** (no capture needed, 24/7-safe):
   `Mods/7dtd-server-apm-bridge/telemetry/apm_app_latest.json`, refreshed every 30 s -
   `world.unityDeltaMs` (frame period; idle = frame target), `update.lateTicks`,
@@ -105,7 +121,15 @@ scrubbed (cmdline/exe redacted, home path replaced).
   below `TickGuard.MinEnemiesKept`). Raise the knob the line names.
 - Memory growing with no collect in sight: grep WARNING for "gc guard ceiling
   unresolved" - the forced collect is suppressed and host RAM was unreadable, so
-  no ceiling replaced it. Set `Gc.SafetyCollectAboveMB` explicitly.
+  no ceiling replaced it. Set `Gc.SafetyCollectAboveMB` explicitly. It also shows
+  as `gcGuardCeiling` on the `es status` `degraded=` line, so a boot-time warning
+  is still visible hours later.
+- A lever configured but doing nothing: check the `es status` runtime counters for
+  that lever (`pathDropped*` for path admission, `tasksSkippedFar` /
+  `tasksStridedOff` for AI LOD, `replicationSkipped`, `graphUpdatesSkipped`,
+  `collisionOffTicks`). All zero with a non-zero configured value means the patch
+  is matched but inert. If a `degraded=` key explains it, that is the cause;
+  otherwise re-check for a MISSING TARGET at boot.
 - Mystery ~120 s hitches: grep WARNING for "gc guard safety collect fired" - the
   heap ceiling is below the working set and the safety net is collecting; raise
   `Gc.SafetyCollectAboveMB`.

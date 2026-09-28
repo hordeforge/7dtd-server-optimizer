@@ -16,8 +16,10 @@ namespace EfficientServer.Patches
     {
         // Cloth suppression failure is model API variance; the LOD scale itself is
         // unaffected. Cosmetic-only, but a permanently silent catch here would hide
-        // the drift, so warn once (per-entity-per-tick rate forbids per-call logs).
-        static bool _clothWarned;
+        // the drift, so announce once (per-entity-per-tick rate forbids per-call
+        // logs) and keep the degradation listed in `es status` as aiLodCloth.
+        internal const string DegradeKey = "aiLodCloth";
+
         static void Postfix(World __instance)
         {
             if (!ModApi.ShouldRun()) return;
@@ -63,12 +65,9 @@ namespace EfficientServer.Patches
                     {
                         // model API variance across versions: keep the LOD scale,
                         // drop only the cloth toggle, and name the failure once.
-                        if (!_clothWarned)
-                        {
-                            _clothWarned = true;
-                            EsLog.Emit(LogLevel.Warn, "AI LOD cloth toggle failed [" + ex.GetType().Name + "]: " + ex.Message
-                                + " - cloth suppression skipped (LOD scale unaffected)");
-                        }
+                        if (Degrade.Report(DegradeKey, "AI LOD cloth toggle failed [" + ex.GetType().Name + "]: " + ex.Message
+                                + " - cloth suppression skipped (LOD scale unaffected)"))
+                            EsLog.Emit(LogLevel.Warn, Degrade.FirstReport(DegradeKey));
                     }
                 }
             }
