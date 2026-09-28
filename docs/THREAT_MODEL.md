@@ -4,42 +4,49 @@ Systemic view of what this repository exposes to attack: entry points, trust
 boundaries, assets, threats, and the controls that exist versus the ones that are
 missing. Individual vulnerability findings belong to sec-review; they land here
 as threats with locations. Re-verify every file reference after each game update
-(Harmony targets break silently, see AGENTS.md critical rule 3).
+(Harmony targets break silently, see AGENTS.md critical rule 3) and after each
+change to the scripts named under E5, E9, and E10.
 
-Last reviewed: 2026-09-28, against git 5913318.
+Last reviewed: 2026-09-28, against git d72362a.
 Owner: repository maintainers. Review trigger: every game update, every new
 patch group, every change to `scripts/install.sh` / `uninstall.sh` /
-`run_server.sh`, and every change to the console arm gates named under B2.
+`run_server.sh` / `backup_config.py` / `es_cfg_guard.py`, every added GitHub
+workflow, and every change to the console arm gates named under B2.
 
 ## Risk-ranked summary
 
 | # | Risk | Boundary | Why |
 |---|---|---|---|
 | R1 | Full-host-authority code runs inside the game server process | Mod to host | By design: a Harmony mod is arbitrary code with the server's privileges. No isolation exists or is possible while it stays a C# mod. Every bug is a server crash or worse, not a sandbox escape |
-| R2 | Unverified build artifact installed over the game tree | Build to runtime | `install.sh` does `rm -rf` of the destination and copies `dist/EfficientServer/` into `Mods/` with no hash or signature check (`scripts/install.sh:94,96`). Nothing on the install path compares the artifact to a trusted build. Whoever controls `dist/` or the Mods directory controls the server process |
-| R3 | Config-file write access silently pre-authorizes every lever, including the diagnostic arms | Filesystem to mod | `Config/efficientserver.json` is read with no signature and no watcher. Anyone who can write that file controls policy: `es reload` re-reads it (`Source/EfficientServer/ModApi.cs:118`). The gates that guard `es benchgod on` and `es animoff`/`es rigoff` are themselves config flags (`Diagnostics.AllowBenchGod`, `Diagnostics.AllowFidelityProbes`, `Source/EfficientServer/Config.cs:663,672`), so a config write both sets the limits and lifts the guard. `es` is a consequence, not a prerequisite |
-| R4 | Console actor can degrade or disable live gameplay with one command | Console to mod | The bench-god and fidelity-probe arms are refused unless the operator opted in (B2, `ConsoleCmdEfficientServer.cs:336,184`). Where the opt-in is on, any console-level actor gets global damage immunity for every player (`Patches/BenchGodPatch.cs:23`) or enemy animation and rig disable, unconfirmed, unscoped, and unpersisted across restart. Disarming is never gated, so a refusal is always reversible |
-| R5 | Config-file self-denial-of-service paths | Filesystem to mod | Clamped maxima are still potent: `TickGuard` despawns enemies past a tick EMA (`Patches/TickGuardPatch.cs:97`) and `Governor.AnimatorEmergency` engages itself past `EmergencyOverMs` (`Patches/GovernorPatch.cs:129,132`); both default off, both config-enableable. The heap-growing GC megapause probe that used to sit here was removed after tag `v1.19.0` and is unreleased (`CHANGELOG.md:29`) |
-| R6 | Inherited telnet exposure | Network to console | Both shipped serverconfig copies enable telnet on port 8082 with an empty password (`serverconfig.optimized.xml:33-35`); safety depends entirely on the game's loopback fallback and failed-login limit, not on this repo |
+| R2 | Unverified build artifact installed over the game tree | B4 build to runtime | `install.sh` does `rm -rf` of the destination and copies `dist/EfficientServer/` into `Mods/` with no hash or signature check (`scripts/install.sh:107,109`). Nothing on the install path compares the artifact to a trusted build. Whoever controls `dist/` or the Mods directory controls the server process |
+| R3 | Config-file write access silently pre-authorizes every lever, including the diagnostic arms | B1 filesystem to mod | `Config/efficientserver.json` is read with no signature and no watcher. Anyone who can write that file controls policy: `es reload` re-reads it (`Source/EfficientServer/ModApi.cs:131`). The gates that guard `es benchgod on` and `es animoff`/`es rigoff` are themselves config flags (`Diagnostics.AllowBenchGod`, `Diagnostics.AllowFidelityProbes`, `Source/EfficientServer/Config.cs:695,704`), so a config write both sets the limits and lifts the guard. `es` is a consequence, not a prerequisite. Two writer tools in this repo hold that same position (E9, E10) |
+| R4 | Console actor can degrade or disable live gameplay with one command | B2 console to mod | The bench-god and fidelity-probe arms are refused unless the operator opted in (`ConsoleCmdEfficientServer.cs:374,199`). Where the opt-in is on, any console-level actor gets global damage immunity for every player (`Patches/BenchGodPatch.cs:32`) or enemy animation and rig disable, unconfirmed and unscoped. Partly mitigated since the last review: revoking the opt-in in the config now stops the damage immunity on the next reload and per-damage-frame re-read (`Patches/BenchGodPatch.cs:32-33`), and a reload without the probe opt-in releases armed animator/rig probes (`ModApi.cs:151-157`). The arm itself is still one console command away, and neither is persisted across restart, so a restart re-applies nothing while a kill mid-bench leaves the arm hot until a reload |
+| R5 | Config-file self-denial-of-service paths | B1 filesystem to mod | Clamped maxima are still potent: `TickGuard` despawns enemies past a tick EMA (`Patches/TickGuardPatch.cs:104`) and `Governor.AnimatorEmergency` engages itself past `EmergencyOverMs` (`Patches/GovernorPatch.cs:132`); both default off, both config-enableable. The heap-growing GC megapause probe that used to sit here was removed after tag `v1.19.0` and is unreleased (`CHANGELOG.md:32`) |
+| R6 | Inherited telnet exposure | B7 network to console | The shipped serverconfig template enables telnet on port 8082 with an empty password (`serverconfig.optimized.xml:33-35`); safety depends entirely on the game's loopback fallback and failed-login limit, not on this repo |
+| R7 | One fetched build dependency is version-pinned but not hash-pinned | B4 build to runtime | The mod project pins `Microsoft.NETFramework.ReferenceAssemblies.net48` to an exact range (`Source/EfficientServer/EfficientServer.csproj:35`) but ships no `packages.lock.json`, and `make build` (`scripts/build.sh`, reached from `Makefile:121`) restores without `--locked-mode`. Only the test project's graph is hash-pinned and locked-mode restored (`Makefile:196`). The package supplies reference assemblies only, so it cannot change the emitted IL, but a substituted package is not detected the way the test graph's would be. `NuGet.config` states the mod project's graph is recorded in a lock file; that file is not in the tree. Corrected in `SECURITY.md` on this pass |
+| R8 | Repo tooling writes the live config and moves it off-host | B1 tooling to install | `scripts/es_cfg_guard.py` rewrites managed keys of the installed config in place and unlinks stranded temp files beside it; `scripts/backup_config.py` copies the live config to an operator-named destination outside the install tree and can restore over the live file. Both are the R3 write position held by a script, so both are in the blast radius of anything that can run them |
 
 Not risks here: the mod opens no sockets, spawns no processes, stores no
 credentials, handles no player data beyond what the game already holds, and
 never writes outside its mod folder and the log (verified: no socket/process/
-write APIs under `Source/EfficientServer/`; the only file reads are
-`Source/EfficientServer/Config.cs:379`).
+write APIs under `Source/EfficientServer/`; the only file read is
+`Source/EfficientServer/Config.cs:393`).
 
 ## Entry points
 
 | ID | Entry point | Location | Notes |
 |---|---|---|---|
-| E1 | Mod load into game process (`InitMod`) | `Source/EfficientServer/ModApi.cs:38` | Game loads the DLL at startup and calls `InitMod`; Harmony patches install here per group. Post-start setup registers on the sanctioned `GameStartDone` hook, not a patched game method (`ModApi.cs:103`) |
-| E2 | Config JSON file read | `Source/EfficientServer/Config.cs:370` (`Load`), path resolution `Config.cs:632` | Read once at init and again on every `es reload` (`ModApi.ReloadConfig`, `ModApi.cs:118`). Parsed with Newtonsoft.Json (game-bundled); read pinned to UTF-8 (`Config.cs:379`). No file watcher, no signature, no ownership check; disk changes apply only via E3 |
-| E3 | Operator console command `es` / `efficientserver` | `Source/EfficientServer/ConsoleCmdEfficientServer.cs:26` (`Execute`) | Subcommands: `reload`, `status`, `animoff`/`animon`, `animstate`, `rigoff`/`rigon`, `benchgod on\|off` (`ConsoleCmdEfficientServer.cs:32-73`). Reachable from the server terminal, the telnet remote console, and in-game clients the game's permission system admits to console commands |
-| E4 | P/Invoke into bundled Boehm GC library | `Source/EfficientServer/BoehmNative.cs` (declarations), `Source/EfficientServer/GcIncremental.cs:30` (call site) | `monobdwgc-2.0`; flips collector mode and sets the pause limit. The megapause probe P/Invokes were removed after `v1.19.0` (`CHANGELOG.md:29`); what remains is the mode flip and the optional pause target |
-| E5 | Install/run/uninstall scripts | `scripts/install.sh`, `scripts/uninstall.sh`, `scripts/run_server.sh`, `Makefile:195,200,202` | Build, back up user config, wipe and copy artifacts into `<DS>/Mods/EfficientServer/`, export GC/JIT env vars, exec the server binary. All three reject an exported-but-empty `SEVENDTD_DS_DIR` rather than defaulting (`install.sh:44`, and the same guard in `uninstall.sh` and `run_server.sh`) so the `rm -rf` cannot land on a different install. `uninstall.sh` copies `Config/` out to a timestamped backup before the wipe (`uninstall.sh:108,120`), and `run_server.sh` keeps the `<DS>/serverconfig*.xml` it replaces |
-| E6 | CI workflow | `.github/workflows/ci.yml:5` | Runs `make test` on pushes to main and on PRs |
-| E7 | Repo Python tooling | `scripts/check_config_doc.py`, `scripts/check_version.py`, `scripts/es_cfg_guard.py`, `scripts/coverage_badge.py`, `scripts/repo_root.py` | Stdlib-only, run by `make test` and CI over repo content and `config/efficientserver.json`. They read the working tree and exit nonzero; none writes outside the repo. every one ships a `--selftest` that drives its own logic, and the guard's also fuzzes its restore protocol over hostile config bytes |
-| E8 | Offline measurement and validation scripts (not in `make test`) | `scripts/validate_anim_path_admission.py`, `scripts/validate_bloodmoon_path.py`, `scripts/measure_es_onoff.py` | Need a live dedicated server; syntax-gated by `compileall` only (`Makefile:114`). They connect to a server the operator names, so the target host is operator-supplied input, not a network listener this repo opens |
+| E1 | Mod load into game process (`InitMod`) | `Source/EfficientServer/ModApi.cs:38` | Game loads the DLL at startup and calls `InitMod`; Harmony patches install here per group. Post-start setup registers on the sanctioned `GameStartDone` hook, not a patched game method (`ModApi.cs:111`) |
+| E2 | Config JSON file read | `Source/EfficientServer/Config.cs:384` (`Load`), path resolution `Config.cs:664` | Read once at init (`ModApi.cs:59`) and again on every `es reload` (`ModApi.ReloadConfig`, `ModApi.cs:129-131`). Parsed with Newtonsoft.Json (game-bundled); read pinned to UTF-8 with BOM tolerated (`Config.cs:393`). No file watcher, no signature, no ownership check; disk changes apply only via E3 |
+| E3 | Operator console command `es` / `efficientserver` | `Source/EfficientServer/ConsoleCmdEfficientServer.cs:26` (`Execute`) | Subcommands: `reload`, `status`, `animoff`/`animon`, `animstate`, `rigoff`/`rigon`, `benchgod on\|off` (`ConsoleCmdEfficientServer.cs:32-89`). Reachable from the server terminal, the telnet remote console, and in-game clients the game's permission system admits to console commands |
+| E4 | P/Invoke into bundled Boehm GC library | `Source/EfficientServer/BoehmNative.cs` (declarations), `Source/EfficientServer/GcIncremental.cs:21` (call site) | `monobdwgc-2.0`; flips collector mode and sets the pause limit. The megapause probe P/Invokes were removed after `v1.19.0` (`CHANGELOG.md:32`); what remains is the mode flip and the optional pause target |
+| E5 | Install/run/uninstall scripts | `scripts/install.sh`, `scripts/uninstall.sh`, `scripts/run_server.sh`, `Makefile:242,247,260` | Build, back up user config, wipe and copy artifacts into `<DS>/Mods/EfficientServer/`, export GC/JIT env vars, exec the server binary. All three reject an exported-but-empty `SEVENDTD_DS_DIR` or `DS` rather than defaulting (`install.sh:46,52-57`, and the same guard in `uninstall.sh` and `run_server.sh`) so the `rm -rf` cannot land on a different install. `uninstall.sh` copies `Config/` out to a timestamped backup before the wipe (`uninstall.sh:119-121`) and warns when that backup sits inside the install tree (`uninstall.sh:111-115`); `run_server.sh` keeps the `<DS>/serverconfig*.xml` it replaces |
+| E6 | CI and release workflows | `.github/workflows/ci.yml`, `.github/workflows/release.yml` | `ci.yml` runs `make test` on pushes to main and on PRs. `release.yml` runs on a `v*` tag, is `permissions: contents: read`, and only compares the tag to `Source/EfficientServer/ModInfo.xml` and runs `scripts/check_version.py`; it deliberately does not build the archive |
+| E7 | Repo Python tooling | `scripts/check_config_doc.py`, `scripts/check_version.py`, `scripts/coverage_badge.py`, `scripts/repo_root.py`, `scripts/cli_common.py`, `scripts/selftest_support.py` | Stdlib-only, run by `make test` and CI over repo content and `config/efficientserver.json` (`Makefile:212-218`). They read the working tree and exit nonzero; none writes outside the repo. Every one ships a `--selftest` that drives its own logic |
+| E8 | Offline measurement and validation scripts (not in `make test`) | `scripts/validate_anim_path_admission.py`, `scripts/validate_bloodmoon_path.py`, `scripts/measure_es_onoff.py` | Need a live dedicated server; syntax-gated by `compileall` only (`Makefile:211`). They connect to a server the operator names, so the target host is operator-supplied input, not a network listener this repo opens. Two of them import E10 to swap config keys for the duration of a run |
+| E9 | Off-host config backup, verify, restore | `scripts/backup_config.py` (`snapshot:154`, `verify:254`, `restore:288`), `Makefile:254` (`make backup-config`) | Reads the live installed config and writes timestamped snapshots plus a sha256 manifest to a destination the operator names. Refuses a destination inside the server install tree (`_resolve_outside_install`, `backup_config.py:135`); prunes to `DEFAULT_KEEP` snapshots; `verify` re-reads every snapshot the way a restore would and exits nonzero on the first that would not load. `restore` copies a verified snapshot to `--to` and refuses to clobber an existing file without `--force` (`backup_config.py:304`). Self-test is wired into `make test` (`Makefile:219`) |
+| E10 | Live-config backup/restore guard (library + CLI) | `scripts/es_cfg_guard.py` (`ConfigSwap:139`, `_sweep_abandoned_temps:191`, `write_atomic:126`) | Rewrites managed keys of `Mods/EfficientServer/Config/efficientserver.json` in place, keeps a `.swap-bak` snapshot and a `.stale` quarantine, decodes as `utf-8-sig` (`CFG_ENCODING`, `es_cfg_guard.py:53`), and writes through temp-file + rename. Recovers an interrupted swap only when the live file diverges solely in the managed keys, so a restore cannot revert unrelated operator edits. Imported by the E8 harnesses. Self-test, including a fuzz of the restore protocol over hostile config bytes, is wired into `make test` (`Makefile:217`) |
+| E11 | Scratch staging-directory lifecycle | `scripts/stage_tmp.sh` (`stage_sweep:29`, `stage_new:40`), sourced by `scripts/package.sh:60` and `scripts/verify_reproducible.sh:59` | `mktemp -d` under `$TMPDIR` with the creating pid in the name; the sweep `rm -rf`s only same-prefix directories under `$TMPDIR` whose owning pid is not running. A recycled pid makes a dead stage survive a sweep. Not executed, only sourced |
 
 ## Trust boundaries
 
@@ -48,20 +55,23 @@ write APIs under `Source/EfficientServer/`; the only file reads are
 | B1 | Host filesystem to mod process (E2) | `Config/efficientserver.json` next to the assembly. Written by the operator; writable by anything that can write that directory. Trusted more than a network input would be, less than compiled-in constants. It is also the carrier for the B2 arm opt-ins, so it is not merely a tuning file (R3) |
 | B2 | Console-equivalent actor to mod commands (E3) | Whoever passes the game's telnet password (or connects from loopback with no password set) or holds console permission in game. This mod adds no second gate beyond the two arm opt-ins below; everything else is console-access only |
 | B3 | Mod to game host process (E1, E3, E4) | No boundary in a memory-safety sense: the mod shares the process, and patches rewrite game method behavior (prefix/transpiler/finalizer) |
-| B4 | Build and publish to installed server (E5) | `dist/EfficientServer/` copied verbatim into the game's `Mods/` tree; zips additionally published via `dist/*.zip` |
-| B5 | Host environment to server process (E5) | Env vars consumed at process init: `MALLOC_ARENA_MAX`, `GC_FREE_SPACE_DIVISOR`, `GC_NPROCS`, `MONO_ENV_OPTIONS`, optional heap/affinity vars (`scripts/run_server.sh:88-105`); plus `LD_LIBRARY_PATH` prepended with the server dir (`run_server.sh:86`) and the GC-incremental pair gated on `SEVENDTD_GC_INCREMENTAL` (`run_server.sh:109-110`) |
-| B6 | CI runner to repository (E6) | GitHub Actions with `permissions: contents: read` (`.github/workflows/ci.yml:10`), token not persisted into the runner workspace (`ci.yml:29`) |
+| B4 | Build and publish to installed server (E5) | `dist/EfficientServer/` copied verbatim into the game's `Mods/` tree; zips additionally published via `dist/*.zip`; the fetched build dependency graph enters here (R7) |
+| B5 | Host environment to server process (E5) | Env vars consumed at process init: `MALLOC_ARENA_MAX` (`run_server.sh:123`), `GC_FREE_SPACE_DIVISOR`, `GC_NPROCS`, `MONO_ENV_OPTIONS` (`run_server.sh:138`), optional heap/affinity vars; plus `LD_LIBRARY_PATH` prepended with the server dir (`run_server.sh:121`) and the GC-incremental pair gated on `SEVENDTD_GC_INCREMENTAL` (`run_server.sh:143`) |
+| B6 | CI runner to repository (E6) | GitHub Actions with `permissions: contents: read` in both workflows, token not persisted into the runner workspace (`ci.yml:32`, `release.yml`) |
+| B7 | Network to game console | Telnet (port 8082 in the shipped template), the game UDP port, and the web dashboard: all game-owned, configured through `serverconfig*.xml`. This repo ships one template and inherits every exposure it sets |
+| B8 | Operator tooling to the live config and to the off-host destination (E9, E10, E11) | Scripts that write `Mods/EfficientServer/Config/efficientserver.json` in place, and that copy it to a destination outside the install tree, and that `rm -rf` scratch trees under `$TMPDIR` |
 
 ## Assets
 
 | ID | Asset | Concrete blast radius |
 |---|---|---|
 | A1 | Server availability and tick latency | The mod's own levers (GC mode, entity shedding, animator culling) can freeze or degrade the tick; a bad patch crashes the process for all players |
-| A2 | Game world and save integrity | `TickGuardPatch` despawns enemies (`Patches/TickGuardPatch.cs:97`); `AnimatorEmergency` degrades combat timing (`Patches/GovernorPatch.cs:132`); both alter live world state |
-| A3 | Fair-play integrity | Server runs EAC-off by necessity of loading a C# mod (`Source/EfficientServer/ModInfo.xml:9`); `benchgod` is aimbot-grade damage immunity for every player while active (`Patches/BenchGodPatch.cs:23`) |
-| A4 | Host RAM and CPU | GC env vars trade RAM for pause length. The heap-growing megapause diagnostic that could pin memory is gone (`CHANGELOG.md:29`) |
+| A2 | Game world and save integrity | `TickGuardPatch` despawns enemies (`Patches/TickGuardPatch.cs:104`); `AnimatorEmergency` degrades combat timing (`Patches/GovernorPatch.cs:132`); both alter live world state |
+| A3 | Fair-play integrity | Server runs EAC-off by necessity of loading a C# mod (`Source/EfficientServer/ModInfo.xml:9`); `benchgod` is aimbot-grade damage immunity for every player while active (`Patches/BenchGodPatch.cs:32`) |
+| A4 | Host RAM and CPU | GC env vars trade RAM for pause length. The heap-growing megapause diagnostic that could pin memory is gone (`CHANGELOG.md:32`) |
 | A5 | Trust in the packaged DLL | Anything installed from `dist/` executes with full server authority; tampered artifacts are indistinguishable from releases unless a deployer manually compares the recorded SHA-256 |
 | A6 | Game-owned data in-process | Save games, `serveradmin.xml`, session tokens held by the game are all reachable from mod code because there is no isolation. Not read or written by current mod code, but within blast radius of any code-execution event |
+| A7 | Operator tuning, as a data asset | The installed config is the only copy of the operator's tuning: it is edited on the server host and nothing regenerates it. It is what A3 and A5 are steered by, so its loss is an availability and integrity event, not a convenience one. Named explicitly because E9 and E10 exist to preserve it |
 
 ## Threats per boundary
 
@@ -69,95 +79,128 @@ write APIs under `Source/EfficientServer/`; the only file reads are
 
 - Tampering: extreme values reshape gameplay or load. Mitigated: every knob
   passes `Normalize` range clamps with logged corrections
-  (`Source/EfficientServer/Config.cs:530`, clamp helper `Config.cs:608`), a
-  misspelled key binds to nothing and keeps the built-in default (fail-soft per
-  group, `Config.cs:399`, with template typos caught pre-packaging by
+  (`Source/EfficientServer/Config.cs:562`, clamp helpers `Config.cs:640,656`),
+  a misspelled key binds to nothing and keeps the built-in default (fail-soft per
+  group, `Config.cs:399-402`, with template typos caught pre-packaging by
   `scripts/check_config_doc.py`, and each unknown key named in a WARN so a typo
-  is not silent, `Config.cs:433`), NaN/Infinity take a clamped fallback
-  (`Config.cs:613`), and malformed JSON falls back to defaults
-  (`Config.cs:399`). A JSON `null` for a whole section is backfilled from
-  defaults by reflection so no null hole reaches a patch
+  is not silent, `Config.cs:402`), NaN/Infinity take a clamped `FiniteRange`
+  fallback, and malformed JSON falls back to defaults with an ERROR
+  (`Config.cs:427`). A JSON `null` document is treated as a load failure, not a
+  silent full reset (`Config.cs:411`), and a JSON `null` for a whole section is
+  backfilled from defaults by reflection so no null hole reaches a patch
   (`Config.cs:416`). Residual: clamped maxima are still potent (R5), and the
   file is unsigned, so clamps bound the damage, not the write (R3).
+- Repudiation of a rejected config: a file that fails to parse must not quietly
+  become built-in defaults mid-session, which would make every knob look
+  operator-chosen when no operator chose it. Mitigated:
+  `ServerPerfConfig.LastLoadFailed` (`Config.cs:382`) is checked by the reload
+  path, which keeps the previous config and logs ERROR with the path
+  (`ModApi.cs:133-138`) and by the console, which prints a refusal rather than a
+  success echo (`ConsoleCmdEfficientServer.cs:52`). The initial load at startup
+  has no previous config to keep, so a bad file at boot still means defaults;
+  that outcome is logged at ERROR (`Config.cs:429`).
 - Denial of service: config levers can degrade gameplay under load
-  (`Governor.AnimatorEmergency` engages itself past `EmergencyOverMs`;
-  `TickGuard` despawns entities). Both emit a WARNING when they engage
-  (`GovernorPatch.cs:129`, `TickGuardPatch.cs:104`), so the event is
+  (`AnimatorEmergency` engages itself past `EmergencyOverMs`; `TickGuard`
+  despawns entities). Both emit a WARNING when they engage
+  (`GovernorPatch.cs:129`, `TickGuardPatch.cs:112,123`), so the event is
   reconstructable after the fact.
-- Repudiation: corrections and parse failures are logged as WARN with values
-  (`EsLog.Emit`, `EsLog.cs:26`). Reload apply failures are surfaced rather than
-  swallowed, so no success echo covers a partial apply
-  (`Source/EfficientServer/ModApi.cs:125` onward, per-group handling).
+- Repudiation: corrections and parse failures are logged by severity through
+  `EsLog.Emit` (`EsLog.cs:26`); ERROR is reserved for the outcomes that leave
+  the server on knobs nobody chose. Reload apply failures are surfaced rather
+  than swallowed, so no success echo covers a partial apply
+  (`ModApi.cs:191`).
 
 ### B2: console actor to mod commands
 
 - Elevation of privilege / abuse: the two arms that change gameplay for every
   player are refused unless the operator opted in through the config:
   `es benchgod on` requires `Diagnostics.AllowBenchGod`
-  (`ConsoleCmdEfficientServer.cs:336`, gate `Config.cs:663`) and `es animoff` /
+  (`ConsoleCmdEfficientServer.cs:374`, gate `Config.cs:695`) and `es animoff` /
   `es rigoff` require `Diagnostics.AllowFidelityProbes`
-  (`ConsoleCmdEfficientServer.cs:184`, gate `Config.cs:672`). Both gates fail
+  (`ConsoleCmdEfficientServer.cs:199`, gate `Config.cs:704`). Both gates fail
   closed on a null config or null section. Disarming is never gated. Residual
-  risk R4: with the opt-in on, the arming is still one console command from
-  anyone who reaches the console, with no confirmation, no scope, and no
-  persistence across restart.
+  risk R4: with the opt-in on, arming is still one console command, with no
+  confirmation and no scope. What the last pass left open has since narrowed:
+  the damage-immunity prefix re-reads the allow-switch every time it is
+  consulted, so the immunity stops as soon as the config revokes it even
+  without a reload (`Patches/BenchGodPatch.cs:32-33`), and a reload without the
+  probe opt-in releases armed animator and rig probes and logs what it released
+  (`ModApi.cs:151-157`, `ConsoleCmdEfficientServer.cs:349`).
 - Denial of service (minor): `es animstate` emits one console/log-sink line per
   living enemy; at horde scale this floods telnet output. Bounded by entity
-  count, self-limited to manual invocation, and kept off the persisted log
-  because it is read-only output (`ConsoleCmdEfficientServer.cs:100`).
+  count, self-limited to manual invocation, and written straight to the console
+  rather than the persisted log because it is read-only output
+  (`ConsoleCmdEfficientServer.cs:222,234`).
 - Repudiation: state-changing commands (`animprobe`, `rigprobe`, `benchgod`
-  toggles, and refusals) persist through `Output` to console AND server log
-  (`ConsoleCmdEfficientServer.cs:100`); command execution is additionally
-  governed by the game setting `HideCommandExecutionLog`, kept at 0 = everything
-  logged in both shipped templates (`serverconfig.optimized.xml:49`). A bare
-  `es benchgod` peek is read-only and intentionally unlogged.
+  toggles, refusals, and the reload outcome) persist through the `Output` choke
+  point to console AND server log (`ConsoleCmdEfficientServer.cs:110-117`);
+  command execution is additionally governed by the game setting
+  `HideCommandExecutionLog`, kept at 0 = everything logged in the shipped
+  template (`serverconfig.optimized.xml:49`). A bare `es benchgod` peek is
+  read-only and intentionally unlogged.
 
 ### B3: mod to host process
 
 - Elevation of privilege: inherent and accepted; the mod IS privileged code.
   Controls reduce likelihood, not impact: per-group fail-soft patching so one
-  bad target does not kill the rest (`PatchAllSafe`, `ModApi.cs:209`), visible
-  MISSING TARGET detection on version drift (`ModApi.cs:94`), fail-closed
-  dedicated gating (`ShouldRunFor`, `Config.cs:645`; the runtime probe fails
-  closed, `ModApi.cs:275`) so server-only behavior (including BenchGod) cannot
+  bad target does not kill the rest (`PatchAllSafe`, `ModApi.cs:256`), visible
+  MISSING TARGET detection on version drift (`ModApi.cs:102`), fail-closed
+  dedicated gating (`ShouldRunFor`, `Config.cs:677`; the runtime probe fails
+  closed, `ModApi.cs:333`) so server-only behavior (including BenchGod) cannot
   activate on an unknown/client host.
 - Single point of failure: `ModApi.ShouldRun()` gates every behavioral patch,
-  including damage immunity (`Patches/BenchGodPatch.cs:23`). If it ever returned
+  including damage immunity (`Patches/BenchGodPatch.cs:32`). If it ever returned
   true where it must not, several high-impact threats activate at once. Treat
   any future edit to it, and any edit to the two arm gates, as
   security-critical.
 - Tampering with game logic: transpiler patches rewrite game IL at runtime
   (e.g. `LayerGridGraph.ScanInternal` node allocation,
-  `Patches/InitScanPoolPatch.cs:31`). Fail-visibly-by-design on IL drift
-  (`InitScanPoolPatch.cs:67`); re-verify after every game update.
+  `Patches/InitScanPoolPatch.cs:43`). Fail-visibly-by-design on IL drift
+  (`InitScanPoolPatch.cs:66`); re-verify after every game update.
 - One-shot native flip: the GC mode flip cannot be undone, so it is guarded
   against repeat and mixed application (`GcIncremental.cs:27`) and the
-  pause-target call has its own try so a missing entry point does not undo or
-  re-run the flip (`GcIncremental.cs:41`).
+  pause-target call has its own try, marked applied only once the flip actually
+  landed, so a missing entry point stays retryable rather than leaving the
+  collector in a half-configured state (`GcIncremental.cs:31-41`).
 
 ### B4: build/publish to installed server
 
 - Tampering: no signature, checksum comparison, or provenance check anywhere on
   the install path. `install.sh` backs up the installed `Config/` (a differing
-  user config plus the guard backup files) via a trap
-  that survives failure, then does `rm -rf` of the destination and copies from
-  `dist/` (`scripts/install.sh:70-88,94,96`). An exported-but-empty
-  `SEVENDTD_DS_DIR` is rejected before the build and before the wipe
-  (`install.sh:44`), which is what keeps the `rm -rf` pointed at the install the
-  operator named. `package.sh` produces a reproducible, byte-identical zip
-  (`scripts/package.sh:42`); `scripts/verify_reproducible.sh` proves
+  user config plus the guard backup files) via a trap that survives failure
+  (`install.sh:85-97`), then does `rm -rf` of the destination and copies from
+  `dist/` (`install.sh:107,109`). An exported-but-empty `SEVENDTD_DS_DIR` or
+  `DS` is rejected before the build and before the wipe (`install.sh:52-57`),
+  which is what keeps the `rm -rf` pointed at the install the operator named.
+  `package.sh` produces a reproducible, byte-identical zip
+  (`scripts/package.sh:7,80`); `scripts/verify_reproducible.sh` proves
   rebuildability. Named gap remains: install verifies none of this, and nothing
   signs anything.
+- Dependency substitution (R7): restore sources are pinned in-repo
+  (`NuGet.config`: nuget.org only, inherited feeds cleared) and the test
+  project's graph is exact-pinned and hash-pinned in a committed lock file,
+  restored `--locked-mode` (`Makefile:196`, `Source/EfficientServer.Tests/packages.lock.json`).
+  The mod project adds one fetched package,
+  `Microsoft.NETFramework.ReferenceAssemblies.net48` at exact range `[1.0.3]`
+  (`Source/EfficientServer/EfficientServer.csproj:35`), which `RestorePackagesWithLockFile`
+  would record in `Source/EfficientServer/packages.lock.json`; that file is not
+  in the tree, and `make build` restores without `--locked-mode`
+  (`Makefile:121`, `scripts/build.sh`). The package provides reference metadata
+  only (`PrivateAssets="all"`), so it cannot alter the emitted IL, but its
+  content is verified only by version number. `NuGet.config` and the previous
+  `SECURITY.md` both asserted a lock file for this graph; corrected on this
+  pass. Candidate fix: commit the mod project's lock file and restore it
+  locked-mode in `build.sh`.
 - Spoofing (supply chain): CI actions are commit-pinned with a stated reason
-  (`.github/workflows/ci.yml:24,33`), NuGet restore is locked-mode
-  (`Makefile:119`) against an in-repo source list (`NuGet.config`: nuget.org
-  only, inherited feeds cleared), push trigger scoped to main
-  (`.github/workflows/ci.yml:6`). Dependency surface is small: Newtonsoft.Json
-  comes from the game's own Managed folder for the mod; test deps are lock-pinned
-  (`Source/EfficientServer.Tests/packages.lock.json`); the `dotnet-coverage`
-  local tool is version-pinned (`.config/dotnet-tools.json`) but not hash-pinned,
-  so `make coverage` fetches an unhashed tool graph. Dependabot watches all three
-  surfaces (`.github/dependabot.yml`).
+  (`.github/workflows/ci.yml:27,36`, `.github/workflows/release.yml`), the
+  release job runs on a `v*` tag with a read-only token and a 5-minute timeout,
+  and deliberately does not build the archive because a hosted runner has no
+  dedicated-server assemblies. Push trigger scoped to main
+  (`.github/workflows/ci.yml:5-7`). Test dependency surface is
+  Newtonsoft.Json only, exact-pinned (`[13.0.4]`) and hash-pinned; the
+  `dotnet-coverage` local tool is version-pinned (`.config/dotnet-tools.json`)
+  but not hash-pinned, so `make coverage` fetches an unhashed tool graph.
+  Dependabot watches the dependency surfaces (`.github/dependabot.yml`).
 - Stale install: `run_server.sh` never builds or installs. It execs whatever
   `Mods/EfficientServer` the server tree already holds (`scripts/install.sh`
   is the only writer), so a launch can run a DLL that no longer matches the
@@ -166,34 +209,84 @@ write APIs under `Source/EfficientServer/`; the only file reads are
 ### B5: host environment to server process
 
 - Tampering (local): env vars materially change GC and JIT behavior
-  (`scripts/run_server.sh:88-110`); `LD_LIBRARY_PATH` is prepended with the
-  server dir (`run_server.sh:86`) so libraries there shadow system ones.
+  (`scripts/run_server.sh:123-143`); `LD_LIBRARY_PATH` is prepended with the
+  server dir (`run_server.sh:121`) so libraries there shadow system ones.
   `SEVENDTD_GC_INCREMENTAL` is the only var that turns a lever on by itself
-  (`run_server.sh:109`). Local-operator trust domain; acceptable, listed so the
+  (`run_server.sh:143`). Local-operator trust domain; acceptable, listed so the
   surface is named.
 
 ### B6: CI runner to repository
 
-- Low. Read-only token (`ci.yml:10`) that is not persisted into the runner
-  workspace (`ci.yml:29`; the gate runs no git commands), 15-minute timeout
-  (`ci.yml:20`), concurrency cancellation (`ci.yml:12`), NuGet cache keyed on
-  the locked dependency graph (`ci.yml:36`). No secrets are used or needed.
+- Low. Read-only token that is not persisted into the runner workspace
+  (`ci.yml:32`; the gate runs no git commands), 15-minute timeout
+  (`ci.yml:23`), concurrency cancellation (`ci.yml:12-14`), NuGet cache keyed on
+  the locked test dependency graph (`ci.yml:36`). The release workflow is
+  read-only and shells out to two files it just checked out, so a tag cannot
+  publish an archive whose version disagrees with `ModInfo.xml`. No secrets are
+  used or needed in either workflow.
+
+### B7: network to game console
+
+- Spoofing and elevation of privilege: telnet with an empty password relies on
+  the game's loopback-only fallback plus `TelnetFailedLoginLimit=10` and a
+  10-second block (`serverconfig.optimized.xml:33-37`). An operator who sets a
+  weak password or forwards 8082 hands an unauthenticated remote actor the
+  console, and with it every `es` subcommand including any arm the config has
+  pre-authorized (R4 + R6). This repo's contribution is the template default and
+  the documentation, not the code.
+
+### B8: operator tooling to the live config and off-host destination
+
+- Tampering (destructive write): E10 rewrites live config keys in place. Two
+  properties keep a killed or unrelated run from destroying tuning: writes go
+  through temp-file + rename so no truncated JSON is left for the game's
+  reader, and `restore()` writes only the managed keys from its snapshot back,
+  so a later run cannot revert unrelated operator edits
+  (`scripts/es_cfg_guard.py:1-30`). Exception, stated in the same docstring: if
+  the live file is missing, unreadable, or not a JSON object, the full snapshot
+  is restored instead, which does overwrite everything.
+- Tampering (destructive delete): `ConfigSwap._sweep_abandoned_temps`
+  (`es_cfg_guard.py:192`) unlinks `<config>.tmp<pid>` files beside the live
+  config when the owning pid is gone, and `stage_tmp.sh:33` `rm -rf`s dead
+  staging trees under `$TMPDIR`. Both are pattern-scoped to files this tooling
+  itself creates, both refuse to touch a pid that is still alive, and both treat
+  a recycled pid as alive (leaving garbage rather than deleting a live write).
+  `$TMPDIR` is operator-set; a hostile value makes the sweep operate in a
+  directory of the setter's choosing, which is already the setter's own
+  privilege.
+- Tampering (restore): `backup_config.py --restore` copies a verified snapshot
+  over a target path and refuses to clobber an existing file without `--force`
+  (`backup_config.py:288-311`, refusal at `backup_config.py:304`); the snapshot is re-verified in the same call, so
+  a restore never copies a snapshot that would not load.
+- Information disclosure: the destination is operator-named and may be a synced
+  folder or another host. The config holds tuning, not secrets, so a leaked copy
+  is a gameplay-integrity event rather than a credential event; the tool refuses
+  a destination inside the install tree so the copy is not lost with the disk it
+  protects (`backup_config.py:135-152`).
+- Unbounded growth: snapshots are pruned to `DEFAULT_KEEP = 14`
+  (`backup_config.py:51`), and `make backup-config` requires
+  `ES_CONFIG_BACKUP_DEST` to be set rather than defaulting to a path inside the
+  install (`Makefile:254-259`).
 
 ## Abuse cases (scenarios, not demonstrations)
 
 1. Config write escalates to gameplay control: an actor with write access to
    `Mods/EfficientServer/Config/efficientserver.json` (a shared host, a backup
    restore, a careless deploy) sets `Diagnostics.AllowBenchGod=true` and the
-   desired clamps, and any later `es reload` (`ModApi.cs:118`) makes the policy
+   desired clamps, and any later `es reload` (`ModApi.cs:131`) makes the policy
    live. No console access is needed for the policy itself, only for the arm.
-   Config write access is therefore the higher-privilege position (R3).
+   Config write access is therefore the higher-privilege position (R3), and a
+   script holding it (E9, E10) is in the same class.
 2. Bench mode left hot: an operator enables the opt-in for a bench session and
-   runs `es benchgod on`, then forgets it. Every player becomes immune to zombie
-   damage until restart, because the flag is static and unpersisted
-   (`ConsoleCmdEfficientServer.cs:336`; checked at `Patches/BenchGodPatch.cs:23`).
-   The refusal path and the toggle are both audited to the log. What remains
-   open is the missing scope and confirmation on a live server, not the gate.
-3. Telnet inheritance: both shipped templates enable telnet with an empty
+   runs `es benchgod on`, then the process is killed before `es benchgod off`.
+   Every player is immune to zombie damage, because the flag is process state,
+   not config state (`ConsoleCmdEfficientServer.cs:361`; consulted at
+   `Patches/BenchGodPatch.cs:32`). The two documented escapes are both config
+   moves: revoking `Diagnostics.AllowBenchGod` stops the immunity on the next
+   damage event even without a reload, and a reload clears the latch outright
+   (`ModApi.cs:151`). The refusal path and the toggle are both audited to the
+   log. What remains open is the missing scope and confirmation at arming time.
+3. Telnet inheritance: the shipped template enables telnet with an empty
    password, relying on the game's loopback-only fallback
    (`serverconfig.optimized.xml:33-35`). An operator who sets a weak password or
    forwards port 8082 inherits full console access, and with it every `es`
@@ -202,59 +295,100 @@ write APIs under `Source/EfficientServer/`; the only file reads are
 4. Reload-window drift: an operator edits the config between init and a later
    `es reload`; because the file has no watcher and `reload` re-reads from disk,
    whatever sits in the file at that moment becomes live policy, including
-   levers that were off at boot (`ModApi.ReloadConfig`, `ModApi.cs:118`; late
+   levers that were off at boot (`ModApi.ReloadConfig`, `ModApi.cs:131`; late
    enable of skips/GC incremental is supported behavior). Anyone with write
    access to the config directory controls policy without console access,
-   subject to the same clamps and the arm gates.
+   subject to the same clamps and the arm gates. A file that fails to parse is
+   rejected instead: the previous config stays live and the refusal is logged
+   (`ModApi.cs:133-138`), so the only way to land a bad file is a file that
+   parses.
 5. Artifact swap before install: an actor who can write `dist/EfficientServer/`
    between `make build` and `make install` supplies a DLL that runs with full
    server authority, and nothing on the install path notices (R2). Recovery is
    manual hash comparison only.
+6. Snapshot tampered with before restore: the backup destination is a plain
+   directory, so an actor who can write it can replace a snapshot or its
+   manifest. `verify` re-reads every snapshot and re-checks the recorded sha256
+   before `restore` copies one (`backup_config.py:254`, `288-300`), so a
+   tampered snapshot fails verification and is not restored. What verification
+   does not provide is authenticity: a tampered pair that is internally
+   consistent (recomputed manifest) is indistinguishable from a real one, and
+   the manifest is unsigned. The restored file is still bounded by the same
+   clamp and gate rules once the server loads it.
 
 ## Mitigations inventory (what exists)
 
 | Control | Covers | Location |
 |---|---|---|
-| Config-opt-in gate on arming global damage immunity | B2 elevation of privilege, R4 | `Source/EfficientServer/ConsoleCmdEfficientServer.cs:336`, `Config.cs:663` (`BenchGodArmAllowed`) |
-| Config-opt-in gate on arming fidelity probes (`animoff`, `rigoff`) | B2 elevation of privilege, R4 | `ConsoleCmdEfficientServer.cs:184`, `Config.cs:672` (`FidelityProbeArmAllowed`) |
-| Disarm paths never gated, refusals audited | B2 availability, repudiation | `ConsoleCmdEfficientServer.cs:336,184` |
-| Range-clamp normalization of every numeric knob, with logged corrections | B1 tampering extremes, config self-DoS upper bounds | `Source/EfficientServer/Config.cs:530`, clamp `Config.cs:608` |
-| Reflection backfill of JSON-null sections from defaults | B1 null-hole reaching a patch | `Config.cs:416` |
-| Parse-failure fallback to defaults | B1 malformed input | `Config.cs:399` |
-| Config read pinned to UTF-8 | B1 encoding-dependent misparse across hosts | `Config.cs:379` |
-| Shipped template typos caught pre-packaging | B1 silent misconfiguration | `scripts/check_config_doc.py` (run by `Makefile:152`) |
-| Structure-aware value fuzz + byte-level file fuzz (invalid UTF-8, NUL, truncation, runaway nesting) and a write-then-read round trip of the loaded config | B1 parser robustness regressions, reload drift | `Source/EfficientServer.Tests/Fuzz.cs:36,143`, run by `Makefile:144` |
-| Per-group fail-soft Harmony application | B3 partial breakage on version drift | `ModApi.cs:209` (`PatchAllSafe`) |
-| Visible MISSING TARGET init summary | B3 silent target drift | `ModApi.cs:94` |
-| Fail-closed `DedicatedOnly` gate (pure, unit-tested) | B3 activation on wrong host type | `Config.cs:645`, runtime probe `ModApi.cs:275` |
-| One-shot guard and separate try on the irreversible native flip | B3 repeated/mixed GC modes | `Source/EfficientServer/GcIncremental.cs:27,41` |
-| Reload apply failures surfaced, success echo suppressed | B1/B2 false "reloaded OK" over partial apply | `ModApi.cs:118` onward |
-| State-changing console commands and refusals echoed to log | B2 repudiation | `ConsoleCmdEfficientServer.cs:100` |
-| Severity-split logging channels (INFO/WARN/ERROR) | triage of config corrections vs failures | `EsLog.cs:18,26` |
-| Emergency levers log as WARNING when engaged | B1/B3 unnoticed combat degradation or entity sheds | `Patches/GovernorPatch.cs:129`, `Patches/TickGuardPatch.cs:104` |
-| Install dir guard: exported-but-empty `SEVENDTD_DS_DIR` rejected before build and wipe | B4 `rm -rf` on an unintended install | `scripts/install.sh:44`, same guard in `uninstall.sh` and `run_server.sh` |
-| Failed install preserves the operator's config via EXIT trap | B4 silent config loss | `scripts/install.sh:65-92` |
-| Commit-pinned CI actions, unpersisted read-only token, main-scoped push | B6 supply chain | `.github/workflows/ci.yml:6,10,24,29` |
-| Locked-mode restore from an in-repo source list, SDK pin | B4/B6 dependency drift | `NuGet.config`, `Makefile:119`, `global.json` |
-| Reproducible package build (sorted entries, epoch mtimes, rebuilt from scratch) | B4 artifact diffing | `scripts/package.sh:42` |
-| Reproducibility proof target | B4 rebuild-equals-release claim | `Makefile:68`, `scripts/verify_reproducible.sh` |
+| Config-opt-in gate on arming global damage immunity | B2 elevation of privilege, R4 | `Source/EfficientServer/ConsoleCmdEfficientServer.cs:374`, `Config.cs:695` (`BenchGodArmAllowed`) |
+| Allow-switch re-read on every damage event, so revoking it stops the immunity without a reload | B2 residual R4 after a killed bench run | `Patches/BenchGodPatch.cs:32-33` |
+| Reload releases an armed damage-immunity latch and armed animator/rig probes the new config no longer allows | B2 residual R4, B1 repudiation | `ModApi.cs:151-157`, `ConsoleCmdEfficientServer.cs:349` (`ReleaseArmedProbes`) |
+| Config-opt-in gate on arming fidelity probes (`animoff`, `rigoff`) | B2 elevation of privilege, R4 | `ConsoleCmdEfficientServer.cs:199`, `Config.cs:704` (`FidelityProbeArmAllowed`) |
+| Disarm paths never gated, refusals audited | B2 availability, repudiation | `ConsoleCmdEfficientServer.cs:374-380` |
+| Range-clamp normalization of every numeric knob, with logged corrections, incl. non-finite rejection | B1 tampering extremes, config self-DoS upper bounds | `Source/EfficientServer/Config.cs:562`, clamps `Config.cs:640,656` |
+| Reflection backfill of JSON-null sections from defaults; JSON `null` document treated as a load failure | B1 null-hole reaching a patch; B1 silent full reset | `Config.cs:411,416` |
+| Parse-failure fallback to defaults, logged at ERROR | B1 malformed input | `Config.cs:427-429` |
+| A rejected reload keeps the previous config instead of reverting tuning to defaults | B1 repudiation of a bad edit | `ModApi.cs:133-138`, `ConsoleCmdEfficientServer.cs:52`, `Config.cs:382` (`LastLoadFailed`) |
+| Config read pinned to UTF-8 (BOM tolerated) | B1 encoding-dependent misparse across hosts | `Config.cs:393` |
+| Shipped template typos caught pre-packaging | B1 silent misconfiguration | `scripts/check_config_doc.py` (run by `Makefile:213`) |
+| Structure-aware value fuzz + byte-level file fuzz (invalid UTF-8, NUL, truncation, runaway nesting) and a write-then-read round trip of the loaded config | B1 parser robustness regressions, reload drift | `Source/EfficientServer.Tests/Fuzz.cs:43,143`, run by `make unit` |
+| Per-group fail-soft Harmony application | B3 partial breakage on version drift | `ModApi.cs:256` (`PatchAllSafe`) |
+| Visible MISSING TARGET init summary | B3 silent target drift | `ModApi.cs:102` |
+| Fail-closed `DedicatedOnly` gate (pure, unit-tested) | B3 activation on wrong host type | `Config.cs:677`, runtime probe `ModApi.cs:333` |
+| One-shot guard, applied-only-on-success, and separate try on the irreversible native flip | B3 repeated/mixed GC modes | `Source/EfficientServer/GcIncremental.cs:27,31-41` |
+| Reload apply failures surfaced and rethrown, success echo suppressed | B1/B2 false "reloaded OK" over partial apply | `ModApi.cs:191-197` |
+| State-changing console commands and refusals echoed to console and log | B2 repudiation | `ConsoleCmdEfficientServer.cs:110-117` |
+| Severity-split logging channels (INFO/WARN/ERROR), ERROR reserved for outcomes that leave the server on unchosen knobs | triage of config corrections vs failures | `EsLog.cs:18,26` |
+| Emergency levers log as WARNING when engaged | B1/B3 unnoticed combat degradation or entity sheds | `Patches/GovernorPatch.cs:129`, `Patches/TickGuardPatch.cs:112,123` |
+| Install dir guard: exported-but-empty `SEVENDTD_DS_DIR` or `DS` rejected before build and wipe | B4 `rm -rf` on an unintended install | `scripts/install.sh:52-57`, same guard in `uninstall.sh` and `run_server.sh` |
+| Failed install preserves the operator's config via EXIT trap | B4 silent config loss (A7) | `scripts/install.sh:85-97` |
+| Uninstall preserves `Config/` and warns when the copy lands inside the install tree | A7 loss, B4 | `scripts/uninstall.sh:111-121` |
+| Config backup tool refuses a destination inside the install tree; `make backup-config` requires an explicit dest | A7, B8 | `scripts/backup_config.py:135-152`, `Makefile:254-259` |
+| Backup `verify` re-reads every snapshot the way a restore would; `restore` re-verifies its own snapshot and refuses to clobber without `--force` | A7 corruption, B8 destructive restore | `scripts/backup_config.py:254,288-311` |
+| Snapshot retention bound | B8 unbounded growth | `scripts/backup_config.py:51,245` |
+| Live-config swap protocol: temp-file + rename writes, managed-keys-only restore, stale-backup quarantine, divergent-file rule | B8 destructive write, B1 partial revert | `scripts/es_cfg_guard.py:1-30,139` |
+| Stranded-temp sweep scoped to this tooling's own names, live pids and recycled pids left alone | B8 destructive delete | `scripts/es_cfg_guard.py:192`, `scripts/stage_tmp.sh:33` |
+| Commit-pinned CI and release actions, unpersisted read-only token, main-scoped push, tag/manifest version agreement | B6 supply chain | `.github/workflows/ci.yml:27,36`, `.github/workflows/release.yml` |
+| Locked-mode restore from an in-repo source list for the test graph, SDK pin | B4/B6 dependency drift | `NuGet.config`, `Makefile:196`, `global.json` |
+| Reproducible package build (sorted entries, epoch mtimes, rebuilt from scratch) | B4 artifact diffing | `scripts/package.sh:7,80` |
+| Reproducibility proof target | B4 rebuild-equals-release claim | `Makefile:125`, `scripts/verify_reproducible.sh` |
 | Command-execution logging kept on (game setting) | B2 repudiation | `serverconfig.optimized.xml:49` (template default) |
 
 ## Claimed-but-unverified and named gaps
 
 Checked the docs against the code; results:
 
-- No remaining false mitigation claim in README or docs: nothing asserts
+- **Corrected on this pass.** `SECURITY.md` and `NuGet.config` both stated the
+  mod project's NuGet graph is recorded in a committed
+  `Source/EfficientServer/packages.lock.json`. That file is not in the tree;
+  only `Source/EfficientServer.Tests/packages.lock.json` is, and only the test
+  project is restored `--locked-mode`. `SECURITY.md` now names both fetched
+  packages, marks the reference-assemblies package as version-pinned but not
+  hash-pinned, and `NuGet.config`'s comment says what the code does. R7 records
+  the residual.
+- **Corrected on this pass.** The previous revision of this model described
+  E7 as tooling that "reads the working tree and exits nonzero; none writes
+  outside the repo". `scripts/es_cfg_guard.py` rewrites the live installed
+  config in place and unlinks files beside it, and `scripts/backup_config.py`
+  writes off-host and can restore over the live path. Both are now named entry
+  points (E9, E10) with boundary B8 and the risks they carry (R8).
+- **Corrected on this pass.** `SECURITY.md` said that with the bench opt-in on,
+  nothing in code further scopes or confirms the arm on a live server. That is
+  still true of arming, but the arm is no longer purely open-ended: the
+  allow-switch is re-read per damage event and a reload releases armed probes
+  (`Patches/BenchGodPatch.cs:32-33`, `ModApi.cs:151-157`). The bullet now states
+  both halves.
+- EAC statements match reality: `ModInfo.xml` sets `SkipWithAntiCheat=true`
+  (`Source/EfficientServer/ModInfo.xml:9`) and the docs correctly explain the
+  mod therefore does not load under enforcing EAC. No remaining claim of
   authentication, rate limiting, sandboxing, or input validation that the code
-  lacks. EAC statements match reality: `ModInfo.xml` sets
-  `SkipWithAntiCheat=true` (`Source/EfficientServer/ModInfo.xml:9`) and the
-  docs correctly explain the mod therefore does not load under enforcing EAC.
+  lacks.
 - **Corrected on this pass.** The previous revision of this model and
   `SECURITY.md` both claimed that nothing in code refuses the bench-only toggles
   on a live server, and listed the missing guard as a top-3 risk. The code
   gates them: `ServerPerfConfig.BenchGodArmAllowed` and
-  `FidelityProbeArmAllowed` (`Config.cs:663,672`) are enforced at the arm sites
-  (`ConsoleCmdEfficientServer.cs:336,184`) and the refusal goes to the audited
+  `FidelityProbeArmAllowed` (`Config.cs:695,704`) are enforced at the arm sites
+  (`ConsoleCmdEfficientServer.cs:374,199`) and the refusal goes to the audited
   output path. R4 and the `SECURITY.md` bullet were rewritten to the residual
   risk (no scope, no confirmation, opt-in pre-authorizes) rather than the
   already-fixed whole.
@@ -265,25 +399,31 @@ Checked the docs against the code; results:
   (`scripts/run_server.sh`). Each is falsifiable by sec-review against the named
   code.
 - Gaps (ranked): R2 install path verifies nothing (candidate fix: compare a
-  recorded artifact hash in `install.sh` before copying); R3 the config file is
-  unsigned and pre-authorizes the R4 arms; R4 no scope, confirmation, or
-  production-mode refusal on an opted-in arm; no signing or release provenance
-  process documented anywhere.
+  recorded artifact hash in `install.sh` before copying); R7 the mod project's
+  fetch is not hash-pinned (candidate fix: commit its lock file and restore it
+  locked-mode in `build.sh`); R3 the config file is unsigned and pre-authorizes
+  the R4 arms; R4 no scope or confirmation at arming time; no signing or release
+  provenance process documented anywhere; the backup manifest is unsigned, so a
+  self-consistent tampered snapshot verifies (abuse case 6).
 
 ## Response readiness (notes only)
 
 - Audit trail available for investigation: everything logs through
   `[EfficientServer]`-prefixed lines into the game log (`EsLog.Emit`,
-  `EsLog.cs:26`) across three severity channels, including config corrections,
-  parse failures, patch failures, MISSING TARGET summaries, engaged emergency
-  levers, entity sheds, and (via the console `Output` choke point) every
-  state-changing console command and every arm refusal; executed commands
-  generally also appear via the game's own execution log while
-  `HideCommandExecutionLog=0`. No separate security event stream exists;
-  o11y-review owns log structure.
+  `EsLog.cs:18,26`) across three severity channels, including config
+  corrections, parse failures, rejected reloads, patch failures, MISSING TARGET
+  summaries, engaged emergency levers, entity sheds, released probes, and (via
+  the console `Output` choke point) every state-changing console command and
+  every arm refusal; executed commands generally also appear via the game's own
+  execution log while `HideCommandExecutionLog=0`. No separate security event
+  stream exists; o11y-review owns log structure. The config backup tool's
+  evidence is its own manifest: timestamp, size, sha256 per snapshot, plus the
+  verification result when `--verify` is run.
 - Vulnerability-reported-to-fix-shipped path: `SECURITY.md` names the reporting
   channel (GitHub issues, public until a private channel exists), the
   authoritative version source (`Source/EfficientServer/ModInfo.xml`, currently
   1.19.0), and the supported-version policy (current release only, no
-  backports). No private disclosure contact is published yet; that remains an
-  organizational gap, noted rather than invented.
+  backports). A `v*` tag is rejected at CI time unless it matches that manifest
+  and the changelog (`.github/workflows/release.yml`). No private disclosure
+  contact is published yet; that remains an organizational gap, noted rather
+  than invented.

@@ -41,15 +41,23 @@ vulnerabilities:
   (`Normalize` in `Config.cs`), and falls back to defaults on malformed input.
   It is read unsigned and is re-read on every `es reload`, so anyone who can
   write that file can reshape gameplay and load behavior within clamped bounds
-  for every later reload.
-- Bench-only toggles are opt-in, then unguarded. Arming `es benchgod on`
-  (all players damage-immune until restart) or the `es animoff` / `es rigoff`
-  fidelity probes is refused unless `Diagnostics.AllowBenchGod` or
+  for every later reload. A reload whose file fails to parse is rejected and
+  the previous config stays live, so a broken edit does not quietly revert
+  every tuned knob to its default. The same write position is held by two tools
+  in this repository: `scripts/es_cfg_guard.py` rewrites managed keys of the
+  installed config in place, and `scripts/backup_config.py` copies the live
+  config off-host and can restore over it (`--force` required to overwrite).
+- Bench-only toggles are opt-in, then largely unguarded. Arming `es benchgod
+  on` (all players damage-immune until restart) or the `es animoff` / `es
+  rigoff` fidelity probes is refused unless `Diagnostics.AllowBenchGod` or
   `Diagnostics.AllowFidelityProbes` is true in that config file; disarming is
-  never gated. With the opt-in on, nothing in code further scopes or confirms
-  the arm on a live server. The same file that gates them is the unsigned
-  config above, so config write access pre-authorizes them;
-  see `docs/THREAT_MODEL.md` R3 and R4.
+  never gated. Nothing at arming time further scopes the arm or asks for
+  confirmation on a live server. What the code does do is stop it: the damage
+  prefix re-reads the allow-switch on every damage event, and an `es reload`
+  that no longer allows the toggles releases both the damage-immunity latch and
+  any armed animator/rig probes, so revoking the opt-in is the undo. The same
+  file that gates them is the unsigned config above, so config write access
+  pre-authorizes them; see `docs/THREAT_MODEL.md` R3 and R4.
 
 ## Supply chain
 
@@ -60,14 +68,21 @@ What ships and how it is protected:
   is resolved from the dedicated server's own `Managed/` directory with
   `Private=false`; the zip contains only `EfficientServer.dll`,
   `ModInfo.xml`, the default config, and the MIT license text.
-- The single NuGet dependency (`Newtonsoft.Json` for the test harness) is
-  exact-pinned in the csproj, hash-pinned in a committed
-  `packages.lock.json`, and restored with `dotnet restore --locked-mode` by
-  `make test`, so a changed dependency fails instead of floating. Restore
-  sources are pinned in-repo by `NuGet.config` (nuget.org only, with inherited
-  machine- and user-level feeds cleared), so a feed added outside this repo
-  cannot satisfy the package.
-- The `dotnet-coverage` local tool is the one fetch that is not hash-locked:
+- Two NuGet packages are fetched. The test harness's `Newtonsoft.Json` is
+  exact-pinned in its csproj, hash-pinned in a committed
+  `Source/EfficientServer.Tests/packages.lock.json`, and restored with
+  `dotnet restore --locked-mode` by `make test`, so a changed dependency fails
+  instead of floating. The mod project fetches one more,
+  `Microsoft.NETFramework.ReferenceAssemblies.net48`, exact-pinned as `[1.0.3]`
+  in `Source/EfficientServer/EfficientServer.csproj`; that package is
+  reference metadata only (`PrivateAssets="all"`), so it cannot change the
+  emitted IL, but its content is checked by version alone: no
+  `Source/EfficientServer/packages.lock.json` is committed and `make build`
+  restores without `--locked-mode`, so a substituted package at the same
+  version would not be detected. Restore sources are pinned in-repo by
+  `NuGet.config` (nuget.org only, with inherited machine- and user-level feeds
+  cleared), so a feed added outside this repo cannot satisfy either package.
+- The `dotnet-coverage` local tool is a third fetch that is not hash-locked:
   `.config/dotnet-tools.json` pins its version, but the .NET 8 SDK this repo
   pins has no tool lock file, so `make coverage` resolves that tool's
   transitive graph from nuget.org at run time. It is CI-only and never touches
@@ -77,7 +92,12 @@ What ships and how it is protected:
   `SOURCE_DATE_EPOCH` normalizes timestamps so two builds of the same tree
   zip byte-identically.
 - CI actions are pinned to commit SHAs (not mutable tags) and the workflow
-  token is read-only.
+  token is read-only, in both `.github/workflows/ci.yml` and the tag-driven
+  `.github/workflows/release.yml`. Neither workflow builds or publishes the
+  mod archive: `make package` needs the dedicated server's own assemblies,
+  which a hosted runner does not have, so a maintainer builds and attaches it.
+  The release workflow checks only that a `v*` tag agrees with the version in
+  `Source/EfficientServer/ModInfo.xml` and with the changelog.
 
 The full model, including entry points, trust boundaries, assets, threats per
 boundary, and ranked gaps: [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md).
