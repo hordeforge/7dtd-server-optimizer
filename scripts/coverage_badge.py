@@ -20,11 +20,12 @@ from selftest_support import Checks
 NAME = "scripts/coverage_badge.py"
 
 USAGE = """\
-usage: scripts/coverage_badge.py COBERTURA_XML OUTPUT.svg [--selftest] [-h | --help]
+usage: scripts/coverage_badge.py COBERTURA_XML OUTPUT.svg [-h | --help]
+       scripts/coverage_badge.py --selftest
 
 Render the README coverage badge from a Cobertura report (the one `make
 coverage` writes); CI commits the resulting SVG. --selftest is wired into
-`make test`.
+`make test` and takes no other arguments.
   COBERTURA_XML  report to read the `line-rate` attribute from
   OUTPUT.svg     badge file to write
   --selftest  exercise the threshold/band logic and the report->badge path
@@ -253,9 +254,20 @@ def _selftest() -> int:
 
 if __name__ == "__main__":
     argv = sys.argv[1:]
-    if argv in (["-h"], ["--help"]):
+    # The usage line offers [-h | --help] alongside the two positionals, so
+    # the help flag has to be recognized there too: a bare-vector match made
+    # `coverage_badge.py COBERTURA_XML OUTPUT.svg -h` exit 2 while the help
+    # said it worked. Split the flags out first, so the positionals still
+    # reach main() unchanged and an unknown argument still fails there.
+    flags = ("-h", "--help", "--selftest")
+    rest = [arg for arg in argv if arg not in flags]
+    if "-h" in argv or "--help" in argv:
         print(USAGE)
         raise SystemExit(0)
-    if argv == ["--selftest"]:
+    if "--selftest" in argv:
+        if rest:
+            print(f"{NAME}: --selftest takes no other arguments: {' '.join(rest)}", file=sys.stderr)
+            print(USAGE, file=sys.stderr)
+            raise SystemExit(2)
         raise SystemExit(_selftest())
-    raise SystemExit(main(argv))
+    raise SystemExit(main(rest))
