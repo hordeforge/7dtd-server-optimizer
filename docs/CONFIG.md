@@ -190,6 +190,8 @@ below). These knobs manage the forced-collect path.
 The guard's safety net: force a collect anyway once the managed heap exceeds the
 ceiling. AUTO derives it from host RAM (fraction x system memory) so a fixed number
 can never sit below the real working set (which would fire every frame).
+`0` is the AUTO sentinel on **both** knobs: it means "use the shipped default"
+(0.5 of host RAM), not "no ceiling". Clamp [0, 0.95].
 
 ### `Incremental` (false) / `IncrementalPauseTargetMs` (0)
 Opt-in Boehm incremental mode (collection in bounded slices). **Measured: marginal**

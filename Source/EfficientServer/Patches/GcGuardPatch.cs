@@ -107,8 +107,14 @@ namespace EfficientServer.Patches
         static long SafetyCeilingMB(GcConfig cfg)
         {
             if (cfg.SafetyCollectAboveMB > 0) return cfg.SafetyCollectAboveMB;
+            // 0 and NaN are the documented AUTO sentinel (same convention as
+            // SafetyCollectAboveMB's 0), not a request for a zero ceiling: Normalize
+            // accepts 0 and the shipped default, so both spellings mean "unset" and
+            // resolve through the one named default. The 0.95 cap duplicates
+            // Normalize's own ceiling so a runtime value bypassing it still cannot
+            // ask for more than 95% of the host.
             float frac = cfg.SafetyCollectRamFraction;
-            if (frac <= 0f || float.IsNaN(frac)) frac = 0.5f;
+            if (frac <= 0f || float.IsNaN(frac)) frac = GcConfig.DefaultSafetyCollectRamFraction;
             if (frac > 0.95f) frac = 0.95f;
             int hostMB = UnityEngine.SystemInfo.systemMemorySize; // host physical RAM in MB
             // The product in double: `hostMB * frac` in binary float rounds

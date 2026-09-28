@@ -26,6 +26,15 @@ namespace EfficientServer.Patches
         // a `% 200` cursor on it would phase-flip. The modulo result itself is
         // already wrap-invariant, so the type is belt-and-braces rather than the
         // load-bearing part. Same cursor convention as TickClock.OwnsSlot.
+        //
+        // Its OWN counter rather than TickClock.Ticks, though both step once per
+        // UpdateTick invocation and are therefore interchangeable as cursors. The
+        // cadence consumers (AI LOD striding, collision staggering, replication and
+        // graph throttling) all read TickClock and all fail OPEN to vanilla when its
+        // driver patch is missing; frame-rate enforcement has no vanilla behavior to
+        // fall back to and no reason to stop working because an unrelated patch
+        // group drifted on a game update. Sharing the counter would couple the two
+        // for no gain.
         static uint _frames;
 
         static void Postfix()

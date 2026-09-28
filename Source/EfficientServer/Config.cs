@@ -70,6 +70,11 @@ namespace EfficientServer
 
     public sealed class GcConfig
     {
+        // The AUTO fraction, named once: it is both this section's default and the
+        // value the GC guard substitutes for a 0 fraction, so the two cannot drift
+        // into "the shipped default is not the applied default".
+        public const float DefaultSafetyCollectRamFraction = 0.5f;
+
         public bool Enabled { get; set; } = true;
         // Skip the forced periodic GC.Collect() in gmUpdate (every ~120 s).
         public bool SkipForcedCollect { get; set; } = true;
@@ -79,7 +84,11 @@ namespace EfficientServer
         // avoids the trap of a fixed ceiling below the real working heap (which
         // is 5-10 GB under load) that would fire every frame and defeat the guard.
         public int SafetyCollectAboveMB { get; set; } = 0;
-        public float SafetyCollectRamFraction { get; set; } = 0.5f;
+        // Share of host RAM the AUTO ceiling sits at. 0 = AUTO, same sentinel as
+        // SafetyCollectAboveMB: it means "use DefaultSafetyCollectRamFraction", not
+        // "no ceiling". Without a 0 the knob's lower clamp would leave an operator
+        // who set it with no ceiling in mind silently on the default instead.
+        public float SafetyCollectRamFraction { get; set; } = DefaultSafetyCollectRamFraction;
         // Opt-in: switch Boehm into incremental/generational mode so collection
         // happens in bounded increments across frames instead of one long STW.
         public bool Incremental { get; set; } = false;
@@ -451,12 +460,21 @@ namespace EfficientServer
         static bool IsConfigSectionType(Type t) =>
             t.IsClass && t != typeof(string) && t.Namespace == typeof(ServerPerfConfig).Namespace;
 
-        // The properties a config document binds: PUBLIC INSTANCE only. The static
-        // surface (Current, Load, LastLoadFailed) is load state and behavior, not a
-        // knob, and no serialized defaults object carries it. One definition, so the
-        // loader's walkers and the fuzz's reflection cannot drift apart on it.
+        /// <summary>
+        /// The properties a config document binds on <paramref name="type"/>:
+        /// PUBLIC INSTANCE only. The static surface (Current, Load,
+        /// LastLoadFailed) is load state and behavior, not a knob, and no
+        /// serialized defaults object carries it. One definition for every caller
+        /// (the null-section backfill, the unknown-key walker and the fuzz's
+        /// reflection), so a filter added here cannot leave one of them scanning a
+        /// different set than the binder does.
+        /// </summary>
+        internal static PropertyInfo[] ConfigPropertiesOf(Type type) =>
+            type.GetProperties(BindingFlags.Public | BindingFlags.Instance);
+
+        // The root config's bindable surface, over the one definition above.
         internal static IEnumerable<PropertyInfo> ConfigProperties =>
-            typeof(ServerPerfConfig).GetProperties(BindingFlags.Public | BindingFlags.Instance);
+            ConfigPropertiesOf(typeof(ServerPerfConfig));
 
         /// <summary>
         /// JSON null for a section binds as a null reference; rebuild every such
@@ -503,8 +521,10 @@ namespace EfficientServer
             // per JSON key. GetProperties re-runs the binder's type walk and
             // allocates a fresh array on every call, so the per-key form made an
             // O(keys x properties) scan of reflection metadata for every config
-            // load, and the recursion re-did it at each nesting level.
-            PropertyInfo[] candidates = type.GetProperties(BindingFlags.Public | BindingFlags.Instance);
+            // load, and the recursion re-did it at each nesting level. The list
+            // comes from the shared definition so this scan cannot widen or narrow
+            // away from what the binder actually binds.
+            PropertyInfo[] candidates = ConfigPropertiesOf(type);
             foreach (JProperty prop in owner.Properties())
             {
                 string path = prefix.Length == 0 ? prop.Name : prefix + "." + prop.Name;
@@ -676,7 +696,7 @@ namespace EfficientServer
             // forced positive. This centralizes the previously ad-hoc use-site clamps
             // and adds the "config corrected" log they lacked.
             Gc.SafetyCollectAboveMB = IntRange("Gc.SafetyCollectAboveMB", Gc.SafetyCollectAboveMB, 0, 1048576);
-            Gc.SafetyCollectRamFraction = FiniteRange("Gc.SafetyCollectRamFraction", Gc.SafetyCollectRamFraction, 0f, 0.95f, 0.5f);
+            Gc.SafetyCollectRamFraction = FiniteRange("Gc.SafetyCollectRamFraction", Gc.SafetyCollectRamFraction, 0f, 0.95f, GcConfig.DefaultSafetyCollectRamFraction);
             Gc.IncrementalPauseTargetMs = IntRange("Gc.IncrementalPauseTargetMs", Gc.IncrementalPauseTargetMs, 0, 10000);
         }
 

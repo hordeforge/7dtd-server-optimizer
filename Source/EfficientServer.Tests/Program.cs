@@ -432,8 +432,8 @@ namespace EfficientServer.Tests
                 if (!section) { buf.Append('"').Append(prop.Name).Append("\":0"); continue; }
                 buf.Append('"').Append(prop.Name).Append("\":{");
                 bool inner = true;
-                foreach (PropertyInfo leaf in prop.PropertyType
-                    .GetProperties(BindingFlags.Public | BindingFlags.Instance))
+                foreach (PropertyInfo leaf in ServerPerfConfig
+                    .ConfigPropertiesOf(prop.PropertyType))
                 {
                     if (!inner) buf.Append(',');
                     inner = false;
@@ -1357,8 +1357,16 @@ namespace EfficientServer.Tests
             Check(d.Pathfinding.MoveRescanThresholdSq == 100f, "default MoveRescanThresholdSq=100");
             Check(d.Pathfinding.MaxPathEnqueuesPerTick == 0, "default MaxPathEnqueuesPerTick=0 (unlimited)");
             Check(d.Pathfinding.DropPathWhenFarDistSq == 0f, "default DropPathWhenFarDistSq=0 (off)");
-            Check(Math.Abs(d.Gc.SafetyCollectRamFraction - 0.5f) < 1e-6, "default RamFraction=0.5");
             Check(d.Gc.SafetyCollectAboveMB == 0, "default SafetyCollectAboveMB=0 (AUTO)");
+            // The AUTO fraction is named once because it is BOTH this section's
+            // default and the value GcGuardPatch substitutes for the 0 sentinel, so
+            // the shipped default and the applied default cannot drift. Pinned here
+            // so changing the constant is a deliberate reviewed change, not an
+            // accident that only shows up as a different guard ceiling in the field.
+            Check(Math.Abs(d.Gc.SafetyCollectRamFraction
+                    - GcConfig.DefaultSafetyCollectRamFraction) < 1e-6
+                && Math.Abs(GcConfig.DefaultSafetyCollectRamFraction - 0.5f) < 1e-6,
+                "default RamFraction is the named AUTO default (0.5)");
 
             // Shipped-default VALUE pins for the rest of the knob surface. The
             // normalize-silence check below only proves defaults sit IN RANGE,
@@ -2433,6 +2441,15 @@ namespace EfficientServer.Tests
                 && atMin.TickGuard.MinEnemiesKept == 0, "TickGuard lower endpoints preserved verbatim");
             Check(atMin.Gc.SafetyCollectAboveMB == 0 && atMin.Gc.SafetyCollectRamFraction == 0f
                 && atMin.Gc.IncrementalPauseTargetMs == 0, "Gc lower endpoints preserved verbatim");
+            // 0 on the fraction is the documented AUTO sentinel, not a zero ceiling,
+            // so it must survive Normalize untouched (the use site resolves it) AND
+            // keep the named default reachable. A clamp of the 0 to a positive
+            // minimum here would instead log a "config corrected" line for a value
+            // the mod documents as meaningful.
+            Check(atMin.Gc.SafetyCollectRamFraction == 0f
+                && GcConfig.DefaultSafetyCollectRamFraction > 0f
+                && GcConfig.DefaultSafetyCollectRamFraction <= 0.95f,
+                "RamFraction 0 is the AUTO sentinel: preserved by Normalize, resolved at the use site");
             Check(EsLog.Warnings.Count == 0, "lower endpoints load without any 'config corrected' warning");
 
             // Governor band vs frame target. The band is compared against the
