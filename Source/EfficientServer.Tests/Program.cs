@@ -305,6 +305,20 @@ namespace EfficientServer.Tests
                 "real EsLog.Emit renders through LogLine, the shared record shape (uptime stamp, one line per record)");
         }
 
+        // The knob groups Load's backfill and FeatureActive's null guards walk,
+        // read through the loader's own property list
+        // (ServerPerfConfig.ConfigProperties) so the fixtures below cannot drift
+        // from the definition production uses. The section predicate is the
+        // loader's rule: a nested class in the config namespace, string excluded.
+        static List<PropertyInfo> ConfigSections()
+        {
+            return ServerPerfConfig.ConfigProperties
+                .Where(p => p.PropertyType.IsClass
+                    && p.PropertyType != typeof(string)
+                    && p.PropertyType.Namespace == typeof(ServerPerfConfig).Namespace)
+                .ToList();
+        }
+
         // A JSON document naming EVERY public property of ServerPerfConfig and of
         // every config section, so the unknown-key scan can be checked against the
         // declared surface rather than a hand-copied key list. Values are
@@ -314,8 +328,7 @@ namespace EfficientServer.Tests
         {
             var buf = new System.Text.StringBuilder("{");
             bool first = true;
-            foreach (PropertyInfo prop in typeof(ServerPerfConfig)
-                .GetProperties(BindingFlags.Public | BindingFlags.Instance))
+            foreach (PropertyInfo prop in ServerPerfConfig.ConfigProperties)
             {
                 if (!first) buf.Append(',');
                 first = false;
@@ -335,6 +348,32 @@ namespace EfficientServer.Tests
                 buf.Append('}');
             }
             return buf.Append('}').ToString();
+        }
+
+        // {"AiLod":null,"Gc":null,...} - one explicit JSON null per knob group,
+        // built from the declared surface rather than a transcribed list, so a
+        // section added tomorrow reaches Load's backfill branch in this fixture
+        // without anyone remembering to add it to a string literal.
+        static string EverySectionNullJson()
+        {
+            var sections = ConfigSections();
+            var buf = new StringBuilder("{");
+            for (int i = 0; i < sections.Count; i++)
+            {
+                if (i > 0) buf.Append(',');
+                buf.Append('"').Append(sections[i].Name).Append("\":null");
+            }
+            return buf.Append('}').ToString();
+        }
+
+        // The same shape as an in-memory config: every section pointer nulled, so
+        // FeatureActive's per-arm null guard is exercised against a config that
+        // really is missing every section rather than against the default object.
+        static ServerPerfConfig ConfigWithNullSections()
+        {
+            var cfg = new ServerPerfConfig();
+            foreach (PropertyInfo section in ConfigSections()) section.SetValue(cfg, null);
+            return cfg;
         }
 
         // "Config load failed [<CLR type name>], using defaults: <message>". Only
@@ -813,6 +852,23 @@ namespace EfficientServer.Tests
             Check(band.Level == 0 && Drive(band, plain, plain.OverBudgetMs - 1.0, 100) == 0,
                 "hysteresis band never accumulates into a transition");
 
+            // The exact thresholds themselves. Both comparisons in Advance are
+            // strict, so an interval sitting ON a threshold is inside the band,
+            // not one tick toward a transition. The fixtures above probe the band
+            // from inside and the two arms from well outside; nothing lands on the
+            // edge, so widening either comparison to >= (or <=) would keep them
+            // green while moving the whole escalation band by one threshold width.
+            var onOver = new GovernorTiers();
+            Check(Drive(onOver, plain, plain.OverBudgetMs, 100) == 0 && onOver.Level == 0,
+                "an interval exactly AT OverBudgetMs is still in the band (strict over-budget test)");
+            var onHealthy = new GovernorTiers();
+            Drive(onHealthy, plain, Over, 5);
+            Check(onHealthy.Level == 1, "on-threshold setup: standing in tier 1");
+            Check(Drive(onHealthy, plain, plain.HealthyMs, 100) == 0 && onHealthy.Level == 1,
+                "an interval exactly AT HealthyMs still holds the tier (strict under-budget test)");
+            Check(Drive(onHealthy, plain, plain.HealthyMs - 0.001, 100) == 1 && onHealthy.Level == 0,
+                "one hair below HealthyMs steps the tier down once the window closes");
+
             // Levers are derived from the operator's own value, doubled and
             // capped, never faster than configured.
             Check(t.EffectiveEntityStride(1) == 2, "stride 1 -> 2 while throttled");
@@ -853,6 +909,25 @@ namespace EfficientServer.Tests
             Check(!e.SweepDue, "no rig sweep before the period elapses");
             e.Advance(em, Over);
             Check(e.SweepDue, "tier 2 asks for a periodic rig sweep");
+
+            // EmergencyOverMs is a SEPARATE threshold, so a server sustained over
+            // the governor band but under the emergency band must keep throttling
+            // indefinitely without the rigs being culled. Every tier-2 fixture
+            // above drives a single over-everything interval, which cannot see a
+            // missing (or too low) emergency test. The exact edge is pinned too:
+            // the comparison is strict, so the threshold value itself does not arm.
+            var betweenBands = new GovernorTiers();
+            Check(Drive(betweenBands, em, em.OverBudgetMs + 1.0, 500) == 1
+                && betweenBands.Level == 1,
+                "sustained over-budget intervals below EmergencyOverMs never arm the emergency");
+            var onEmergency = new GovernorTiers();
+            Check(Drive(onEmergency, em, em.EmergencyOverMs, 500) == 1
+                && onEmergency.Level == 1,
+                "an interval exactly AT EmergencyOverMs does not arm the emergency (strict test)");
+            var pastEmergency = new GovernorTiers();
+            Check(Drive(pastEmergency, em, em.EmergencyOverMs + 0.001, 500) == 2
+                && pastEmergency.Level == 2,
+                "one hair past EmergencyOverMs arms the emergency after both windows close");
 
             // Recovery steps down one tier at a time and restores the levers.
             Drive(e, em, Healthy, 5);
@@ -1236,18 +1311,17 @@ namespace EfficientServer.Tests
             Check(empty != null && empty.Pathfinding != null && empty.Gc != null, "empty object -> sub-configs filled");
 
             // Explicit JSON null for a section binds as a null reference and must be
-            // backfilled with defaults. Assert EVERY section via reflection so a
-            // future knob group cannot skip its backfill line and NRE downstream.
-            var secNull = LoadTemp(
-                "{\"AiLod\":null,\"SkipOnDedicated\":null,\"DynamicMesh\":null,\"Gc\":null," +
-                "\"Pathfinding\":null,\"Network\":null,\"WorldTransfer\":null,\"Server\":null," +
-                "\"AnimatorLod\":null,\"CrowdCollisionLod\":null,\"Governor\":null," +
-                "\"TickGuard\":null,\"Diagnostics\":null}");
+            // backfilled with defaults. The document is built from the declared
+            // surface and the assertion walks the same list, so a future knob group
+            // cannot skip its backfill line (or its fixture line) and NRE downstream.
+            List<PropertyInfo> declaredSections = ConfigSections();
+            Check(declaredSections.Count > 0,
+                "section fixture: the declared surface still yields knob groups (got "
+                    + declaredSections.Count + ")");
+            var secNull = LoadTemp(EverySectionNullJson());
             bool allSectionsBackfilled = true;
-            foreach (var sect in typeof(ServerPerfConfig).GetProperties())
-                if (sect.PropertyType.IsClass && sect.PropertyType != typeof(string)
-                    && sect.PropertyType.Namespace == typeof(ServerPerfConfig).Namespace
-                    && sect.GetValue(secNull) == null)
+            foreach (var sect in declaredSections)
+                if (sect.GetValue(secNull) == null)
                     { allSectionsBackfilled = false; break; }
             Check(allSectionsBackfilled, "explicit null sections -> every section backfilled");
             Check(secNull.AiLod.FullAiDistSq == 100f && secNull.Governor.OverBudgetMs == 57f,
@@ -1974,17 +2048,14 @@ namespace EfficientServer.Tests
             Check(featureKeys.SequenceEqual(expectedKeys),
                 "feature-key vocabulary pinned: " + string.Join(",", featureKeys));
             // The null fixture must really be null, or the sweep below would pass
-            // on a default config and prove nothing.
-            var nullSections = new ServerPerfConfig
-            {
-                AiLod = null!, SkipOnDedicated = null!, DynamicMesh = null!, Gc = null!,
-                Pathfinding = null!, Network = null!, WorldTransfer = null!, Server = null!,
-                AnimatorLod = null!, CrowdCollisionLod = null!, Governor = null!,
-                TickGuard = null!, Diagnostics = null!,
-            };
-            Check(nullSections.AiLod == null && nullSections.Governor == null
-                && nullSections.Diagnostics == null,
-                "null-section fixture really holds null sections");
+            // on a default config and prove nothing. Built by nulling every
+            // declared section, so a knob group added tomorrow is null here too
+            // instead of quietly keeping the sweep off the guard it needs.
+            var nullSections = ConfigWithNullSections();
+            int nulledSections = declaredSections.Count(p => p.GetValue(nullSections) == null);
+            Check(nulledSections == declaredSections.Count,
+                "null-section fixture really holds null in every declared section ("
+                    + nulledSections + "/" + declaredSections.Count + ")");
             foreach (string key in featureKeys)
             {
                 if (key == ServerPerfConfig.KeyBenchGod)
