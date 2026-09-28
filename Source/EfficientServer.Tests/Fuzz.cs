@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using System.Text;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -325,6 +326,9 @@ namespace EfficientServer.Tests
         // knobs join the fuzz corpus automatically instead of drifting stale. The
         // binding surface is ServerPerfConfig.ConfigProperties, the same one the
         // loader walks, so the static load state can never be mistaken for a knob.
+        // That property is already PUBLIC INSTANCE only (see Config.cs), so the
+        // instance-only reason the loader binds holds here too and needs no second
+        // definition of the surface.
         static List<string[]> ReflectedLeaves()
         {
             var leaves = new List<string[]>();
@@ -338,14 +342,15 @@ namespace EfficientServer.Tests
                 if (!top.PropertyType.IsClass
                     || top.PropertyType.Namespace != typeof(ServerPerfConfig).Namespace)
                     continue;
-                foreach (var sub in top.PropertyType.GetProperties())
+                foreach (var sub in top.PropertyType.GetProperties(BindingFlags.Public | BindingFlags.Instance))
                     leaves.Add(new[] { top.Name, sub.Name });
             }
             return leaves;
         }
 
         // Top-level knob-group names, from the schema like ReflectedLeaves, so a
-        // future section joins the combined fuzz automatically.
+        // future section joins the combined fuzz automatically. Same instance-only
+        // surface, same reason.
         static List<string> ReflectedSections()
         {
             var names = new List<string>();

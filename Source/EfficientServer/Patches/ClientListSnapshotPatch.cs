@@ -27,9 +27,9 @@ namespace EfficientServer.Patches
     /// private snapshot built via ICollection.CopyTo. CopyTo does not version-check
     /// and arrays are fixed-size, so the enumeration cannot throw regardless of what
     /// the main thread does concurrently: worst cases are a bounded-staleness answer
-    /// (a client added mid-copy is missed once) or, if the copy itself races a resize,
-    /// a caught ArgumentException -> empty snapshot -> the duplicate check passes and
-    /// the request proceeds to password/accept exactly as when no client matches.
+    /// (a client added mid-copy is missed once) or, if every attempt loses its length
+    /// argument to a join, an empty snapshot -> the duplicate check passes and the
+    /// request proceeds to password/accept exactly as when no client matches.
     /// Rate limiting, the pending-IP and password rejects, and Accept all stay on the
     /// receive thread untouched, so no wrapper state changes threads.
     ///
@@ -69,6 +69,13 @@ namespace EfficientServer.Patches
         // fallback and `es status` shows the total: a single occurrence and a
         // persistent copy failure under join churn are the same one log line.
         internal const string DegradeKey = "clientListSnapshot";
+
+        // How many times one request re-reads Count and re-copies before it gives
+        // up and scans nothing. The gap the retry closes is the main thread's join
+        // landing between the two reads: without it every join during a request's
+        // copy turns the duplicate-IP guard off for that request, which is the
+        // common case under exactly the churn this patch exists for.
+        const int SnapshotAttempts = 3;
 
         static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
         {
@@ -125,17 +132,30 @@ namespace EfficientServer.Patches
             if (!ModApi.ShouldRun(config) || cfg == null || !cfg.ClientListSnapshot)
                 return Generic(live);
 
-            ClientInfo[] raw;
-            try
+            ClientInfo[] raw = null;
+            Exception failure = null;
+            for (int attempt = 0; attempt < SnapshotAttempts && raw == null; attempt++)
             {
-                // CopyTo-based snapshot: no version check, no enumerator exception.
-                // A concurrent grow past the captured Count makes List.CopyTo argue
-                // about lengths (caught below -> empty scan, fail open); shrink or
-                // steady state yield a valid point-in-time copy.
-                raw = new ClientInfo[live.Count];
-                ((ICollection<ClientInfo>)live).CopyTo(raw, 0);
+                try
+                {
+                    // CopyTo-based snapshot: no version check, no enumerator exception.
+                    // A concurrent grow past the captured Count makes List.CopyTo
+                    // argue about lengths, so each attempt re-reads Count; a steady
+                    // list, a shrink, or a join outside the read-copy gap yields a
+                    // valid point-in-time copy on the first try.
+                    ClientInfo[] copy = new ClientInfo[live.Count];
+                    ((ICollection<ClientInfo>)live).CopyTo(copy, 0);
+                    raw = copy;
+                }
+                catch (Exception ex)
+                {
+                    // A shrinking list cannot throw (the copy just stops early, and
+                    // the null-fill pass below drops the vacated tail), so anything
+                    // caught here is a length argument losing a race with a join.
+                    failure = ex;
+                }
             }
-            catch (Exception ex)
+            if (raw == null)
             {
                 // Fail-open is the documented outcome, but never SILENT: a
                 // snapshot that fell back to an empty scan lets a duplicate-IP
@@ -146,8 +166,8 @@ namespace EfficientServer.Patches
                 // failure so the cause is greppable. Degrade.Report both
                 // announces-once and counts every hit, so the rate is readable
                 // from `es status` instead of inferred from one line.
-                if (Degrade.Report(DegradeKey, "client-list snapshot failed [" + ex.GetType().Name
-                        + "]: " + ex.Message + " - duplicate-IP check falls open for that "
+                if (Degrade.Report(DegradeKey, "client-list snapshot failed [" + failure.GetType().Name
+                        + "]: " + failure.Message + " - duplicate-IP check falls open for that "
                         + "request (announced once; per-hit count in 'es status')"))
                     EsLog.Emit(LogLevel.Warn, Degrade.FirstReport(DegradeKey));
                 return Generic(Empty());

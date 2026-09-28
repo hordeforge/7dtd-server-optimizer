@@ -254,7 +254,9 @@ The transpiler reroutes only the enumerator acquisition: the scan enumerates a
 private snapshot built with `ICollection.CopyTo` (no version check, fixed-size
 array -> cannot throw). Rate limiting, both rejects, and Accept stay on the
 receive thread unchanged. Decision semantics hold up to one copy instant; a copy
-that races a resize fails open to an empty scan (accept path), never a crash.
+that races a join is retried against a fresh count, and only a run that loses
+every attempt fails open to an empty scan (accept path, warned once), never a
+crash.
 This is the mod's one intentional receive-thread surface: stateless helper,
 cross-thread reads limited to the sanctioned reference/volatile set
 (ARCHITECTURE concurrency model).

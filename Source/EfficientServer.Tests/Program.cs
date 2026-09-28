@@ -485,8 +485,12 @@ namespace EfficientServer.Tests
 
             const int Generations = 20000;
             const int Readers = 4;
+            // The seed's MaxPathEnqueuesPerTick, the one value the writer never
+            // publishes; see the seed below.
+            const int SeedMarker = 0;
             bool[] readerOk = new bool[Readers];
             long[] readerReads = new long[Readers];
+            long[] readerRaced = new long[Readers];
 
             // Seed the holder with a writer-shaped generation before any thread
             // runs. ConfigPublication's static initializer publishes built-in
@@ -494,9 +498,15 @@ namespace EfficientServer.Tests
             // that seed before the writer's first store trips the marker assertion
             // on a correctly published config, which is a startup race, not the
             // tearing this test is about.
+            //
+            // MaxPathEnqueuesPerTick = SeedMarker is the "no writer generation
+            // observed" marker: the writer publishes gen+1 for gen in
+            // [0, Generations), so every value it stores is >= 1 and a reader can
+            // tell a sample it actually raced the writer from one that only saw
+            // this seed.
             var seed = new ServerPerfConfig();
             seed.Pathfinding.PoolInitScanNodes = true;
-            seed.Pathfinding.MaxPathEnqueuesPerTick = 1;
+            seed.Pathfinding.MaxPathEnqueuesPerTick = SeedMarker;
             seed.Enabled = true;
             ConfigPublication.Current = seed;
             var stop = new ManualResetEventSlim(false);
@@ -534,12 +544,22 @@ namespace EfficientServer.Tests
                 {
                     bool ok = true;
                     long seen = 0;
-                    // Parked before the first sample so the writer cannot finish
-                    // before this reader has looked at the holder even once.
+                    long raced = 0;
+                    // Parked before the first sample so the writer cannot start
+                    // publishing before this reader has looked at the holder even
+                    // once.
                     readersParked.Signal();
-                    // Read until the writer has published its last generation, then
-                    // take one more sample so every reader is guaranteed to have run.
-                    while (!stop.IsSet)
+                    // Sample FIRST, then ask whether the writer is done. A
+                    // while(!stop.IsSet) loop around the sample body is a timing
+                    // bug: signalling does not keep the reader running, so a
+                    // reader descheduled between Signal and the loop's first test
+                    // resumes to find the writer's 20000 generations already
+                    // published and stop set, samples nothing, and fails the
+                    // "reader actually sampled" check on a correctly published
+                    // config. Sampling before the test makes one sample
+                    // unconditional, and the loop then runs until the writer is
+                    // finished.
+                    do
                     {
                         ServerPerfConfig cfg = ConfigPublication.Current;
                         if (cfg == null) { ok = false; break; }
@@ -548,13 +568,16 @@ namespace EfficientServer.Tests
                         // writer stamped is one the writer actually set.
                         if (cfg.Pathfinding == null || cfg.Network == null || !cfg.Pathfinding.PoolInitScanNodes)
                         { ok = false; break; }
-                        if (cfg.Pathfinding.MaxPathEnqueuesPerTick < 1
+                        if (cfg.Pathfinding.MaxPathEnqueuesPerTick < SeedMarker
                             || cfg.Pathfinding.MaxPathEnqueuesPerTick > Generations)
                         { ok = false; break; }
+                        if (cfg.Pathfinding.MaxPathEnqueuesPerTick != SeedMarker) raced++;
                         seen++;
                     }
+                    while (!stop.IsSet);
                     readerOk[id] = ok;
                     readerReads[id] = seen;
+                    readerRaced[id] = raced;
                 });
                 readerThreads[r].IsBackground = true;
             }
@@ -572,7 +595,7 @@ namespace EfficientServer.Tests
             for (int r = 0; r < Readers; r++)
                 Check(readerReads[r] > 0,
                     "config publication: reader " + r + " actually sampled the holder");
-            Check(readerReads.Sum() > 0,
+            Check(readerRaced.Sum() > 0,
                 "config publication: readers sampled a published generation, not just the seed");
             for (int r = 0; r < Readers; r++)
                 Check(readerOk[r],

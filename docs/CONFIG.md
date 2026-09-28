@@ -250,8 +250,9 @@ One-way per process: the collector mode is a P/Invoke that cannot be undone, so
   churn on stock).
 - **Gameplay impact: none** - rate limiting, the pending-IP and password rejects,
   and Accept are untouched, and the decision semantics hold up to one copy
-  instant (a client added mid-copy can be missed once). If the copy itself races
-  a resize, the scan passes empty (fail open to accept), never crashes.
+  instant (a client added mid-copy can be missed once). A copy that races a join
+  is retried against a fresh count, and if every attempt loses the race the scan
+  passes empty (fail open to accept, warned once per process), never crashes.
 - **Default ON per policy**: removes a stock crash mode with no behavior change;
   set false only to reproduce the stock race in a controlled A/B (false restores
   the exact vanilla enumerator).
