@@ -44,7 +44,18 @@ elif [[ -x "$HOME/.cache/dotnet-sdk/dotnet" ]]; then
   export DOTNET_ROOT="$HOME/.cache/dotnet-sdk"
   export PATH="$DOTNET_ROOT:$PATH"
 fi
-SRV="${SEVENDTD_DS_DIR:-$HOME/.local/share/Steam/steamapps/common/7 Days to Die Dedicated Server}"
+SRV="${SEVENDTD_DS_DIR:-${DS:-$HOME/.local/share/Steam/steamapps/common/7 Days to Die Dedicated Server}}"
+# DS is the second accepted spelling (see --help above and install.sh, which
+# hands its resolved path to this script); an exported-but-empty one must fail
+# instead of silently resolving to the stock default, so the compile never
+# happens against a different install than the operator named.
+for _var in SEVENDTD_DS_DIR DS; do
+  if [[ -n "${!_var+x}" && -z "${!_var}" ]]; then
+    echo "ERROR: $_var is set but empty; pass a real install dir or unset it." >&2
+    exit 1
+  fi
+done
+unset _var
 CLIENT="${SEVENDTD_GAME_DIR:-$HOME/.local/share/Steam/steamapps/common/7 Days To Die}"
 if [[ -f "$SRV/7DaysToDieServer_Data/Managed/Assembly-CSharp.dll" ]]; then
   MANAGED="$SRV/7DaysToDieServer_Data/Managed"

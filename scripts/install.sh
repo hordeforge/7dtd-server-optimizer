@@ -14,7 +14,8 @@ read from the environment.
   -h, --help  show this help and exit
 
 Environment:
-  SEVENDTD_DS_DIR / DS  dedicated install root; the mod is installed into
+  SEVENDTD_DS_DIR / DS  dedicated install root (SEVENDTD_DS_DIR wins, then DS,
+                       then the stock Steam path); the mod is installed into
                        $SEVENDTD_DS_DIR/Mods/EfficientServer
 EOF
 }
@@ -35,14 +36,24 @@ esac
 
 # Resolve and validate the install dir BEFORE the build: an empty override
 # must not spend a compile, and must not reach the rm -rf below.
-SRV="${SEVENDTD_DS_DIR:-$HOME/.local/share/Steam/steamapps/common/7 Days to Die Dedicated Server}"
+# DS is an accepted spelling, not just the SEVENDTD_DS_DIR the Makefile exports:
+# uninstall.sh printed `make install DS="$SRV"` in its restore hint, and
+# --help above documents both, so `DS=/path scripts/install.sh` must resolve to
+# that path. It used to fall through to the stock default and wipe a DIFFERENT
+# install's mod folder than the operator named.
+SRV="${SEVENDTD_DS_DIR:-${DS:-$HOME/.local/share/Steam/steamapps/common/7 Days to Die Dedicated Server}}"
 # Exported-but-empty must fail, not fall through to the stock default in the
 # expression above: the rm -rf below would then wipe a DIFFERENT install's mod
-# folder than the operator named. Same guard in uninstall.sh and run_server.sh.
-if [[ -n "${SEVENDTD_DS_DIR+x}" && -z "$SEVENDTD_DS_DIR" ]]; then
-  echo "ERROR: SEVENDTD_DS_DIR is set but empty; pass a real install dir or unset it." >&2
-  exit 1
-fi
+# folder than the operator named. Both spellings are checked, because either
+# one being empty is what a mistyped `DS=` leaves behind. Same guard in
+# uninstall.sh and run_server.sh.
+for _var in SEVENDTD_DS_DIR DS; do
+  if [[ -n "${!_var+x}" && -z "${!_var}" ]]; then
+    echo "ERROR: $_var is set but empty; pass a real install dir or unset it." >&2
+    exit 1
+  fi
+done
+unset _var
 
 # Back up on disk, never the stock /tmp: it is tmpfs on most Linux hosts, and
 # after a failed install that copy is the only place the operator's tuning

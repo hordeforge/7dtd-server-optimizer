@@ -4,6 +4,12 @@ ROOT := $(CURDIR)
 # Python's tempfile and .NET's Path.GetTempPath all honor TMPDIR, so this one
 # export covers the shell, Python and C# sides. .scratch/ is gitignored.
 export TMPDIR := $(ROOT)/.scratch/tmp
+# Create it while the makefile is read, not in a recipe: make resolves the
+# exported TMPDIR before any target runs, so on a fresh clone it printed
+# "TMPDIR value ...: No such file or directory / using default temporary
+# directory '/tmp'" on every invocation and used the stock tmpfs for its own
+# temporaries, which is the thing the export above exists to avoid.
+$(shell mkdir -p "$(TMPDIR)")
 
 DS ?= $(HOME)/.local/share/Steam/steamapps/common/7 Days to Die Dedicated Server
 # Scripts read SEVENDTD_DS_DIR; route the documented `make install DS=...`
@@ -43,11 +49,12 @@ MYPY_VERSION := 2.1.0
 .PHONY: help build build-mcs test lint unit check-scripts preflight-lint preflight-unit \
 	preflight-scripts scratch coverage install uninstall run clean package verify-reproducible
 # Every gate that can reach Python's tempfile, .NET's Path.GetTempPath or
-# mktemp depends on this. The directory must exist before those run: a
-# nonexistent TMPDIR is silently ignored by each of them, and Python's
-# tempfile.gettempdir() then falls back to the stock /tmp, undoing the
-# routing above. The subset targets ran without it, so `make unit` and
-# `make check-scripts` alone wrote their scratch into RAM.
+# mktemp depends on this. A nonexistent TMPDIR is silently ignored by each of
+# them, and Python's tempfile.gettempdir() then falls back to the stock /tmp,
+# undoing the routing above. The subset targets ran without it, so `make unit`
+# and `make check-scripts` alone wrote their scratch into RAM. The parse-time
+# mkdir near the TMPDIR export already covers the directory; this stays the
+# declared prereq, so a removed .scratch/ cannot silently unroute a gate.
 scratch:
 	@mkdir -p "$(TMPDIR)"
 help:
