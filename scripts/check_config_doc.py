@@ -24,8 +24,9 @@ import re
 import sys
 from typing import TypedDict
 
-from cli_common import Selftest, run_cli
+from cli_common import run_cli
 from repo_root import repo_root
+from selftest_support import Checks
 
 ROOT = repo_root()
 CONFIG_CS = ROOT / "Source" / "EfficientServer" / "Config.cs"
@@ -166,7 +167,9 @@ def _selftest() -> int:
     Config.cs-shaped snippet and plain dicts so every helper's spec is asserted
     directly, following the --selftest convention of es_cfg_guard.
     """
-    t = Selftest()
+    checks = Checks("check_config_doc")
+
+    t = checks
 
     # parse_cs_default: every initializer form Config.cs uses.
     t.check(
@@ -300,7 +303,7 @@ def _selftest() -> int:
         default_drift(schema, {"Enabled": True, "AiLod": {"FullAiDistSq": 100}}) == [],
     )
 
-    return t.finish("check_config_doc")
+    return checks.finish()
 
 
 def main() -> int:

@@ -24,8 +24,9 @@ import sys
 from itertools import pairwise
 from pathlib import Path
 
-from cli_common import Selftest, run_cli
+from cli_common import run_cli
 from repo_root import repo_root
+from selftest_support import Checks
 
 ROOT = repo_root()
 MODINFO = ROOT / "Source" / "EfficientServer" / "ModInfo.xml"
@@ -133,7 +134,9 @@ def _selftest() -> int:
     """
     import tempfile
 
-    t = Selftest()
+    checks = Checks("check_version")
+
+    t = checks
 
     with tempfile.TemporaryDirectory(prefix="es-version-test.") as td:
         mi = Path(td) / "ModInfo.xml"
@@ -211,7 +214,7 @@ def _selftest() -> int:
         _changelog_fails("## [Unreleased]\n\n- thing\n", "1.19.0") != [],
     )
 
-    return t.finish("check_version")
+    return checks.finish()
 
 
 def main() -> int:

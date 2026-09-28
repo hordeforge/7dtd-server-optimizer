@@ -11,7 +11,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from cli_common import Selftest, run_cli
+from cli_common import run_cli
+from selftest_support import Checks
 
 # Paths that exist together only at this repository's root. Both are required,
 # so a stray Makefile in a parent workspace directory cannot be mistaken for it.
@@ -42,7 +43,9 @@ def repo_root(start: Path | None = None) -> Path:
 def _selftest() -> int:
     import tempfile
 
-    t = Selftest()
+    checks = Checks("repo_root")
+
+    t = checks
 
     t.check("finds the real root from this file", (repo_root() / MARKERS[0]).is_file())
 
@@ -71,7 +74,7 @@ def _selftest() -> int:
             pass  # no root anywhere above: also a correct rejection of `partial`
         t.check("one marker of two is not a root", found != partial.resolve())
 
-    return t.finish("repo_root")
+    return checks.finish()
 
 
 if __name__ == "__main__":

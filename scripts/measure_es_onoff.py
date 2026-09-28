@@ -38,7 +38,7 @@ from pathlib import Path
 from typing import TypedDict
 
 from cli_common import run_cli
-from es_cfg_guard import ConfigSwap, write_atomic
+from es_cfg_guard import ConfigSwap
 from harness_common import (
     DS,
     ES_CFG,
@@ -47,6 +47,7 @@ from harness_common import (
     ensure_server_ready,
     log,
     teardown_bots,
+    write_atomic,
     write_report,
 )
 

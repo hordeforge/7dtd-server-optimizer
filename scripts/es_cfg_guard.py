@@ -38,7 +38,8 @@ import os
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
-from cli_common import Selftest, run_cli
+from cli_common import run_cli
+from selftest_support import Checks
 
 STALE_SUFFIX = ".stale"
 # Marker write_atomic puts between a file name and its writer's pid, so a
@@ -323,7 +324,9 @@ class ConfigSwap:
 def _selftest() -> int:
     import tempfile
 
-    t = Selftest()
+    checks = Checks("es_cfg_guard")
+
+    t = checks
 
     def section(doc: dict[str, object], key: str) -> dict[str, object]:
         """Narrow a top-level JSON object to one of its nested sections."""
@@ -654,7 +657,7 @@ def _selftest() -> int:
             sorted(p.name for p in root.iterdir()) == [cfg.name],
         )
 
-    return t.finish("es_cfg_guard")
+    return checks.finish()
 
 
 if __name__ == "__main__":

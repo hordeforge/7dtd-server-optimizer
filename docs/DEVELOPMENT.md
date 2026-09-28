@@ -179,6 +179,7 @@ Offline gates run by `make test` and CI. Live-server harnesses need a running de
 | `check_version.py` | Regression gate (in `make test`): ModInfo (source+dist) == AssemblyVersion, no doc claims a future minor; selftest pins version extraction/normalization |
 | `es_cfg_guard.py` | Config swap/restore primitive: snapshot the installed `efficientserver.json` before a harness mutates it, and restore it on every exit path including a SIGKILLed run; selftest pins the guard protocol |
 | `coverage_badge.py` | Renders the Cobertura report from `make coverage` into a badge SVG (CI pastes it into the README); selftest pins the percentage and colour bands |
+| `selftest_support.py` | PASS/FAIL collector the selftests above share, so the result line and exit code are one spelling. Not an entry point |
 | `harness_common.py` | Shared plumbing for the three live harnesses below: loadgen import path, env-driven paths, readiness probe, report writer. Not an entry point |
 | `validate_anim_path_admission.py` | Live A/B: animator-emergency + path-admission against real bots/zombies (telnet + loadgen); see RESULTS |
 | `validate_bloodmoon_path.py` | Live blood-moon path-admission A/B: real director-spawned horde, baseline vs path knobs on; writes a JSON report |

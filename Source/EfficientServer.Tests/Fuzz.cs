@@ -425,13 +425,13 @@ namespace EfficientServer.Tests
             I(c.DynamicMesh.MaxRegionLoadMsPerFrame, 1, 1000, "DynamicMesh.MaxRegionLoadMsPerFrame");
             I(c.DynamicMesh.MaxActiveSyncs, 1, 128, "DynamicMesh.MaxActiveSyncs");
 
-            I(c.Pathfinding.GraphUpdateEveryTicks, 1, 200, "Pathfinding.GraphUpdateEveryTicks");
+            I(c.Pathfinding.GraphUpdateEveryTicks, 1, ServerPerfConfig.GraphUpdateMax, "Pathfinding.GraphUpdateEveryTicks");
             F(c.Pathfinding.MoveRescanThresholdSq, 100f, 10000f, "Pathfinding.MoveRescanThresholdSq");
             I(c.Pathfinding.MaxPathEnqueuesPerTick, 0, 2000, "Pathfinding.MaxPathEnqueuesPerTick");
             F(c.Pathfinding.DropPathWhenFarDistSq, 0f, 4000000f, "Pathfinding.DropPathWhenFarDistSq");
 
             I(c.WorldTransfer.ChunkPackagesPerObserverPerTick, 1, 32, "WorldTransfer.ChunkPackagesPerObserverPerTick");
-            I(c.Network.EntityDistributionEveryTicks, 1, 4, "Network.EntityDistributionEveryTicks");
+            I(c.Network.EntityDistributionEveryTicks, 1, ServerPerfConfig.EntityStrideMax, "Network.EntityDistributionEveryTicks");
 
             I(c.CrowdCollisionLod.ResolveEveryNTicks, 1, 16, "CrowdCollisionLod.ResolveEveryNTicks");
             F(c.AnimatorLod.FullRateDistSq, 100f, 1000000f, "AnimatorLod.FullRateDistSq");

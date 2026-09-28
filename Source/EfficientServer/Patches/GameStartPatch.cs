@@ -136,9 +136,12 @@ namespace EfficientServer.Patches
                 _prevFps = UnityEngine.Application.targetFrameRate;
                 _fpsApplied = true;
             }
+            // Record the value this apply OWNS, not only the one it wrote: the
+            // engine can already report `wanted` on a first apply, and the
+            // restore line below names _appliedFps, which would then read 0.
+            _appliedFps = wanted;
             if (UnityEngine.Application.targetFrameRate == wanted) return;
             UnityEngine.Application.targetFrameRate = wanted;
-            _appliedFps = wanted;
             EsLog.Emit(LogLevel.Info, $"target frame rate -> {wanted} (frame path only; full tick stays ~20 Hz)");
         }
     }

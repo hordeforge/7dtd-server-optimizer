@@ -10,7 +10,7 @@ import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-from cli_common import Selftest
+from selftest_support import Checks
 
 USAGE = """\
 usage: coverage_badge.py COBERTURA_XML OUTPUT.svg [--selftest] [-h | --help]
@@ -89,7 +89,9 @@ def _selftest() -> int:
     """
     import tempfile
 
-    t = Selftest()
+    checks = Checks("coverage_badge")
+
+    t = checks
 
     if sys.argv[1:] != ["--selftest"]:
         print(f"usage: {Path(sys.argv[0]).name} --selftest", file=sys.stderr)
@@ -143,7 +145,7 @@ def _selftest() -> int:
             'coverage: 0%' in text_bare and '#e05d44' in text_bare,
         )
 
-    return t.finish("coverage_badge")
+    return checks.finish()
 
 
 if __name__ == "__main__":
