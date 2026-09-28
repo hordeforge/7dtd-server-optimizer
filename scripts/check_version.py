@@ -10,9 +10,11 @@ Checks that:
    drift class where docs referenced a release that never shipped).
 4. CHANGELOG.md exists and mentions the shipped mod version, so a release
    cannot tag without its changelog entry.
-5. The CHANGELOG's released sections parse, run newest-first without repeats,
-   and the newest one is the shipped mod version (a bump with no notes, or
-   notes for a version the manifest does not carry, is caught).
+5. The CHANGELOG's released sections parse, carry a real ISO release date,
+   run newest-first by both version and date without repeats, and the newest
+   one is the shipped mod version (a bump with no notes, a two-digit year, a
+   date that does not exist, or notes for a version the manifest does not
+   carry, is caught).
 
 Run: python3 scripts/check_version.py
      python3 scripts/check_version.py --selftest     (both wired into `make test`)
@@ -21,6 +23,7 @@ from __future__ import annotations
 
 import re
 import sys
+from datetime import date as date_type
 from itertools import pairwise
 from pathlib import Path
 
@@ -80,6 +83,21 @@ def released_sections(text: str) -> list[tuple[str, str | None]]:
     ]
 
 
+def release_date(date: str) -> date_type | None:
+    """The section's release date as a real calendar date, or None.
+
+    `date.fromisoformat` is the whole point: it rejects a two-digit year
+    (`26-09-20`, which parses as year 26 and sorts before every real release)
+    and an impossible calendar day (`2026-02-30`, `2026-13-01`) that a bare
+    non-empty check waves through. Timezone-free by construction, so the
+    comparison below never depends on the runner's TZ.
+    """
+    try:
+        return date_type.fromisoformat(date)
+    except ValueError:
+        return None
+
+
 def _changelog_fails(text: str, shipped: str) -> list[str]:
     """Structure of the release list against the version the mod reports.
 
@@ -93,9 +111,18 @@ def _changelog_fails(text: str, shipped: str) -> list[str]:
         return ["CHANGELOG.md has no `## [X.Y.Z] - date` release section"]
 
     seen: list[tuple[int, ...]] = []
+    dates: list[tuple[str, date_type]] = []
     for label, date in released:
+        parsed = release_date(date) if date else None
         if not date:
             fails.append(f"CHANGELOG.md section [{label}] has no release date")
+        elif parsed is None:
+            fails.append(
+                f"CHANGELOG.md section [{label}] has an unparseable release "
+                f"date {date!r} (expected ISO YYYY-MM-DD)"
+            )
+        else:
+            dates.append((label, parsed))
         if not re.fullmatch(r"[0-9]+(?:\.[0-9]+)+", label):
             fails.append(f"CHANGELOG.md section [{label}] is not a version number")
             continue
@@ -112,6 +139,19 @@ def _changelog_fails(text: str, shipped: str) -> list[str]:
                 "CHANGELOG.md release sections are not newest-first "
                 f"({'.'.join(str(p) for p in below)} above "
                 f"{'.'.join(str(p) for p in above)})"
+            )
+            break
+
+    # Dates descend with the versions. A list whose dates run the other way
+    # (or repeat a day across two releases) describes a release history the
+    # changelog does not contain, and any reader dating a regression from it
+    # lands on the wrong release.
+    for (newer, d_newer), (older, d_older) in pairwise(dates):
+        if d_older >= d_newer:
+            fails.append(
+                f"CHANGELOG.md release dates are not newest-first "
+                f"([{older}] {d_older.isoformat()} above "
+                f"[{newer}] {d_newer.isoformat()})"
             )
             break
 
@@ -212,6 +252,44 @@ def _selftest() -> int:
     t.check(
         "_changelog_fails rejects a changelog with no release section",
         _changelog_fails("## [Unreleased]\n\n- thing\n", "1.19.0") != [],
+    )
+
+    # Date parsing: a two-digit year, an impossible calendar day and a
+    # non-ISO spelling all reach the release list as "has a date" today.
+    t.check(
+        "release_date parses a full ISO date",
+        release_date("2026-09-20") == date_type(2026, 9, 20),
+    )
+    for bad in ("26-09-20", "2026-02-30", "2026-13-01", "20/09/2026", "2026-9-2"):
+        t.check(f"release_date rejects {bad}", release_date(bad) is None)
+    t.check(
+        "_changelog_fails rejects a two-digit release year",
+        any(
+            "unparseable release date" in f
+            for f in _changelog_fails("## [1.19.0] - 26-09-20\n\nx\n", "1.19.0")
+        ),
+    )
+    t.check(
+        "_changelog_fails rejects an impossible release day",
+        any(
+            "unparseable release date" in f
+            for f in _changelog_fails("## [1.19.0] - 2026-02-30\n\nx\n", "1.19.0")
+        ),
+    )
+    same_day = "## [1.19.0] - 2026-09-20\n\nx\n\n## [1.18.0] - 2026-09-20\n\nx\n"
+    t.check(
+        "_changelog_fails rejects two releases sharing one date",
+        any("newest-first" in f for f in _changelog_fails(same_day, "1.19.0")),
+    )
+    dated_backwards = "## [1.19.0] - 2026-09-01\n\nx\n\n## [1.18.0] - 2026-09-20\n\nx\n"
+    t.check(
+        "_changelog_fails rejects dates that ascend with the list",
+        any("newest-first" in f for f in _changelog_fails(dated_backwards, "1.19.0")),
+    )
+    # A leap day is a real release date; it must not read as malformed.
+    t.check(
+        "_changelog_fails accepts a leap-day release",
+        _changelog_fails("## [1.19.0] - 2028-02-29\n\nx\n", "1.19.0") == [],
     )
 
     return checks.finish()

@@ -91,7 +91,13 @@ def latest_server_log() -> Path | None:
     # chronologically only within one world-name prefix, so logs from different
     # world names interleaved in the same dir would misorder by name.
     def by_mtime(paths: Iterable[Path]) -> list[Path]:
-        return sorted(paths, key=lambda p: p.stat().st_mtime)
+        # st_mtime_ns, not st_mtime: the float seconds lose resolution on a
+        # coarse-mtime filesystem, and a tie is not a rare case here because
+        # the server writes its next log as soon as the previous run exits.
+        # sorted() is stable, so an exact tie would fall back to glob order
+        # and silently hand back a stale log to sample - an A/B verdict then
+        # measures the wrong run. Name breaks the tie deterministically.
+        return sorted(paths, key=lambda p: (p.stat().st_mtime_ns, p.name))
 
     cands = by_mtime(LOG_DIR.glob("server_prefab_*.txt")) if LOG_DIR.is_dir() else []
     if not cands:
