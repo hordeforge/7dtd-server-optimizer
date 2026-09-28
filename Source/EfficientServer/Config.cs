@@ -384,7 +384,7 @@ namespace EfficientServer
                 // scripts/check_config_doc.py, but an operator edit after install
                 // is not covered by that gate.
                 foreach (string key in UnknownKeys(json))
-                    EsLog.Emit(LogLevel.Warn, "config unknown key '" + key
+                    EsLog.Emit(LogLevel.Warn, "config unknown key '" + PrintableKey(key)
                         + "' ignored; that knob keeps its default (names are case-insensitive, spelling is not)");
                 var loaded = JsonConvert.DeserializeObject<ServerPerfConfig>(json);
                 if (loaded == null) return new ServerPerfConfig();
@@ -474,6 +474,51 @@ namespace EfficientServer
                 if (!bound)
                     unknown.Add(path);
             }
+        }
+
+        // A key name reaches the warning straight from the operator's JSON, and
+        // JSON lets a key hold any Unicode except an unescaped quote or
+        // backslash. Control characters and zero-width/bidi formatting marks
+        // survive that intact, so "Ena\nbled" splits one warning into two log
+        // lines and a zero-width joiner makes two different keys read
+        // identically to the operator grepping for them. Map exactly those to
+        // U+FFFD (the same marker the decode path already uses for a byte it
+        // cannot represent) so each key stays one line and one name.
+        const char UnrepresentableChar = (char)0xFFFD;
+
+        // Code points, not literal characters: the mcs fallback backend compiles
+        // this file with whatever codepage the host locale implies, and a
+        // non-ASCII literal in source would then be read as mojibake.
+        static bool IsUnprintableInKey(char c) =>
+            c < 0x20 || c == 0x7F || c == 0x00AD
+            || (c >= 0x200B && c <= 0x200F)   // zero-width space/joiners, LRM, RLM
+            || (c >= 0x202A && c <= 0x202E)   // bidi embedding/override
+            || c == 0x2028 || c == 0x2029     // line/paragraph separator
+            || c == 0xFEFF;                   // BOM, zero-width no-break space
+
+        /// <summary>
+        /// Key path as it may be written to a log line: the operator's spelling
+        /// with unprintable characters replaced, so one key is one line and one
+        /// visible name.
+        /// </summary>
+        internal static string PrintableKey(string key)
+        {
+            if (string.IsNullOrEmpty(key)) return key;
+            int first = -1;
+            for (int i = 0; i < key.Length; i++)
+            {
+                if (!IsUnprintableInKey(key[i])) continue;
+                first = i;
+                break;
+            }
+            // The common case (a plainly spelled typo) allocates nothing and
+            // returns the operator's exact string.
+            if (first < 0) return key;
+            StringBuilder sb = new StringBuilder(key.Length + 8);
+            sb.Append(key, 0, first);
+            for (int i = first; i < key.Length; i++)
+                sb.Append(IsUnprintableInKey(key[i]) ? UnrepresentableChar : key[i]);
+            return sb.ToString();
         }
 
         public void Normalize()

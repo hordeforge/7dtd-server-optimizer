@@ -1126,12 +1126,59 @@ namespace EfficientServer.Tests
             var bom = LoadTempFile(bomP);
             Check(bom != null && !bom.Enabled,
                 "UTF-8 BOM prefix tolerated at config load");
-            // No-BOM non-ASCII value bytes round-trip through Load without error too.
+            // No-BOM UTF-8 config loads normally. Every knob is numeric or
+            // boolean, so the ONLY place non-ASCII can reach the reader is a
+            // section or key NAME, and those are echoed back verbatim in the
+            // unknown-key warning: that echo is the round trip worth pinning.
             string noBomP = WriteTempBytes(
                 System.Text.Encoding.UTF8.GetBytes("{\"Pathfinding\":{\"GraphUpdateEveryTicks\":6}}"));
             var noBom = LoadTempFile(noBomP);
             Check(noBom != null && noBom.Pathfinding.GraphUpdateEveryTicks == 6,
                 "UTF-8 no-BOM config loads normally");
+
+            EsLog.Warnings.Clear();
+            // Code points, not literals: this file is compiled by the mcs
+            // fallback backend under the host codepage, where a non-ASCII
+            // character literal in source would itself be read as mojibake.
+            string visibleKey = "Ena" + ((char)0x00E9).ToString() + ((char)0x0301).ToString()
+                + ((char)0x4E2D).ToString() + ((char)0xD83D).ToString() + ((char)0xDE00).ToString();
+            var visibleCfg = LoadTempFile(WriteTempBytes(
+                System.Text.Encoding.UTF8.GetBytes("{\"" + visibleKey + "\":1}")));
+            Check(visibleCfg != null && visibleCfg.Enabled,
+                "config whose only non-ASCII is a key name loads without error");
+            Check(EsLog.Warnings.Count == 1 && EsLog.Warnings[0].Contains("'" + visibleKey + "'"),
+                "an unknown key is echoed with its exact UTF-8 spelling: precomposed"
+                + " e-acute, its combining acute, CJK and an astral-plane emoji"
+                + " (a UTF-16 surrogate pair) all survive the decode intact");
+
+            EsLog.Warnings.Clear();
+            // A zero-width joiner is invisible, so two keys differing only by
+            // one read identically to an operator grepping the log. It is
+            // replaced, not dropped, so the two keys stay distinguishable.
+            string zwjKey = "En" + ((char)0x200D).ToString() + "abled";
+            LoadTempFile(WriteTempBytes(
+                System.Text.Encoding.UTF8.GetBytes("{\"" + zwjKey + "\":1}")));
+            Check(EsLog.Warnings.Count == 1
+                && EsLog.Warnings[0].Contains("'En" + (char)0xFFFD + "abled'"),
+                "an invisible character in a key name is shown as U+FFFD so the"
+                + " spelling stays readable and the key stays distinguishable");
+
+            EsLog.Warnings.Clear();
+            // JSON forbids a raw control character in a string, so the key
+            // below carries the ESCAPED newline. Newtonsoft decodes it to a
+            // real LF inside the name, which used to reach the warning line
+            // verbatim and split one key across two log lines.
+            var lfCfg = LoadTempFile(WriteTempBytes(
+                System.Text.Encoding.UTF8.GetBytes("{\"Ena\\nbled\":1}")));
+            Check(lfCfg != null && lfCfg.Enabled,
+                "config with an escaped newline in a key name loads without error");
+            Check(EsLog.Warnings.Count == 1,
+                "a control character in a key name still yields exactly one warning line");
+            Check(EsLog.Warnings[0].IndexOf('\n') < 0 && EsLog.Warnings[0].IndexOf('\r') < 0,
+                "the unknown-key warning carries no embedded line break");
+            Check(EsLog.Warnings[0].Contains("Ena" + (char)0xFFFD + "bled"),
+                "the unprintable character is shown as U+FFFD and the rest of the"
+                + " spelling stays readable");
 
             // Discovery + IO-failure branches of the load path itself, which no
             // string-level fixture reaches (they all go through LoadTemp):
