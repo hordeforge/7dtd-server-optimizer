@@ -421,7 +421,9 @@ missing saturation stress A/B keep it opt-in; feel WHILE active passed human eva
   `MinEnemiesKept` living enemies.
 - **Gameplay impact: REAL - it removes zombies.** The farthest-first order makes
   the cut least visible (players in combat keep their attackers), but a horde that
-  should have 400 zombies will thin. That is the explicit trade: a thinner horde
+  should have 400 zombies will thin. Ties (co-located enemies share a distance
+  exactly) break on the lower entity id, so the batch is the same one on every
+  run. That is the explicit trade: a thinner horde
   at 20 TPS instead of a full horde at ~3 TPS. Default OFF because the mod does
   not silently change gameplay.
 - **When to enable:** servers that routinely exceed the measured capacity ceiling

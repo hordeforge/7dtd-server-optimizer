@@ -46,6 +46,10 @@
          window, at any tick sampling) is what keeps distant zombies' AI and
          collision resolution alive under Server.TargetFps > 20. -->
     <Compile Include="../EfficientServer/Patches/TickClock.cs" />
+    <!-- Game-type-free shed selector: which entity ids a tick-guard batch
+         removes. Distance alone is not a total order, so the id tie-break (and
+         with it replay-stable batches) is pinned here. -->
+    <Compile Include="../EfficientServer/Patches/ShedOrder.cs" />
   </ItemGroup>
 
   <ItemGroup>

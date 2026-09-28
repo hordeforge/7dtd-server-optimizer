@@ -26,7 +26,12 @@ namespace EfficientServer.Patches
         static readonly TickIntervalEma TickEma = new TickIntervalEma();
         static int _overTicks;
         static int _cooldown;
-        static readonly List<(float distSq, Entity entity)> Scratch = new List<(float, Entity)>();
+
+        // Reusable census scratch: (distSq, entityId) per living enemy, never the
+        // entity itself, so a shed at least CooldownTicks apart pins nothing
+        // between batches - a strong-reference scratch would hold up to
+        // MinEnemiesKept despawned enemies alive until the next one.
+        static readonly List<(float distSq, int entityId)> Census = new List<(float, int)>();
 
         // Live state for `es status`: lifetime shed count (the tick EMA shown in
         // `es status` comes from the governor's equivalent instance - see
@@ -52,33 +57,15 @@ namespace EfficientServer.Patches
 
             _overTicks = 0;
             _cooldown = cfg.CooldownTicks;
-            Shed(cfg, emaMs);
-        }
-
-        static void Shed(TickGuardConfig cfg, double emaMs)
-        {
-            // Scratch holds strong Entity references, and a shed is at least
-            // CooldownTicks apart, so it must be emptied on EVERY exit path, not
-            // just the one that despawns: the keep-floor branch below leaves the
-            // whole living-enemy list (up to MinEnemiesKept, 10000 at the config
-            // ceiling) pinned - and despawned enemies with it - until the next
-            // shed. Same contract as AnimatorEmergency.Enter's LiveRigs.
-            try
-            {
-                ShedOnce(cfg, emaMs);
-            }
-            finally
-            {
-                Scratch.Clear();
-            }
+            ShedOnce(cfg, emaMs);
         }
 
         static void ShedOnce(TickGuardConfig cfg, double emaMs)
         {
             // A suppressed shed is the one outcome an operator cannot infer from the
             // log: no shed line means either "never triggered" or "triggered and did
-            // nothing", and those need different responses. Every Shed call is at
-            // least CooldownTicks apart, so one line per suppression is bounded.
+            // nothing", and those need different responses. Sheds are at least
+            // CooldownTicks apart, so one line per suppression is bounded.
             World world = GameManager.Instance != null ? GameManager.Instance.World : null;
             if (world == null) { Suppressed(cfg, emaMs, "no world loaded"); return; }
             List<Entity> entities = world.Entities.list;
@@ -86,6 +73,7 @@ namespace EfficientServer.Patches
             if (players.Count == 0) { Suppressed(cfg, emaMs, "no players online"); return; }
 
             int enemies = 0;
+            Census.Clear();
             for (int i = 0; i < entities.Count; i++)
             {
                 if (!(entities[i] is EntityEnemy enemy) || enemy.IsDead())
@@ -98,7 +86,7 @@ namespace EfficientServer.Patches
                     float d = (players[p].position - pos).sqrMagnitude;
                     if (d < best) best = d;
                 }
-                Scratch.Add((best, enemy));
+                Census.Add((best, enemy.entityId));
             }
             if (enemies <= cfg.MinEnemiesKept)
             {
@@ -107,11 +95,14 @@ namespace EfficientServer.Patches
                 return;
             }
 
-            // Farthest-from-any-player first; never below the keep floor.
-            Scratch.Sort((a, b) => b.distSq.CompareTo(a.distSq));
-            int shed = Mathf.Min(cfg.ShedBatch, enemies - cfg.MinEnemiesKept);
-            for (int i = 0; i < shed; i++)
-                world.RemoveEntity(Scratch[i].entity.entityId, EnumRemoveEntityReason.Despawned);
+            // Farthest-from-any-player first, lowest entityId first inside a
+            // distance tie, so a batch boundary landing in a tie group cannot
+            // cut it by World.Entities.list order; never below the keep floor.
+            List<int> shedIds = ShedOrder.Select(Census,
+                Mathf.Min(cfg.ShedBatch, enemies - cfg.MinEnemiesKept));
+            for (int i = 0; i < shedIds.Count; i++)
+                world.RemoveEntity(shedIds[i], EnumRemoveEntityReason.Despawned);
+            int shed = shedIds.Count;
             ShedTotal += shed;
             // WARNING, not info: shedding removes entities (a real gameplay impact)
             // and only fires while the tick is collapsing, rate-bounded by

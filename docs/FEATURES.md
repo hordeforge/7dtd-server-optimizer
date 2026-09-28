@@ -354,7 +354,8 @@ walked back (`es animoff` is a tier-2 gameplay probe, not a rig probe), and
 
 `TickGuardPatch` (config `TickGuard.*`) sheds the farthest-from-any-player enemies
 in batches (silent despawn: no loot/XP/corpse) when the tick stays past the point
-throttling can fix, never below `MinEnemiesKept`. Validated live: with the governor,
+throttling can fix, never below `MinEnemiesKept`. Farthest first, lowest entity id
+inside a distance tie, so a replayed run sheds the same ids in the same order. Validated live: with the governor,
 drove a 522-zombie overload (3.5x the capacity ceiling) back from 167 to 56 ms/frame
 autonomously. Default off because it removes entities - a real gameplay trade
 (thinner horde at 20 TPS instead of a full horde at 3 TPS). See

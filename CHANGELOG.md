@@ -56,6 +56,13 @@ version 1.17.0; every release after them takes its number from the tag.
   `probeAllow=`.
 
 ### Fixed
+- `TickGuard` shed batches were not reproducible: co-located enemies share a
+  distance exactly, and the batch was cut by `World.Entities.list` order, so the
+  same horde at the same distances could shed different zombies on two runs.
+  Distance is now a total order (farthest first, lowest entity id inside a tie),
+  and the selection moved to a game-type-free seam (`ShedOrder.Select`) the unit
+  harness drives directly. The batch scratch also holds ids instead of entity
+  references, so a horde is no longer pinned between sheds.
 - `scripts/install.sh` ignored the `DS=` spelling it documents: only
   `SEVENDTD_DS_DIR` resolved the target, so `DS=/path scripts/install.sh` fell
   through to the stock Steam path and installed (and `rm -rf`'d the mod folder

@@ -1252,6 +1252,58 @@ namespace EfficientServer.Tests
             Check(actualCross == expectedCross && actualCross > 0,
                 "tick EMA crosses OverBudgetMs on advance " + actualCross + " (predicted " + expectedCross + ")");
 
+            // ShedOrder: which entity ids one tick-guard batch removes. Distance is
+            // not a total order (co-located enemies share a distSq exactly), so a
+            // batch boundary landing in a tie group must not be cut by
+            // World.Entities.list order, or the same horde at the same distances
+            // sheds different zombies on two runs. The expectation is the spec,
+            // read off the order itself: descending distance, ascending entityId
+            // inside a tie.
+            var census = new List<(float distSq, int entityId)>
+            {
+                (100f, 7), (900f, 3), (100f, 5), (400f, 11), (900f, 2)
+            };
+            var shedTop3 = ShedOrder.Select(census, 3);
+            Check(shedTop3.Count == 3 && shedTop3[0] == 2 && shedTop3[1] == 3 && shedTop3[2] == 11,
+                "shed order: farthest first, lowest id inside each distance tie (got "
+                    + string.Join(",", shedTop3) + ")");
+            // Same census, different enumeration order, one more id selected: the
+            // first four must be identical, and the 900-pair tie must keep ids 2
+            // before 3 rather than tracking the input.
+            var reordered = new List<(float distSq, int entityId)>
+            {
+                (900f, 2), (100f, 5), (400f, 11), (900f, 3), (100f, 7)
+            };
+            var shedTop4 = ShedOrder.Select(reordered, 4);
+            Check(shedTop4.Count == 4 && shedTop4[0] == 2 && shedTop4[1] == 3
+                && shedTop4[2] == 11 && shedTop4[3] == 5,
+                "shed order is a function of the census, not of enumeration order (got "
+                    + string.Join(",", shedTop4) + ")");
+            Check(census[0].entityId == 7 && census[1].entityId == 3,
+                "shed order does not reorder the caller's census (it is reused between batches)");
+            // Batch size is clamped to the horde, and a zero/negative batch sheds
+            // nothing rather than indexing past the census.
+            Check(ShedOrder.Select(census, 99).Count == 5 && ShedOrder.Select(census, 0).Count == 0
+                && ShedOrder.Select(census, -1).Count == 0,
+                "shed batch clamps to the horde; empty batches shed nothing");
+            // A corrupt position yields a NaN distSq, and float.CompareTo calls NaN
+            // less than everything in one argument order and more in the other:
+            // left to CompareTo the ordering stops being transitive and the cut
+            // lands on enumeration order again. NaN sheds first, id-ascending.
+            var corrupt = new List<(float distSq, int entityId)>
+            {
+                (float.NaN, 4), (50f, 9), (float.NaN, 6)
+            };
+            var shedCorrupt = ShedOrder.Select(corrupt, 2);
+            Check(shedCorrupt.Count == 2 && shedCorrupt[0] == 4 && shedCorrupt[1] == 6,
+                "NaN distance sheds first, id-ascending inside the NaN group (got "
+                    + string.Join(",", shedCorrupt) + ")");
+            var shedCorruptFlip = ShedOrder.Select(
+                new List<(float distSq, int entityId)> { (float.NaN, 6), (50f, 9), (float.NaN, 4) }, 2);
+            Check(shedCorruptFlip[0] == 4 && shedCorruptFlip[1] == 6,
+                "NaN shed order survives a reordered census (got "
+                    + string.Join(",", shedCorruptFlip) + ")");
+
             // Encoding boundary: the config file is UTF-8, and a UTF-8 BOM must be
             // tolerated, so operator configs behave identically on every host.
             string bomP = WriteTempBytes(
