@@ -14,6 +14,8 @@
 # Version: taken from the newest git tag (vX.Y.Z -> X.Y.Z), or overridden
 # with VERSION=x.y.z, with -dirty appended whenever the tree is modified. A
 # release-form name must match the Version in Source/EfficientServer/ModInfo.xml.
+# The short commit id a tree past the newest tag falls back to is exempt: it
+# names no release, so there is no ModInfo version for it to disagree with.
 # Requires a local game install: build.sh compiles
 # against the shipped Assembly-CSharp.dll, which this repo does not
 # redistribute (see ../AGENTS.md).
@@ -34,7 +36,8 @@ Environment:
   VERSION             version suffix for the zip name (default: newest git tag,
                       with -dirty on a modified tree, else the short commit id).
                       A release-form value (x.y.z) must equal the Version in
-                      Source/EfficientServer/ModInfo.xml; the run fails otherwise
+                      Source/EfficientServer/ModInfo.xml; the run fails otherwise.
+                      The commit-id fallback names no release and is not checked
   SOURCE_DATE_EPOCH   zip entry mtime epoch (default: last commit time). Held
                       constant across builds, so two builds of one tree are
                       byte-identical
@@ -92,10 +95,15 @@ VERSION="${VERSION#v}"
 # tree (v1.17.0-3-gabc1234-dirty) is still recognized as a distance and not
 # shipped under a version string. The mark is reapplied below.
 VERSION="${VERSION%-dirty}"
+# 1 only for the commit-id name below, which names no release and so has no
+# ModInfo counterpart to disagree with. Every other source (an explicit
+# VERSION=, or describe landing exactly on a tag) names a release and is checked.
+FROM_COMMIT_ID=0
 if [[ -z "$VERSION" || "$VERSION" == *-* ]]; then
   # No tag yet (or an annotated-tag distance like v1.17.0-3-gabc1234): neither
   # names a release, so fall back to a short commit id.
   VERSION="$(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null || echo unknown)"
+  FROM_COMMIT_ID=1
 fi
 VERSION="$VERSION$DIRTY_SUFFIX"
 if [[ ! "$VERSION" =~ ^[0-9A-Za-z._-]+$ ]]; then
@@ -110,13 +118,21 @@ fi
 # CHANGELOG and the docs, and has no tag to compare against. Only a release-form
 # version is checked (the mark is stripped above, so the check also fires while
 # the tree is still dirty); a commit-id name already says what it is.
+#
+# The commit-id fallback is exempt by provenance, not by shape. A short hash is
+# hex, so it slips the release-form regex whenever every digit it happens to
+# contain is 0-9: the tree at v1.19.0-109-g6485685 described as "6485685", the
+# regex read that as a release name, and packaging aborted with "Bump
+# ModInfo.xml to 6485685". Every commit past the newest tag takes that fallback
+# path, so a plain development build failed outright rather than by chance, and
+# nothing in the name said a release was meant.
 MODINFO_VERSION="$(sed -n 's/.*<Version value="\([^"]*\)".*/\1/p' \
   "$ROOT/Source/EfficientServer/ModInfo.xml" | head -n 1)"
 if [[ -z "$MODINFO_VERSION" ]]; then
   echo "ERROR: no <Version> in Source/EfficientServer/ModInfo.xml" >&2
   exit 1
 fi
-if [[ "${VERSION%-dirty}" =~ ^[0-9]+(\.[0-9]+)*$ \
+if [[ "$FROM_COMMIT_ID" == 0 && "${VERSION%-dirty}" =~ ^[0-9]+(\.[0-9]+)*$ \
    && "${VERSION%-dirty}" != "$MODINFO_VERSION" ]]; then
   echo "ERROR: release version ${VERSION%-dirty} does not match the shipped ModInfo.xml" >&2
   echo "  (ModInfo.xml says $MODINFO_VERSION)." >&2
