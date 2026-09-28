@@ -381,16 +381,35 @@ def main() -> int:
         verdicts["overall"] = "ERROR"
         code = 4
     finally:
-        # Isolated per step: a restore failure must not skip the reload, and
-        # neither cleanup failure may go unlogged or skip bot teardown.
+        # Isolated per step: a restore failure must not skip bot teardown, and
+        # neither cleanup failure may go unlogged.
+        restored = True
         try:
             CFG_SWAP.restore()
         except Exception as e:
             log(f"WARN: config restore failed ({e}); backup kept for next run")
+            restored = False
+        # Re-apply the restored file to the live server. Skipped when the
+        # restore failed, so a reload cannot re-arm the harness values the
+        # restore just failed to revert.
+        if restored:
+            try:
+                B.telnet(["es reload"], settle=1.0)
+            except Exception as e:
+                # Best effort, since the sampled server may already be gone -
+                # but never silent: a failed reload leaves this server running
+                # the harness' path knobs until someone reloads it by hand.
+                log(f"  es reload after restore failed ({e}); the running server "
+                    "still has this run's path knobs until someone reloads it")
+        # animoff is console-side session state no config restore can undo, so
+        # it is cleared on its own: a failed reload above must not leave the
+        # animator LOD probe armed on a live server.
         try:
-            B.telnet(["es reload", "es animon"], settle=1.0)
-        except Exception:
-            pass  # best effort; the server may already be gone
+            B.telnet(["es animon"], settle=1.0)
+        except Exception as e:
+            log(f"  es animon after restore failed ({e}); the animator LOD probe "
+                "may still be off on the running server")
+        report["restored"] = restored
         teardown_bots(bots)
         # Default: leave dedicated running so multi-phase/tool-timeout runs can resume.
         # Set VALIDATE_KILL_SERVER=1 to tear down.

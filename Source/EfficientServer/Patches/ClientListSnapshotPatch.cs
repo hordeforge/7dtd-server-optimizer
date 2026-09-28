@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Reflection;
 using System.Reflection.Emit;
+using System.Threading;
 using HarmonyLib;
 
 namespace EfficientServer.Patches
@@ -62,6 +63,9 @@ namespace EfficientServer.Patches
         }
 
         static bool Prepare() => TargetMethod() != null;
+
+        // Set by the snapshot's fail-open catch; 0 until that first fallback.
+        static int _snapshotFallbackWarned;
 
         static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
         {
@@ -127,8 +131,19 @@ namespace EfficientServer.Patches
                 raw = new ClientInfo[live.Count];
                 ((ICollection<ClientInfo>)live).CopyTo(raw, 0);
             }
-            catch (Exception)
+            catch (Exception ex)
             {
+                // Fail-open is the documented outcome, but never SILENT: a
+                // snapshot that fell back to an empty scan lets a duplicate-IP
+                // join through, and the operator reading the log has no other
+                // way to learn the guard degraded. One line per process (this
+                // runs on the receive thread for every connection request, so a
+                // per-hit line would flood the log under join churn), naming the
+                // failure so the cause is greppable.
+                if (Interlocked.Exchange(ref _snapshotFallbackWarned, 1) == 0)
+                    EsLog.Emit(LogLevel.Warn, "client-list snapshot failed [" + ex.GetType().Name
+                        + "]: " + ex.Message + " - duplicate-IP check falls open for that "
+                        + "request (this line is printed once per process)");
                 return Generic(Empty());
             }
             // Belt and suspenders across host BCL variations: drop any torn tail slot

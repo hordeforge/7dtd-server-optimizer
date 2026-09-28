@@ -70,8 +70,29 @@ def main(argv: list[str]) -> int:
         )
         print(USAGE, file=sys.stderr)
         return 2
-    root = ET.parse(argv[1]).getroot()
-    pct = round(float(root.get("line-rate", "0")) * 100)
+    # Name the offending input and fail, like every sibling gate: a raw
+    # traceback here would bury the fact that the COVERAGE REPORT is the thing
+    # missing or malformed, and would read as a bug in this script.
+    try:
+        root = ET.parse(argv[1]).getroot()
+    except (OSError, ET.ParseError) as ex:
+        print(
+            f"FAIL: {argv[1]} is not a readable Cobertura report: {ex}",
+            file=sys.stderr,
+        )
+        return 1
+    try:
+        pct = round(float(root.get("line-rate", "0")) * 100)
+    except ValueError as ex:
+        # A non-numeric line-rate ("" or an empty element attribute) must not
+        # render as a 0% red shield: that is a silent, wrong badge, the exact
+        # failure this script exists to prevent.
+        print(
+            f"FAIL: {argv[1]} has a non-numeric line-rate "
+            f"({root.get('line-rate')!r}): {ex}",
+            file=sys.stderr,
+        )
+        return 1
     # Pinned codec like every other text write in scripts/: the badge lands
     # on GitHub via CI, and a non-UTF-8 preferred locale must not change bytes.
     Path(argv[2]).write_text(badge(pct, colour(pct)), encoding="utf-8")
@@ -143,6 +164,29 @@ def _selftest() -> int:
         t.check(
             "missing line-rate renders 0% red",
             'coverage: 0%' in text_bare and '#e05d44' in text_bare,
+        )
+
+        # A MISSING or MALFORMED report is an operator error, not a crash: exit
+        # 1 with the offending path named, and above all no badge written.
+        # Before this the parse raised a traceback, and a non-numeric
+        # line-rate rendered as a 0% red shield - a silently wrong badge.
+        missing = Path(td) / "not-there.cobertura.xml"
+        rc_missing = main([sys.argv[0], str(missing), str(out)])
+        t.check("missing report exits 1 without a traceback", rc_missing == 1)
+        malformed = Path(td) / "malformed.cobertura.xml"
+        malformed.write_text("<coverage line-rate=", encoding="utf-8")
+        rc_malformed = main([sys.argv[0], str(malformed), str(out)])
+        t.check("malformed report exits 1", rc_malformed == 1)
+        notanumber = Path(td) / "notanumber.cobertura.xml"
+        notanumber.write_text(
+            '<coverage line-rate="n/a"></coverage>', encoding="utf-8"
+        )
+        before = out.read_text(encoding="utf-8")
+        rc_nan = main([sys.argv[0], str(notanumber), str(out)])
+        t.check("non-numeric line-rate exits 1", rc_nan == 1)
+        t.check(
+            "non-numeric line-rate leaves the old badge untouched",
+            out.read_text(encoding="utf-8") == before,
         )
 
     return checks.finish()

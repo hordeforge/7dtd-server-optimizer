@@ -408,12 +408,20 @@ def main() -> int:
             # when the restore failed, so a reload cannot re-apply the harness
             # values the restore just failed to revert; the report must say
             # "restored": false then, not claim success.
+            reloaded = True
             if restored:
                 try:
                     B.telnet(["es reload"], settle=1.0)
-                except Exception:
-                    pass
+                except Exception as e:
+                    # Never silent: a failed reload leaves this server running the
+                    # harness's Enabled value even though the file on disk is the
+                    # operator's again, which is exactly the state the run is
+                    # supposed to end without.
+                    log(f"  es reload after restore failed ({e}); the running server "
+                        "still has this run's Enabled value until someone reloads it")
+                    reloaded = False
             report["restored"] = restored
+            report["reloaded"] = reloaded
         teardown_bots(bots)
         write_report("es_onoff", report)
     return code
