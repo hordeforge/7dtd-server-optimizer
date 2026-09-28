@@ -31,7 +31,7 @@ sys.path.insert(0, str(LOADGEN_ROOT / "scripts"))
 # is exempted per-file in ruff.toml instead of inline noqa noise.
 import bloodmoon_profile as B
 
-from es_cfg_guard import ConfigSwap, write_atomic
+from es_cfg_guard import ConfigSwap, unique_path, write_atomic
 
 # Public surface of this shared module (mypy no_implicit_reexport: consumers
 # may import exactly these; B and write_atomic are deliberate re-exports).
@@ -47,6 +47,7 @@ __all__ = [
     "kill_matching_processes",
     "log",
     "teardown_bots",
+    "unique_path",
     "write_atomic",
     "write_diag_config",
     "write_path_config",
@@ -188,8 +189,15 @@ def write_report(prefix: str, report: dict[str, object]) -> Path:
     hour, so two runs of an A/B pair can stamp identical names and the second
     write_atomic silently destroys the first half of the evidence pair. UTC
     has no transitions, so one name maps to exactly one instant on any host.
+
+    That still leaves the far more common collision: a run killed by a tool
+    timeout and re-run immediately lands in the same SECOND, and the retry
+    overwrites the report of the run it was retrying - the evidence a rerun is
+    supposed to preserve. unique_path suffixes instead, so a repeat ADDS a
+    report rather than replacing one.
     """
-    out = OUT_DIR / f"{prefix}_{time.strftime('%Y%m%d_%H%M%S', time.gmtime())}.json"
+    stamp = f"{prefix}_{time.strftime('%Y%m%d_%H%M%S', time.gmtime())}"
+    out = unique_path(OUT_DIR / f"{stamp}.json")
     # Atomic for the same reason every live-file rewrite here goes through
     # write_atomic: these runs are routinely SIGKILLed by tool timeouts, and a
     # truncated report would break whatever tails or diffs it afterwards.

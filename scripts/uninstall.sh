@@ -60,9 +60,17 @@ if [[ "${SEVENDTD_UNINSTALL_PURGE:-0}" == "1" ]]; then
   echo "SEVENDTD_UNINSTALL_PURGE=1: deleting the installed config too, no copy kept."
 else
   # UTC stamp: a repeated local hour (DST fall-back) would otherwise overwrite
-  # the previous backup with the one taken minutes earlier.
+  # the previous backup with the one taken minutes earlier. Second resolution
+  # alone still collides when two uninstalls land in the same second, and then
+  # the second cp -a overwrites the first backup - the exact evidence loss this
+  # copy exists to prevent. Suffix until the target dir is free.
   STAMP="$(date -u +%Y%m%d_%H%M%S)"
   TARGET="$BACKUP_DIR/$STAMP"
+  n=1
+  while [[ -e "$TARGET" ]]; do
+    TARGET="$BACKUP_DIR/${STAMP}_$n"
+    n=$((n + 1))
+  done
   mkdir -p "$TARGET"
   shopt -s nullglob
   for f in "$DEST"/Config/*; do

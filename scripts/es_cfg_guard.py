@@ -84,6 +84,33 @@ def _write_atomic(path: Path, data: bytes) -> None:
         raise
 
 
+def unique_path(path: Path) -> Path:
+    """Return ``path``, or the first free ``<stem>.<n><suffix>`` beside it.
+
+    Every artifact this repo names after a wall-clock stamp (report JSON,
+    quarantined backup) is stamped to the SECOND, and a run that is retried
+    inside the same second - a tool-timeout kill followed by an immediate
+    re-run, two legs of an A/B pair back to back - resolves to the same name.
+    The second write then silently destroys the first one's output, which is
+    the opposite of what a retry should do. This resolves the collision by
+    suffixing, so a repeat ADDS an artifact instead of replacing one.
+
+    The scan is read-then-write, not atomic: two harnesses racing the same
+    free name can still both pick it, and the later rename wins. That race is
+    between processes deliberately run side by side, and bounding it needs a
+    lock whose failure modes are worse than the collision it prevents; the
+    sequential-retry case, which is what actually happens, is covered.
+    """
+    if not path.exists():
+        return path
+    n = 1
+    while True:
+        candidate = path.with_name(f"{path.stem}.{n}{path.suffix}")
+        if not candidate.exists():
+            return candidate
+        n += 1
+
+
 def write_atomic(path: Path, data: str) -> None:
     """Replace ``path`` with ``data`` atomically (temp file + rename), UTF-8.
 
@@ -170,7 +197,10 @@ class ConfigSwap:
                     pass  # alive (or not ours to signal): not ours to remove
 
     def _quarantine(self, why: str) -> None:
-        stale = self.bak.with_suffix(self.bak.suffix + STALE_SUFFIX)
+        # Suffix-resolved: two quarantines in the same run's lifetime (or two
+        # runs of a bench loop that keeps hitting damaged state) must not have
+        # the second rename destroy the first one's evidence.
+        stale = unique_path(self.bak.with_suffix(self.bak.suffix + STALE_SUFFIX))
         os.replace(self.bak, stale)
         self._log(
             f"config guard: leftover backup {self.bak.name} is stale ({why}); "
@@ -428,6 +458,30 @@ def _selftest() -> int:
             [p.name for p in root.iterdir() if ".tmp" in p.name] == [],
         )
 
+        # 8c. unique_path: a second write to the same stamped name must ADD a
+        # file, never replace the first. A run is retried inside the same
+        # second (tool-timeout kill, then immediate re-run), and the report or
+        # backup of the run being retried is exactly what must survive.
+        up = root / "run.json"
+        first = unique_path(up)
+        first.write_text("first", encoding="utf-8")
+        second = unique_path(up)
+        second.write_text("second", encoding="utf-8")
+        third = unique_path(up)
+        third.write_text("third", encoding="utf-8")
+        t.check("unique_path leaves a free name alone", first == up)
+        t.check("unique_path suffixes the second write", second != up and second.is_file())
+        t.check(
+            "unique_path keeps the first write readable",
+            first.read_text(encoding="utf-8") == "first",
+        )
+        t.check("unique_path suffixes past an occupied suffix", third != second)
+        # Suffix on the STEM, never inside the extension: report consumers and
+        # tailers match on *.json.
+        t.check("unique_path preserves the extension", second.suffix == ".json")
+        for extra in (first, second, third):
+            extra.unlink()
+
         # 8b. A write that fails AFTER the temp file exists must not strand it:
         # a directory at the target path makes os.replace fail (EISDIR) with the
         # temp already on disk, and litter beside the live config survives every
@@ -549,6 +603,56 @@ def _selftest() -> int:
         s10.restore()
         live_tmp.unlink()
         not_a_temp.unlink()
+
+        # 15. TWO QUARANTINES must both leave evidence. A bench host that keeps
+        # hitting a damaged config quarantines on every run, and a fixed
+        # .stale name made run N+1's rename destroy run N's evidence - the one
+        # artifact the quarantine exists to preserve.
+        s11 = mk()
+        s11.bak.write_text("{ truncated", encoding="utf-8")
+        s11.recover()
+        stales_a = sorted(p.name for p in root.glob(s11.bak.name + "*" + STALE_SUFFIX))
+        s11.bak.write_text("{ also truncated", encoding="utf-8")
+        s11.recover()
+        stales_b = sorted(p.name for p in root.glob(s11.bak.name + "*" + STALE_SUFFIX))
+        t.check(
+            "second quarantine keeps the first's evidence",
+            len(stales_a) == 1 and len(stales_b) == 2 and stales_a[0] in stales_b,
+        )
+        t.check("second quarantine consumed its own backup", not s11.bak.exists())
+        for name in stales_b:
+            (root / name).unlink()
+
+    # 16. THE WHOLE PROTOCOL, RUN TWICE, MUST CONVERGE. Everything above
+    # exercises one damaged state at a time; this is the property the module
+    # actually promises - a second identical run leaves the config exactly as
+    # one run does, with no backup, no stale file and no temp litter left
+    # behind to change the next run's behavior.
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        cfg = root / "efficientserver.json"
+        seeded = json.dumps(original, indent=2) + "\n"
+        cfg.write_text(seeded, encoding="utf-8")
+
+        def one_run() -> None:
+            s = ConfigSwap(cfg, keys, log=lambda _m: None)
+            s.begin()
+            doc = _read_doc(cfg)
+            doc["Enabled"] = False
+            section(doc, "Pathfinding")["MaxPathEnqueuesPerTick"] = 64
+            cfg.write_text(json.dumps(doc, indent=2) + "\n", encoding="utf-8")
+            s.restore()
+
+        one_run()
+        after_one = cfg.read_bytes()
+        one_run()
+        after_two = cfg.read_bytes()
+        t.check("running the protocol twice converges byte-for-byte", after_one == after_two)
+        t.check("a completed protocol leaves the config intact", after_two == seeded.encode())
+        t.check(
+            "a completed protocol leaves no backup, stale or temp",
+            sorted(p.name for p in root.iterdir()) == [cfg.name],
+        )
 
     return t.finish("es_cfg_guard")
 

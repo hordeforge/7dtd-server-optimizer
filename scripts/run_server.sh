@@ -148,9 +148,17 @@ fi
 cd "$SRV"
 # UTC stamp: local time repeats an hour at every DST fall-back, so restarts
 # inside the repeated hour (same wall second) would reuse and clobber the
-# previous server log exactly when you need the crash evidence.
+# previous server log exactly when you need the crash evidence. A second
+# resolution is still one name per second, so a fast restart - or a launch
+# that dies immediately and is relaunched - lands on the same name. Suffix
+# until free rather than overwriting the log a previous run just wrote.
 TS="$(date -u +%Y%m%d_%H%M%S)"
 LOG="$LOGDIR/server_$TS.log"
+_n=1
+while [[ -e "$LOG" ]]; do
+  LOG="$LOGDIR/server_${TS}_$_n.log"
+  _n=$((_n + 1))
+done
 
 # If config is outside the install tree, copy it beside the binary (the game often
 # resolves -configfile relative to its cwd). An existing, differing file there is
