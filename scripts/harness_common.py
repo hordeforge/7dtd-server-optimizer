@@ -110,15 +110,16 @@ def kill_matching_processes(marker: str) -> int:
 # Knobs the path-admission A/Bs toggle. The guard restores exactly these on any
 # exit path (crash-safe: a backup left by a killed run is finished or
 # quarantined by the NEXT run instead of blindly clobbering operator edits).
-# Diagnostics.AllowBenchGod is included because the animator harness must arm
-# `es benchgod on` (the console gate refuses without it) and must put the
-# operator's value back afterwards.
+# Both Diagnostics allow-switches are included because the harness must arm
+# `es benchgod on` and `es animoff` (each console gate refuses without its own
+# opt-in) and must put the operator's values back afterwards.
 CFG_SWAP = ConfigSwap(
     ES_CFG,
     [
         ("Pathfinding", "MaxPathEnqueuesPerTick"),
         ("Pathfinding", "DropPathWhenFarDistSq"),
         ("Diagnostics", "AllowBenchGod"),
+        ("Diagnostics", "AllowFidelityProbes"),
     ],
     log=log,
 )
@@ -166,14 +167,18 @@ def write_path_config(max_cap: int, drop_far: float) -> None:
 
 
 def write_diag_config(allow_benchgod: bool) -> None:
-    """Rewrite EfficientServer diagnostic knobs (bench-god allow switch).
+    """Rewrite EfficientServer diagnostic opt-ins on disk.
 
     `es benchgod on` refuses to arm unless Diagnostics.AllowBenchGod is true in
-    the installed config, so the animator harness writes it here before issuing
-    the console command. The value is restored by CFG_SWAP.restore() on every
-    exit path.
+    the installed config, and `es animoff` / `es rigoff` refuse unless
+    Diagnostics.AllowFidelityProbes is true, so a harness that runs those
+    probes writes them here before issuing the console command. The values are
+    restored by CFG_SWAP.restore() on every exit path.
     """
-    _rewrite_installed_section("Diagnostics", {"AllowBenchGod": allow_benchgod})
+    _rewrite_installed_section(
+        "Diagnostics",
+        {"AllowBenchGod": allow_benchgod, "AllowFidelityProbes": allow_benchgod},
+    )
 
 
 def write_report(prefix: str, report: dict) -> Path:

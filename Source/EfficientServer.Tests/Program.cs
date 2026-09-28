@@ -506,6 +506,26 @@ namespace EfficientServer.Tests
             Check(ServerPerfConfig.BenchGodArmAllowed(bgOn),
                 "BenchGodArmAllowed(opt-in) -> allowed");
 
+            // Fidelity-probe arm gate: `es animoff` / `es rigoff` degrade combat
+            // timing and rig visuals server-wide, so they need the same explicit
+            // config opt-in rather than console access alone.
+            Check(!new ServerPerfConfig().Diagnostics.AllowFidelityProbes,
+                "default AllowFidelityProbes=false (animoff/rigoff refuse until opted in)");
+            var probeOn = LoadTemp("{\"Diagnostics\":{\"AllowFidelityProbes\":true}}");
+            Check(probeOn.Diagnostics != null && probeOn.Diagnostics.AllowFidelityProbes,
+                "Diagnostics.AllowFidelityProbes=true round-trips");
+            Check(!ServerPerfConfig.FidelityProbeArmAllowed(null!),
+                "FidelityProbeArmAllowed(null config) -> fail closed");
+            Check(!ServerPerfConfig.FidelityProbeArmAllowed(new ServerPerfConfig()),
+                "FidelityProbeArmAllowed(defaults) -> refused");
+            Check(!ServerPerfConfig.FidelityProbeArmAllowed(new ServerPerfConfig { Diagnostics = null! }),
+                "FidelityProbeArmAllowed(null diagnostics section) -> fail closed");
+            Check(ServerPerfConfig.FidelityProbeArmAllowed(probeOn),
+                "FidelityProbeArmAllowed(opt-in) -> allowed");
+            // Sibling-flag isolation: opting into one diagnostic must not arm the other.
+            Check(!ServerPerfConfig.FidelityProbeArmAllowed(bgOn) && !ServerPerfConfig.BenchGodArmAllowed(probeOn),
+                "AllowFidelityProbes and AllowBenchGod are independent");
+
             // v1.7.0 fields: MidTickStride clamp, Network + Diagnostics defaults.
             var d2 = new ServerPerfConfig();
             Check(d2.AiLod.MidTickStride == 1, "default MidTickStride=1 (off)");

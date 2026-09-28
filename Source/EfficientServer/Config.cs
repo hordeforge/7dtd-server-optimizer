@@ -264,14 +264,21 @@ namespace EfficientServer
         public int MinEnemiesKept { get; set; } = 60;
     }
 
-    // Runtime allow-switch container for `es benchgod on` (global player damage
-    // immunity). Default off: the console command refuses to arm the flag
-    // until the operator opted in here, so reaching telnet/console alone is
-    // not enough to make every player immortal on a live server. Turning the
-    // flag OFF is always allowed. Pure decision: BenchGodArmAllowed.
+    // Runtime allow-switches for the bench-only console commands. Both default
+    // off: the command refuses to arm the flag until the operator opted in
+    // here, so reaching telnet/console alone is not enough to make every player
+    // immortal (AllowBenchGod) or to silently degrade every enemy's combat
+    // timing (AllowFidelityProbes) on a live server. Turning either flag OFF is
+    // always allowed. Pure decisions: BenchGodArmAllowed, FidelityProbeArmAllowed.
     public sealed class DiagnosticsConfig
     {
         public bool AllowBenchGod { get; set; } = false;
+        // Gates the two fidelity-degrading probe arms: `es animoff` (every enemy
+        // animator culled, timer-only attack cadence) and `es rigoff` (visual rig
+        // components disabled). The matching restore commands (`es animon`,
+        // `es rigon`) and the read-only `es animstate` are never gated, so a
+        // probe can always be walked back.
+        public bool AllowFidelityProbes { get; set; } = false;
     }
 
     /// <summary>
@@ -526,6 +533,15 @@ namespace EfficientServer
         /// </summary>
         public static bool BenchGodArmAllowed(ServerPerfConfig cfg) =>
             cfg != null && cfg.Diagnostics != null && cfg.Diagnostics.AllowBenchGod;
+
+        /// <summary>
+        /// Pure fidelity-probe arm gate (no game types), same contract as
+        /// <see cref="BenchGodArmAllowed"/>: `es animoff` / `es rigoff` require an
+        /// explicit Diagnostics.AllowFidelityProbes opt-in, and a null config or
+        /// section fails closed (false).
+        /// </summary>
+        public static bool FidelityProbeArmAllowed(ServerPerfConfig cfg) =>
+            cfg != null && cfg.Diagnostics != null && cfg.Diagnostics.AllowFidelityProbes;
 
         /// <summary>
         /// Pure per-feature config gating (no game types): whether a patch group is

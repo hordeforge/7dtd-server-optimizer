@@ -428,17 +428,22 @@ horde.
 
 The former GC megapause probe (`GcMegapauseTest` + `WarmupSeconds` +
 `GrowSeconds`) was removed in 2.6.0; RESULTS.md keeps the evidence it produced
-(measured 479 ms forced collect at 6.9 GB). Remaining knob:
+(measured 479 ms forced collect at 6.9 GB). Remaining knobs:
 
-### `AllowBenchGod` (false)
-Runtime allow-switch for `es benchgod on` (global player damage immunity,
-RESULTS 3q). Default false: arming the flag from telnet/console REFUSES with an
-audited log line unless this knob is true in the installed config
-(`es reload` applies it), so reaching the console alone is not enough to make
-every player immortal on a live server. Turning the flag off
-(`es benchgod off`) always works. `es status` shows the switch as
-`benchgodAllow=`. The shipped template omits the whole Diagnostics group on
-purpose: absent keys keep their defaults, so a fresh install refuses.
+### `AllowBenchGod` (false) and `AllowFidelityProbes` (false)
+Runtime allow-switches for the bench-only console commands. `AllowBenchGod`
+covers `es benchgod on` (global player damage immunity, RESULTS 3q) and
+`AllowFidelityProbes` covers `es animoff` / `es rigoff` (all enemy animators
+culled, unguarded rig visual components disabled). Both default false: the
+command REFUSES with an audited log line unless the matching knob is true in
+the installed config (`es reload` applies it), so reaching the console alone is
+not enough to make every player immortal or to degrade enemy combat timing on
+a live server. The flags are independent, and the restore commands
+(`es benchgod off`, `es animon`, `es rigon`) plus the read-only
+`es animstate` are never gated, so an armed probe can always be walked back.
+`es status` shows the switches as `benchgodAllow=` and `probeAllow=`. The
+shipped template omits the whole Diagnostics group on purpose: absent keys keep
+their defaults, so a fresh install refuses.
 
 ---
 
@@ -480,4 +485,6 @@ at saturation variance); `es benchgod on|off` makes players damage-immune so
 synthetic bench bots survive endgame hordes and the load stays an active siege
 (RESULTS 3q spawn-equilibrium problem) - never on a real server. Arming `on`
 additionally requires `Diagnostics.AllowBenchGod: true` (see above); without it
-the command refuses and logs.
+the command refuses and logs. Arming `es animoff` / `es rigoff` likewise
+requires `Diagnostics.AllowFidelityProbes: true`; the restore commands stay
+ungated.

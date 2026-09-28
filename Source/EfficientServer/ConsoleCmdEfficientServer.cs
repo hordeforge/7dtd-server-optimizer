@@ -20,7 +20,8 @@ namespace EfficientServer
             "EfficientServer control: 'es status' shows active levers plus live "
             + "counters, 'es reload' re-reads the config (applies live); diagnostics: "
             + "'es animoff' | 'es animon' | 'es animstate' | 'es rigoff' | 'es rigon' | "
-            + "'es benchgod on|off' (arming on requires Diagnostics.AllowBenchGod=true)";
+            + "'es benchgod on|off' (arming on requires Diagnostics.AllowBenchGod=true); "
+            + "'es animoff' and 'es rigoff' require Diagnostics.AllowFidelityProbes=true";
 
         public override void Execute(List<string> _params, CommandSenderInfo _senderInfo)
         {
@@ -118,7 +119,7 @@ namespace EfficientServer
                 + $"skip(music={c.SkipOnDedicated.DynamicMusicSystem} waterSplash={c.SkipOnDedicated.WaterSplashParticles} "
                 + $"envAudio={c.SkipOnDedicated.EnvironmentAudioUpdates} cloth={c.SkipOnDedicated.ClothAndJiggleBoneSimulation} "
                 + $"lightSpectrum={c.SkipOnDedicated.AmbientLightSpectrumUpdates} explosionFx={c.SkipOnDedicated.ExplosionParticles}) | "
-                + $"benchgodAllow={c.Diagnostics.AllowBenchGod}");
+                + $"benchgodAllow={c.Diagnostics.AllowBenchGod} probeAllow={c.Diagnostics.AllowFidelityProbes}");
             OutputRuntime();
         }
 
@@ -132,6 +133,7 @@ namespace EfficientServer
             if (world == null) { SdtdConsole.Instance.Output(EsLog.LogPrefix + "no world"); return; }
             if (sub == "animoff")
             {
+                if (!ArmProbe("animoff")) return;
                 Patches.AnimatorEmergency.Enter();
                 Output(
                     "animprobe: ENTER CullCompletely emergency "
@@ -144,6 +146,24 @@ namespace EfficientServer
                     "animprobe: EXIT emergency; "
                     + "check 'es animstate' for dp>0 on moving zombies");
             }
+        }
+
+        /// <summary>
+        /// Second gate for the two fidelity-degrading probe arms, same shape as the
+        /// benchgod gate: console access alone must not be enough to stop enemy
+        /// animation (or rig visuals) on a live server, so arming needs an explicit
+        /// Diagnostics.AllowFidelityProbes opt-in. Disabling is never gated, and a
+        /// refusal goes through the audited output path (console AND log).
+        /// </summary>
+        static bool ArmProbe(string sub)
+        {
+            if (ServerPerfConfig.FidelityProbeArmAllowed(ModApi.Config)) return true;
+            Output(
+                sub + " REFUSED (flag stays OFF): this probe degrades combat timing and "
+                + "rig visuals server-wide; arming it requires "
+                + "Diagnostics.AllowFidelityProbes=true in Config/efficientserver.json "
+                + "+ es reload; see docs/CONFIG.md");
+            return false;
         }
 
         static void AnimState()
@@ -229,6 +249,7 @@ namespace EfficientServer
             if (world == null) { SdtdConsole.Instance.Output(EsLog.LogPrefix + "no world"); return; }
             if (sub == "rigoff")
             {
+                if (!ArmProbe("rigoff")) return;
                 // Additive sweep: only still-enabled, not-yet-tracked components
                 // are disabled and appended, so rigoff N times converges to the
                 // same state as rigoff once and one rigon undoes it all.

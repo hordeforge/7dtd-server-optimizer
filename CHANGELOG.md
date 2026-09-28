@@ -25,6 +25,16 @@ So `EfficientServer-0.1.0.zip` logging `mod=1.17.0` is correct, not drift.
 
 ## [Unreleased]
 
+### Added
+- `Diagnostics.AllowFidelityProbes` (default false) gates the console arms of
+  the fidelity probes: `es animoff` (every enemy animator culled, timer-only
+  attack cadence) and `es rigoff` (unguarded rig visual components disabled)
+  now refuse with an audited log line until the operator opts in, matching the
+  existing `es benchgod on` gate. The restore commands (`es animon`,
+  `es rigon`) and `es animstate` stay ungated. `es status` shows the switch as
+  `probeAllow=`.
+
+### Changed
 - Restore sources are now pinned in-repo (`NuGet.config`, nuget.org only with
   inherited machine and user feeds cleared) instead of coming from whatever
   feed the host machine happens to configure.
