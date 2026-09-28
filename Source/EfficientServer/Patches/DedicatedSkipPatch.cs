@@ -21,8 +21,12 @@ namespace EfficientServer.Patches
         // Patched manually from GameStartPatch after types resolve, in case optional types move.
         public static void ApplyOptional()
         {
-            if (!ModApi.Config.Enabled) return;
-            var skip = ModApi.Config.SkipOnDedicated;
+            // One read of the published config: Config is a volatile reference the
+            // reload swaps, so two reads can straddle a swap and pair one generation's
+            // Enabled with the next generation's section.
+            ServerPerfConfig config = ModApi.Config;
+            if (config == null || !config.Enabled) return;
+            var skip = config.SkipOnDedicated;
             if (skip == null) return;
 
             if (skip.DynamicMusicSystem)

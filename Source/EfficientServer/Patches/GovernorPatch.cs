@@ -111,7 +111,8 @@ namespace EfficientServer.Patches
                     AnimatorEmergency.Exit();
                 }
                 else
-                    LogRestored(cfg, emaMs);
+                    LogStepDown(cfg, emaMs, "restored baseline "
+                        + $"(replication /{EffectiveEntityStride()}, graph updates /{EffectiveGraphEvery()})");
             }
             else if (Tiers.SweepDue)
             {
@@ -120,13 +121,8 @@ namespace EfficientServer.Patches
             }
         }
 
-        static void LogRestored(GovernorConfig cfg, double emaMs)
-        {
-            EsLog.Emit(LogLevel.Info, $"Governor: tick EMA {Ms(emaMs)}ms < "
-                + $"{Ms(cfg.HealthyMs)}ms - restored baseline "
-                + $"(replication /{EffectiveEntityStride()}, graph updates /{EffectiveGraphEvery()})");
-        }
-
+        // One step-down line, for every transition DOWN a tier: the caller names
+        // what the step-down did, the rest (EMA, recovery threshold) is identical.
         static void LogStepDown(GovernorConfig cfg, double emaMs, string what)
         {
             EsLog.Emit(LogLevel.Info, $"Governor: tick EMA {Ms(emaMs)}ms < "

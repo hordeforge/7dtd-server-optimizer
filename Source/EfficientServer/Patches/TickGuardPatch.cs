@@ -134,14 +134,8 @@ namespace EfficientServer.Patches
                 world.RemoveEntity(shedIds[i], EnumRemoveEntityReason.Despawned);
             int shed = shedIds.Count;
             ShedTotal += shed;
-            // WARNING, not info: shedding removes entities (a real gameplay impact)
-            // and only fires while the tick is collapsing, rate-bounded by
-            // CooldownTicks - the channel an operator greps when players report
-            // vanished hordes.
-            // Invariant floats: same log-parsing convention as the governor lines.
-            EsLog.Emit(LogLevel.Warn, $"TickGuard: tick EMA {emaMs.ToString("F1", CultureInfo.InvariantCulture)}ms > "
-                + $"{cfg.ShedAboveMs.ToString(CultureInfo.InvariantCulture)}ms - shed {shed} "
-                + $"farthest enemies ({enemies} -> {enemies - shed}, lifetime {ShedTotal})");
+            EmitShedLine(cfg, emaMs, "shed " + shed + " farthest enemies ("
+                + enemies + " -> " + (enemies - shed) + ", lifetime " + ShedTotal + ")");
         }
 
         // The trigger fired (tick over budget) but the shed was withheld. Same
@@ -150,9 +144,21 @@ namespace EfficientServer.Patches
         // count is included so a log-only timeline can tell suppression from shed.
         static void Suppressed(TickGuardConfig cfg, double emaMs, string reason)
         {
-            EsLog.Emit(LogLevel.Warn, $"TickGuard: tick EMA {emaMs.ToString("F1", CultureInfo.InvariantCulture)}ms > "
-                + $"{cfg.ShedAboveMs.ToString(CultureInfo.InvariantCulture)}ms - shed SUPPRESSED "
-                + $"({reason}; lifetime {ShedTotal})");
+            EmitShedLine(cfg, emaMs, "shed SUPPRESSED (" + reason + "; lifetime " + ShedTotal + ")");
         }
+
+        // The one line shape both outcomes share, so a shed and a suppression are
+        // never two differently-worded lines an operator has to grep for. WARNING,
+        // not info: shedding removes entities (a real gameplay impact) and only
+        // fires while the tick is collapsing, rate-bounded by CooldownTicks - the
+        // channel an operator greps when players report vanished hordes.
+        // Invariant floats: same log-parsing convention as the governor lines.
+        static void EmitShedLine(TickGuardConfig cfg, double emaMs, string outcome)
+        {
+            EsLog.Emit(LogLevel.Warn, "TickGuard: tick EMA " + Ms(emaMs) + "ms > "
+                + cfg.ShedAboveMs.ToString(CultureInfo.InvariantCulture) + "ms - " + outcome);
+        }
+
+        static string Ms(double value) => value.ToString("F1", CultureInfo.InvariantCulture);
     }
 }

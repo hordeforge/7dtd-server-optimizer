@@ -267,6 +267,10 @@ namespace EfficientServer
         // the same destroyed-object semantics as List.Contains.
         static readonly HashSet<Behaviour> _rigDisabledSet = new HashSet<Behaviour>();
 
+        // Unity's overloaded null comparison: a destroyed component reads == null
+        // even though the reference is non-null.
+        static bool IsDestroyed(Behaviour b) { return b == null; }
+
         // Tracked components whose entity died or despawned while disabled can
         // never be restored (only an unusable Unity wrapper remains), so keep
         // sweeping them would grow one entry per spawn/despawn for the whole
@@ -279,15 +283,18 @@ namespace EfficientServer
             int removed = 0;
             for (int i = _rigDisabled.Count - 1; i >= 0; i--)
             {
-                // Unity's overloaded null comparison: a destroyed component
-                // reads == null even though the reference is non-null.
-                if (_rigDisabled[i] == null)
+                if (IsDestroyed(_rigDisabled[i]))
                 {
-                    _rigDisabledSet.Remove(_rigDisabled[i]);
                     _rigDisabled.RemoveAt(i);
                     removed++;
                 }
             }
+            // The mirror is pruned by PREDICATE, never by Remove(destroyedRef): the
+            // set compares keys through UnityEngine.Object.Equals, which reports
+            // false for a destroyed instance against anything, so a key-based
+            // removal could never match and the set would keep one dead entry per
+            // despawned rig.
+            if (removed > 0) _rigDisabledSet.RemoveWhere(IsDestroyed);
             if (removed > 0)
                 EsLog.Emit(LogLevel.Info, "rigprobe: pruned " + removed + " tracked component(s) whose "
                     + "rig despawned (tracked=" + _rigDisabled.Count + ")");

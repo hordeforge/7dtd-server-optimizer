@@ -27,6 +27,9 @@ namespace EfficientServer.Patches
         // so this is the floor the smoother relaxes to between spikes.
         const double SeedMs = 50.0;
 
+        // EMA memory, in ticks: each new gap moves the average a 1/Nth of the way.
+        const double MemoryTicks = 32.0;
+
         readonly Stopwatch _clock = Stopwatch.StartNew();
         double _lastTickMs;
         double _ms = SeedMs;
@@ -43,7 +46,7 @@ namespace EfficientServer.Patches
         public double Advance(double nowMs)
         {
             if (_lastTickMs > 0)
-                _ms += (nowMs - _lastTickMs - _ms) / 32.0;
+                _ms += (nowMs - _lastTickMs - _ms) / MemoryTicks;
             _lastTickMs = nowMs;
             return _ms;
         }
