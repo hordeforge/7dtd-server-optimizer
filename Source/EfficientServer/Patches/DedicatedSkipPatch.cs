@@ -78,34 +78,41 @@ namespace EfficientServer.Patches
         }
 
         // Run the original unless the mod is active AND this skip's knob is
-        // currently true. Master gate first: an inactive mod must never skip.
-        static bool Gate(bool knobActive)
+        // currently true. The master gate and the section fetch live here so the
+        // four prefixes cannot drift on either; both are read per call, which is
+        // what lets `es reload` take a skip away without a restart. Null means
+        // "run the original".
+        static SkipConfig RunSection
         {
-            return !(ModApi.ShouldRun() && knobActive);
+            get
+            {
+                ServerPerfConfig cfg = ModApi.Config;
+                return ModApi.ShouldRun() && cfg != null ? cfg.SkipOnDedicated : null;
+            }
         }
 
         static bool SkipDynamicMusic()
         {
-            return Gate(ModApi.Config != null && ModApi.Config.SkipOnDedicated != null
-                && ModApi.Config.SkipOnDedicated.DynamicMusicSystem);
+            SkipConfig s = RunSection;
+            return s == null || !s.DynamicMusicSystem;
         }
 
         static bool SkipWaterSplash()
         {
-            return Gate(ModApi.Config != null && ModApi.Config.SkipOnDedicated != null
-                && ModApi.Config.SkipOnDedicated.WaterSplashParticles);
+            SkipConfig s = RunSection;
+            return s == null || !s.WaterSplashParticles;
         }
 
         static bool SkipEnvironmentAudio()
         {
-            return Gate(ModApi.Config != null && ModApi.Config.SkipOnDedicated != null
-                && ModApi.Config.SkipOnDedicated.EnvironmentAudioUpdates);
+            SkipConfig s = RunSection;
+            return s == null || !s.EnvironmentAudioUpdates;
         }
 
         static bool SkipAmbientSpectrum()
         {
-            return Gate(ModApi.Config != null && ModApi.Config.SkipOnDedicated != null
-                && ModApi.Config.SkipOnDedicated.AmbientLightSpectrumUpdates);
+            SkipConfig s = RunSection;
+            return s == null || !s.AmbientLightSpectrumUpdates;
         }
     }
 }

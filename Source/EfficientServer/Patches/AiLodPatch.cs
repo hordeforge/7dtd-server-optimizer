@@ -26,9 +26,6 @@ namespace EfficientServer.Patches
 
             float fullSq = cfg.FullAiDistSq;
             float medSq = cfg.MediumAiDistSq;
-            float full = cfg.FullScale;
-            float med = cfg.MediumScale;
-            float far = cfg.FarScale;
             bool killCloth = ModApi.Config.SkipOnDedicated != null
                 && ModApi.Config.SkipOnDedicated.ClothAndJiggleBoneSimulation;
 
@@ -39,9 +36,9 @@ namespace EfficientServer.Patches
 
                 float d = e.aiClosestPlayerDistSq;
                 float scale;
-                if (d < fullSq) scale = full;
-                else if (d < medSq) scale = med;
-                else scale = far;
+                if (d < fullSq) scale = cfg.FullScale;
+                else if (d < medSq) scale = cfg.MediumScale;
+                else scale = cfg.FarScale;
 
                 e.aiActiveScale = scale;
 

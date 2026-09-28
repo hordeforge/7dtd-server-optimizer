@@ -35,6 +35,11 @@ So `EfficientServer-0.1.0.zip` logging `mod=1.17.0` is correct, not drift.
   `probeAllow=`.
 
 ### Changed
+- The governor throttle-ceiling constants (`EntityStrideMax`, `GraphUpdateMax`)
+  are actually used now: `Normalize` and `ApplyThrottledLevers` read them
+  instead of repeating `4` and `200` as literals.
+- The four dedicated-skip prefixes share one gated `SkipOnDedicated` fetch
+  instead of each repeating the same null-guard chain.
 - Restore sources are now pinned in-repo (`NuGet.config`, nuget.org only with
   inherited machine and user feeds cleared) instead of coming from whatever
   feed the host machine happens to configure.

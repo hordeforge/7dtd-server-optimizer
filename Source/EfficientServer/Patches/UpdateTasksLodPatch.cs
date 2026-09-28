@@ -61,17 +61,14 @@ namespace EfficientServer.Patches
             if (cfg.SkipTasksUnlessAlerted && AiAlertGate.IsAlertedOrBusy(__instance))
                 return true;
 
-            if (mid)
-            {
-                // Run this entity's heavy tail only on its stride tick; otherwise
-                // fall through to the despawn-only skip below. Striping by entity id
-                // + TickClock index spreads the mid-band cost across `stride`
-                // windows. The clock steps per UpdateTick invocation (= frames,
-                // RESULTS 3k): exact at the vanilla 20 fps, and coverage-complete
-                // above 20 fps whenever gcd(fps/20, stride) = 1.
-                if (TickClock.OwnsCurrentSlot(__instance.entityId, cfg.MidTickStride))
-                    return true; // this entity's stride tick
-            }
+            // Run this entity's heavy tail only on its stride tick; otherwise fall
+            // through to the despawn-only skip below. Striping by entity id +
+            // TickClock index spreads the mid-band cost across `stride` windows.
+            // The clock steps per UpdateTick invocation (= frames, RESULTS 3k):
+            // exact at the vanilla 20 fps, and coverage-complete above 20 fps
+            // whenever gcd(fps/20, stride) = 1.
+            if (mid && TickClock.OwnsCurrentSlot(__instance.entityId, cfg.MidTickStride))
+                return true; // this entity's stride tick
 
             // Mid off-frame or far: run only CheckDespawn (updateTasks' first step, so
             // far wandering-horde / bloodmoon / expired entities still despawn), skip

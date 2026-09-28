@@ -107,9 +107,7 @@ class ConfigSwap:
     ):
         self.cfg = cfg_path
         self.bak = cfg_path.with_suffix(cfg_path.suffix + ".swap-bak")
-        # Accept bare "Key" strings so a missed trailing comma cannot turn a
-        # key path into character-wise iteration.
-        self.keys = [k if isinstance(k, tuple) else (k,) for k in keys]
+        self.keys = keys
         self._log = log
         self._begun = False
 
