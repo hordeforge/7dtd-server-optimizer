@@ -178,6 +178,34 @@ def read_config(path: Path) -> dict[str, object]:
     return parse_config_bytes(read_config_bytes(path), path)
 
 
+def read_serverconfig_bytes(path: Path) -> bytes:
+    """The raw bytes of a serverconfig XML, raising BackupError when unreadable.
+
+    The XML twin of :func:`read_config_bytes`, and for the same reason: one
+    read serves the parse proof, the manifest digest and the snapshot copy.
+    """
+    try:
+        return path.read_bytes()
+    except OSError as exc:
+        msg = f"unreadable server config {path}: {exc}"
+        raise BackupError(msg) from exc
+
+
+def parse_serverconfig_bytes(data: bytes, origin: Path) -> None:
+    """Parse serverconfig XML already in hand, raising BackupError on anything unloadable.
+
+    The XML twin of :func:`parse_config_bytes`, for the same reason: a caller
+    that already holds the bytes (for the manifest digest, for the copy written
+    into the snapshot) must not reopen the file to prove it parses.
+    ``origin`` names the file in the failure message.
+    """
+    try:
+        ET.fromstring(data)
+    except ET.ParseError as exc:
+        msg = f"unreadable server config {origin}: {exc}"
+        raise BackupError(msg) from exc
+
+
 def read_serverconfig(path: Path) -> None:
     """Parse a serverconfig XML, raising BackupError on anything unloadable.
 
@@ -185,11 +213,7 @@ def read_serverconfig(path: Path) -> None:
     does not parse is not a backup. ElementTree raises on a truncated or
     malformed document, which is the corruption a text copy actually hits.
     """
-    try:
-        ET.parse(path)
-    except (OSError, ET.ParseError) as exc:
-        msg = f"unreadable server config {path}: {exc}"
-        raise BackupError(msg) from exc
+    parse_serverconfig_bytes(read_serverconfig_bytes(path), path)
 
 
 def is_dedicated_install(server_root: Path) -> bool:
@@ -395,8 +419,11 @@ def snapshot(
             " game config to lose; the snapshot covers the mod config only.",
             file=sys.stderr,
         )
+    # One read of each live XML feeds all three answers below (parse proof,
+    # manifest digest, staged copy); it used to be read three times.
+    sc_bytes = {sc.name: read_config_bytes(sc) for sc in serverconfigs}
     for sc in serverconfigs:
-        read_serverconfig(sc)
+        parse_serverconfig_bytes(sc_bytes[sc.name], sc)
 
     stamp = utc_stamp(now)
     target = dest / stamp
@@ -412,7 +439,7 @@ def snapshot(
         "stamp": target.name,
         "source": str(live),
         "sha256": sha256_of_bytes(live_bytes),
-        "serverconfig": {sc.name: sha256_of_bytes(sc.read_bytes()) for sc in serverconfigs},
+        "serverconfig": {name: sha256_of_bytes(data) for name, data in sc_bytes.items()},
     }
     # Build under a name no reader matches, then publish with one rename. The
     # stamp in the manifest is the FINAL name, so the manifest is built here,
@@ -424,8 +451,8 @@ def snapshot(
     staging = _new_staging(dest)
     try:
         (staging / CONFIG_NAME).write_bytes(live_bytes)
-        for sc in serverconfigs:
-            (staging / sc.name).write_bytes(sc.read_bytes())
+        for name, data in sc_bytes.items():
+            (staging / name).write_bytes(data)
         (staging / MANIFEST_NAME).write_text(
             json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
         )
@@ -587,12 +614,19 @@ def _verify_serverconfigs(d: Path, manifest: object) -> list[str]:
             problems.append(f"{d.name}: serverconfig {name} is in the manifest but missing")
             continue
         expected = recorded[name]
-        actual = sha256_of_bytes(path.read_bytes())
+        # One read serves the digest and the parse proof below; the array form
+        # read the same file twice, once per answer.
+        try:
+            data = read_serverconfig_bytes(path)
+        except BackupError as exc:
+            problems.append(str(exc))
+            continue
+        actual = sha256_of_bytes(data)
         if actual != expected:
             problems.append(f"{d.name}: {name} sha256 {actual} != manifest {expected}")
             continue
         try:
-            read_serverconfig(path)
+            parse_serverconfig_bytes(data, path)
         except BackupError as exc:
             problems.append(str(exc))
     return problems

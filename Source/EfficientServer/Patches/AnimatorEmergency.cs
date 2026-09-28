@@ -62,6 +62,15 @@ namespace EfficientServer.Patches
         // Reusable sweep scratch: id -> rig seen this pass, ids to drop afterwards.
         static readonly Dictionary<int, Animator> LiveRigs = new Dictionary<int, Animator>();
         static readonly List<int> StaleIds = new List<int>();
+        // Sweep scratch: the animators of the entity being walked, reused
+        // across entities so the per-entity GetComponentsInChildren allocates
+        // nothing. The array form cost one managed array per enemy per sweep,
+        // and a standing tier-2 emergency re-sweeps every 100 ticks
+        // (GovernorTiers.SweepPeriodTicks), so that was one array per enemy
+        // every few seconds for the whole session. Main-thread only, consumed
+        // before the next entity is walked, and cleared on abandon so a partial
+        // enumeration pins no rigs.
+        static readonly List<Animator> Scratch = new List<Animator>();
 
         public static bool Active { get; private set; }
 
@@ -74,14 +83,22 @@ namespace EfficientServer.Patches
         static IEnumerable<Animator> LivingEnemyAnimators(World world)
         {
             List<Entity> entities = world.Entities.list;
-            for (int i = 0; i < entities.Count; i++)
+            try
             {
-                if (!(entities[i] is EntityEnemy enemy)) continue;
-                // Corpses stay in Entities.list; leave death pose alone.
-                if (enemy.IsDead()) continue;
-                Animator[] anims = enemy.GetComponentsInChildren<Animator>(true);
-                for (int a = 0; a < anims.Length; a++)
-                    if (anims[a] != null) yield return anims[a];
+                for (int i = 0; i < entities.Count; i++)
+                {
+                    if (!(entities[i] is EntityEnemy enemy)) continue;
+                    // Corpses stay in Entities.list; leave death pose alone.
+                    if (enemy.IsDead()) continue;
+                    Scratch.Clear();
+                    enemy.GetComponentsInChildren(true, Scratch);
+                    for (int a = 0; a < Scratch.Count; a++)
+                        if (Scratch[a] != null) yield return Scratch[a];
+                }
+            }
+            finally
+            {
+                Scratch.Clear();
             }
         }
 

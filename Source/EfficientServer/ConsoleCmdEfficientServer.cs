@@ -226,11 +226,16 @@ namespace EfficientServer
             int aliveHash = Animator.StringToHash("IsAlive");
             int walkHash = Animator.StringToHash("WalkType");
             List<Entity> entities = world.Entities.list;
+            // Reused across entities: the array-returning overload allocated one
+            // Animator[] per enemy in the dump, and the harness reads this on a
+            // server with hundreds of zombies.
+            var rigScratch = new List<Animator>();
             for (int i = 0; i < entities.Count; i++)
             {
                 if (!(entities[i] is EntityEnemy enemy)) continue;
-                Animator[] anims = enemy.GetComponentsInChildren<Animator>(true);
-                Animator anim = anims.Length > 0 ? anims[0] : null;
+                rigScratch.Clear();
+                enemy.GetComponentsInChildren(true, rigScratch);
+                Animator anim = rigScratch.Count > 0 ? rigScratch[0] : null;
                 if (anim == null) { SdtdConsole.Instance.Output($"  {enemy.entityId} NO ANIMATOR"); continue; }
                 string st = "n/a";
                 if (anim.enabled && anim.isActiveAndEnabled)

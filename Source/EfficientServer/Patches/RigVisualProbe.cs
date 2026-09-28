@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -50,6 +51,32 @@ namespace EfficientServer.Patches
         // UnityEngine.Object overrides Equals, so the set uses the same
         // destroyed-object semantics as List.Contains.
         static readonly HashSet<Behaviour> _disabledSet = new HashSet<Behaviour>();
+        // Type -> is that type one of the rig types above. The sweep tests EVERY
+        // Behaviour on EVERY entity's rig, and the test used to be
+        // RigTypes.Contains(component.GetType().Name): Mono's Type.Name builds a
+        // fresh string per call, so one sweep over a blood-moon horde allocated
+        // one string per component visited (thousands per sweep) and hashed it
+        // by content. One lookup per distinct component TYPE, computed once
+        // ever, replaces all of it. Bounded by the game's Behaviour type count
+        // (a fixed set, not per entity), so this cannot grow with load.
+        static readonly Dictionary<Type, bool> RigTypeByType = new Dictionary<Type, bool>();
+        // Sweep scratch: the component list of the entity being walked, reused
+        // across entities so the per-entity GetComponentsInChildren does not
+        // allocate a fresh array for each one. Main-thread only (console
+        // command), and consumed before the next entity is walked.
+        static readonly List<Behaviour> Scratch = new List<Behaviour>();
+
+        static bool IsRigType(Component component)
+        {
+            Type type = component.GetType();
+            bool tracked;
+            if (!RigTypeByType.TryGetValue(type, out tracked))
+            {
+                tracked = RigTypes.Contains(type.Name);
+                RigTypeByType[type] = tracked;
+            }
+            return tracked;
+        }
 
         /// <summary>
         /// Components disabled and not yet restored, across every sweep since the
@@ -73,18 +100,20 @@ namespace EfficientServer.Patches
             List<Entity> entities = world.Entities.list;
             for (int i = 0; i < entities.Count; i++)
             {
-                Behaviour[] behaviours = entities[i].GetComponentsInChildren<Behaviour>(true);
-                for (int b = 0; b < behaviours.Length; b++)
+                Scratch.Clear();
+                entities[i].GetComponentsInChildren(true, Scratch);
+                for (int b = 0; b < Scratch.Count; b++)
                 {
-                    if (behaviours[b] == null || !behaviours[b].enabled) continue;
-                    if (!RigTypes.Contains(behaviours[b].GetType().Name)) continue;
-                    if (_disabledSet.Contains(behaviours[b])) continue;
-                    behaviours[b].enabled = false;
-                    _disabled.Add(behaviours[b]);
-                    _disabledSet.Add(behaviours[b]);
+                    if (Scratch[b] == null || !Scratch[b].enabled) continue;
+                    if (!IsRigType(Scratch[b])) continue;
+                    if (_disabledSet.Contains(Scratch[b])) continue;
+                    Scratch[b].enabled = false;
+                    _disabled.Add(Scratch[b]);
+                    _disabledSet.Add(Scratch[b]);
                     disabled++;
                 }
             }
+            Scratch.Clear();
             return disabled;
         }
 
