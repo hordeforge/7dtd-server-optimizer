@@ -72,7 +72,9 @@ write APIs under `Source/EfficientServer/`; the only file reads are
   (`Source/EfficientServer/Config.cs:415`, clamp helper `Config.cs:495`), a
   misspelled key binds to nothing and keeps the built-in default (fail-soft per
   group, `Config.cs:377`, with template typos caught pre-packaging by
-  `scripts/check_config_doc.py`), malformed JSON falls back to defaults
+  `scripts/check_config_doc.py`, and each unknown key named in a WARN so a typo
+  is not silent, `Config.cs:429`), NaN/Infinity take a clamped fallback
+  (`Config.cs:549,554`), and malformed JSON falls back to defaults
   (`Config.cs:384`). A JSON `null` for a whole section is backfilled from
   defaults by reflection so no null hole reaches a patch
   (`Config.cs:404`). Residual: clamped maxima are still potent (R5), and the

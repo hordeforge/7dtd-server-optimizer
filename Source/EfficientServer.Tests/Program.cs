@@ -19,6 +19,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Text;
 using System.Threading;
 using EfficientServer.Patches;
 
@@ -104,6 +105,24 @@ namespace EfficientServer.Tests
         {
             EsLog.Warnings.Clear();
             return LoadTemp(json);
+        }
+
+        // The shipped template, located by walking up from this binary for the
+        // directory that holds it (the same "find the project root by its
+        // marker" rule the scripts use) rather than by a relative path that
+        // only resolves from one build layout. Returns null when the harness
+        // runs outside the source tree (a bare published copy of this binary),
+        // and the caller SKIPs instead of passing on an absent file.
+        static string? ConfigTemplatePath()
+        {
+            var dir = new DirectoryInfo(AppContext.BaseDirectory);
+            while (dir != null)
+            {
+                string candidate = Path.Combine(dir.FullName, "config", "efficientserver.json");
+                if (File.Exists(candidate)) return candidate;
+                dir = dir.Parent;
+            }
+            return null;
         }
 
         // "Config load failed [<CLR type name>], using defaults: <message>". Only
@@ -1153,7 +1172,7 @@ namespace EfficientServer.Tests
                 "\"CrowdCollisionLod\":{\"ResolveEveryNTicks\":16}," +
                 "\"AnimatorLod\":{\"FullRateDistSq\":1000000,\"FarStride\":10}," +
                 "\"Server\":{\"TargetFps\":120,\"JobWorkerCount\":64}," +
-                "\"Governor\":{\"OverBudgetMs\":500,\"HealthyMs\":495,\"EmergencyOverMs\":1000," +
+                "\"Governor\":{\"OverBudgetMs\":20,\"HealthyMs\":15,\"EmergencyOverMs\":25," +
                 "\"WindowTicks\":6000,\"CooldownTicks\":36000}," +
                 "\"TickGuard\":{\"ShedAboveMs\":1000,\"WindowTicks\":6000,\"ShedBatch\":100," +
                 "\"CooldownTicks\":36000,\"MinEnemiesKept\":10000}," +
@@ -1176,9 +1195,15 @@ namespace EfficientServer.Tests
                 "AnimatorLod upper endpoints preserved verbatim");
             Check(atMax.Server.TargetFps == 120 && atMax.Server.JobWorkerCount == 64,
                 "Server upper endpoints preserved verbatim");
-            Check(atMax.Governor.OverBudgetMs == 500f && atMax.Governor.HealthyMs == 495f
-                && atMax.Governor.EmergencyOverMs == 1000f && atMax.Governor.WindowTicks == 6000
-                && atMax.Governor.CooldownTicks == 36000, "Governor upper endpoints preserved verbatim");
+            // At the 120 fps target the whole band is pinned to its floor: an
+            // unloaded loop sits at 8.3 ms, so a wide band could never be
+            // exceeded and the governor would be inert. The band's own upper
+            // endpoints are pinned separately below, at the vanilla frame rate
+            // that makes them legal.
+            Check(atMax.Governor.OverBudgetMs == 20f && atMax.Governor.HealthyMs == 15f
+                && atMax.Governor.EmergencyOverMs == 25f && atMax.Governor.WindowTicks == 6000
+                && atMax.Governor.CooldownTicks == 36000,
+                "Governor upper endpoints preserved verbatim, band floored to the fps-120 target");
             Check(atMax.TickGuard.ShedAboveMs == 1000f && atMax.TickGuard.WindowTicks == 6000
                 && atMax.TickGuard.ShedBatch == 100 && atMax.TickGuard.CooldownTicks == 36000
                 && atMax.TickGuard.MinEnemiesKept == 10000, "TickGuard upper endpoints preserved verbatim");
@@ -1230,6 +1255,89 @@ namespace EfficientServer.Tests
             Check(atMin.Gc.SafetyCollectAboveMB == 0 && atMin.Gc.SafetyCollectRamFraction == 0f
                 && atMin.Gc.IncrementalPauseTargetMs == 0, "Gc lower endpoints preserved verbatim");
             Check(EsLog.Warnings.Count == 0, "lower endpoints load without any 'config corrected' warning");
+
+            // Governor band vs frame target. The band is compared against the
+            // MEASURED frame interval and an unloaded loop idles at
+            // 1000/TargetFps, so the fps-20 default (57) can never be exceeded
+            // above ~18 fps: raising Server.TargetFps without retuning the band
+            // would silently switch the governor off. Normalize therefore caps
+            // OverBudgetMs at 1.2x the target frame interval, and the cap is
+            // pinned here from both sides - a value that fits survives, one that
+            // does not is corrected AND logged, so the operator sees it move.
+            EsLog.Warnings.Clear();
+            var bandAt20 = LoadTemp("{\"Server\":{\"TargetFps\":20},\"Governor\":{\"OverBudgetMs\":57,\"HealthyMs\":52}}");
+            Check(bandAt20.Governor.OverBudgetMs == 57f && bandAt20.Governor.HealthyMs == 52f,
+                "governor band untouched by the 20 fps target (ceiling 60)");
+            Check(EsLog.Warnings.Count == 0, "a band that fits the target raises no correction");
+
+            EsLog.Warnings.Clear();
+            var bandAt40 = LoadTemp("{\"Server\":{\"TargetFps\":40},\"Governor\":{\"OverBudgetMs\":57,\"HealthyMs\":52}}");
+            Check(bandAt40.Governor.OverBudgetMs == 30f && bandAt40.Governor.HealthyMs == 25f,
+                "fps-40 default band is pulled down to the 30/25 tune the docs give");
+            Check(EsLog.Warnings.Any(w => w.StartsWith("config corrected Governor.OverBudgetMs")
+                && w.Contains("57 -> 30")),
+                "the pulled-down band is named in the correction log");
+
+            EsLog.Warnings.Clear();
+            var bandTuned = LoadTemp("{\"Server\":{\"TargetFps\":60},\"Governor\":{\"OverBudgetMs\":20,\"HealthyMs\":15}}");
+            Check(bandTuned.Governor.OverBudgetMs == 20f && bandTuned.Governor.HealthyMs == 15f,
+                "an explicitly tuned band inside the target's ceiling is preserved");
+            Check(EsLog.Warnings.Count == 0, "a tuned band that fits raises no correction");
+
+            // The band's own upper endpoints stay legal whenever no frame target
+            // is set (TargetFps 0 = vanilla 20 fps, idle 50 ms).
+            EsLog.Warnings.Clear();
+            var bandAtMax = LoadTemp("{\"Governor\":{\"OverBudgetMs\":500,\"HealthyMs\":495,\"EmergencyOverMs\":1000},"
+                + "\"TickGuard\":{\"ShedAboveMs\":1000}}");
+            Check(bandAtMax.Governor.OverBudgetMs == 500f && bandAtMax.Governor.HealthyMs == 495f
+                && bandAtMax.Governor.EmergencyOverMs == 1000f,
+                "Governor upper endpoints preserved verbatim at the vanilla frame rate");
+            Check(EsLog.Warnings.Count == 0, "the widest band still loads silently with no target fps");
+
+            // Unknown keys. A typo binds to nothing and keeps its default; the
+            // load must still succeed (fail-soft per group) but must NAME the
+            // key, or an operator who misspelled a knob has no way to learn it
+            // never took effect. Names bind case-insensitively, so a
+            // differently-cased key is not a typo and must not be reported.
+            EsLog.Warnings.Clear();
+            var typoed = LoadTemp(
+                "{\"Enabld\":false,\"Pathfinding\":{\"GraphUpdateEveryTick\":9},\"Server\":{\"TargetFps\":20}}");
+            Check(typoed.Enabled && typoed.Pathfinding.GraphUpdateEveryTicks == 4 && typoed.Server.TargetFps == 20,
+                "unknown keys are ignored without losing the keys around them");
+            Check(EsLog.Warnings.Count == 2
+                && EsLog.Warnings.Contains("config unknown key 'Enabld' ignored;"
+                    + " that knob keeps its default (names are case-insensitive, spelling is not)")
+                && EsLog.Warnings.Contains("config unknown key 'Pathfinding.GraphUpdateEveryTick' ignored;"
+                    + " that knob keeps its default (names are case-insensitive, spelling is not)"),
+                "each unknown key is named on its own warning line, with its section path");
+
+            EsLog.Warnings.Clear();
+            var recased = LoadTemp("{\"enabled\":false,\"ailod\":{\"fullaidistsq\":50}}");
+            Check(!recased.Enabled && recased.AiLod.FullAiDistSq == 50f,
+                "a differently-cased key still binds, as the deserializer documents");
+            Check(EsLog.Warnings.Count == 0, "a recased key is not reported as unknown");
+
+            // The shipped template must be clean by construction: its keys are
+            // the documented surface, so a regression here means CONFIG.md and
+            // config/efficientserver.json drifted apart again.
+            var template = ConfigTemplatePath();
+            if (template == null)
+            {
+                Console.WriteLine("SKIP: shipped-template unknown-key check (no source tree above this binary)");
+            }
+            else
+            {
+                var shipped = ServerPerfConfig.UnknownKeys(File.ReadAllText(template, Encoding.UTF8));
+                Check(shipped.Count == 0,
+                    "shipped template names no unknown key: " + string.Join(", ", shipped));
+            }
+
+            // A non-object document has no keys to name and must not turn the
+            // scan into a throw; the deserializer still decides what it means.
+            var notAnObject = LoadTempTracked("[1,2,3]");
+            Check(notAnObject != null && notAnObject.Enabled, "array document -> defaults, no throw");
+            Check(EsLog.Warnings.Count == 1 && NamesExceptionType(EsLog.Warnings[0]),
+                "array document reports the deserializer failure, not a scan failure");
 
             // Idempotency: re-normalizing an already-normalized config must be
             // silent and value-stable. Every FiniteRange/IntRange fallback is

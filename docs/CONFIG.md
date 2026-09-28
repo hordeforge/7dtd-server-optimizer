@@ -9,8 +9,10 @@ file consulted (`config: <path>`; a missing file logs `NO CONFIG FILE at ...
 - built-in defaults applied` instead of failing). Every lever is individually
 toggleable; a matched-but-disabled patch logs `(matched but config-disabled)` at init.
 Unknown keys are NAMED and ignored at load (`config unknown key 'X' ignored ...`),
-so a typo cannot silently leave a knob at its default; missing keys keep their
-built-in defaults.
+one WARNING line per key with its section path (`Pathfinding.GraphUpdateEveryTick`),
+so a typo cannot silently leave a knob at its default; the rest of the file still
+loads, and missing keys keep their built-in defaults. Key names bind
+case-insensitively (Newtonsoft's rule), so a recased key is a bind, not a typo.
 
 **Defaults policy:** ON when a lever improves performance with **no gameplay
 impact** (provable equivalence or headless-only work). OFF when it changes anything
@@ -336,8 +338,10 @@ Band and stride; clamps [100, 1e6] and [1, 10].
   unconfirmed - likely placebo.
 - **Cost:** modest per-frame loop overhead + idle wakeups. **Recommendation: 0.**
 - **Interactions:** the governor's EMA measures FRAME intervals, so its idle floor
-  equals the frame target - calibrate `HealthyMs`/`OverBudgetMs` to your fps (see
-  below). Cadence levers (`GraphUpdateEveryTicks`, replication stride) hook methods
+  equals the frame target - `Normalize` therefore caps `Governor.OverBudgetMs` at
+  1.2x the target frame interval (see `OverBudgetMs` below), and a `HealthyMs`
+  above the cap's counterpart is pulled down with it. Cadence levers
+  (`GraphUpdateEveryTicks`, replication stride) hook methods
   that run only in the FULL-tick branch, so they count full ticks and are
   fps-independent. The TickClock-sampled stripers (`MidTickStride`,
   `ResolveEveryNTicks`, `MaxPathEnqueuesPerTick`) do NOT share that property: their
@@ -373,7 +377,13 @@ UpdateTick, which runs per frame). The loop idles at exactly the frame target
 (50 ms at fps 20, 25 at 40, 16.7 at 60) and never below, so `HealthyMs` must sit
 ABOVE your idle frame time or recovery never triggers (proved live at fps 20 with a
 45 ms threshold). Defaults assume the vanilla fps 20; a fps-40 tune would be e.g.
-OverBudget 30 / Healthy 27.
+OverBudget 30 / Healthy 25.
+**`Server.TargetFps > 0` caps `OverBudgetMs` at 1.2x the target frame interval**
+(60 at fps 20, 30 at 40, 20 at 60), because the fps-20 default of 57 can never be
+exceeded above ~18 fps and the governor would sit permanently healthy, i.e. off.
+A band you tuned below the cap is kept as written; a wider one is pulled down and
+named in the `config corrected` log. The floor is 20 ms, so a very high target
+(fps 120 and up) can only be guarded against a 2x+ frame overrun.
 
 ### `WindowTicks` (100) / `CooldownTicks` (400)
 ~5 s of sustained signal to transition; ~20 s minimum between transitions.

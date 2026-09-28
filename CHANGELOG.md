@@ -99,6 +99,19 @@ So `EfficientServer-0.1.0.zip` logging `mod=1.17.0` is correct, not drift.
   run. Those runs are routinely SIGKILLed by tool timeouts, and nothing ever
   removed them, so a long-lived server install accumulated one per killed
   run. Temps owned by a still-running pid are left alone.
+- Unknown config keys are named again at load, one WARNING per key with its
+  section path (`config unknown key 'Pathfinding.GraphUpdateEveryTick' ignored`).
+  The load is unchanged (fail-soft per group, the rest of the file still
+  applies), so this only makes a typo visible instead of silent. Name lookup is
+  ordinal-ignore-case, matching the binder: a recased key binds and is not
+  reported.
+- `Server.TargetFps > 0` now caps `Governor.OverBudgetMs` at 1.2x the target
+  frame interval (60 at fps 20, 30 at 40, 20 at 60). The band is compared
+  against the measured frame interval, so the fps-20 default of 57 could never
+  be exceeded above ~18 fps: raising the frame target left the governor
+  permanently healthy, i.e. silently off. A band tuned below the cap is kept
+  as written; a wider one is pulled down and named in the `config corrected`
+  log. Defaults (`TargetFps` 0) are unchanged.
 
 ## [1.19.0] - 2026-09-20
 

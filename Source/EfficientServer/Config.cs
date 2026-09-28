@@ -1,9 +1,11 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Reflection;
 using System.Text;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace EfficientServer
 {
@@ -371,9 +373,15 @@ namespace EfficientServer
                 // Explicit encoding: the config is UTF-8 (BOM tolerated). Never the
                 // host locale default, so a non-ASCII value survives any OS.
                 string json = File.ReadAllText(path, Encoding.UTF8);
-                // A misspelled key binds to nothing and silently keeps the built-in
-                // default (fail-soft per group). Template typos are caught
-                // pre-packaging by scripts/check_config_doc.py, so no runtime scan.
+                // A misspelled key binds to nothing and keeps the built-in default
+                // (fail-soft per group), so the load itself never fails on one; the
+                // scan below is what stops that from being SILENT. The shipped
+                // template is typo-gated pre-packaging by
+                // scripts/check_config_doc.py, but an operator edit after install
+                // is not covered by that gate.
+                foreach (string key in UnknownKeys(json))
+                    EsLog.Emit(LogLevel.Warn, "config unknown key '" + key
+                        + "' ignored; that knob keeps its default (names are case-insensitive, spelling is not)");
                 var loaded = JsonConvert.DeserializeObject<ServerPerfConfig>(json);
                 if (loaded == null) return new ServerPerfConfig();
                 BackfillNullSections(loaded);
@@ -409,6 +417,54 @@ namespace EfficientServer
                 if (!IsConfigSectionType(prop.PropertyType)) continue;
                 if (prop.GetValue(c) != null) continue;
                 prop.SetValue(c, Activator.CreateInstance(prop.PropertyType));
+            }
+        }
+
+        /// <summary>
+        /// Dotted paths in <paramref name="json"/> that bind to no config
+        /// property, so a typoed knob can be named instead of silently ignored.
+        /// REPORT only: the load is unchanged, an unknown key costs nothing but a
+        /// warning line.
+        /// </summary>
+        public static List<string> UnknownKeys(string json)
+        {
+            var unknown = new List<string>();
+            // JToken.Parse (not JObject.Parse) so a non-object document, which
+            // has no keys to name and never reaches the walker, is not turned
+            // into a scan-time exception: the deserializer still decides what
+            // that document means.
+            if (JToken.Parse(json) is JObject root)
+                CollectUnknownKeys(string.Empty, root, typeof(ServerPerfConfig), unknown);
+            return unknown;
+        }
+
+        // Newtonsoft resolves member names case-INsensitively, so a differently
+        // cased key really does bind. The lookup matches that with an
+        // OrdinalIgnoreCase comparison (never a culture-sensitive one) and so
+        // reports only keys that genuinely bind to nothing.
+        static void CollectUnknownKeys(string prefix, JObject owner, Type type, List<string> unknown)
+        {
+            foreach (JProperty prop in owner.Properties())
+            {
+                string path = prefix.Length == 0 ? prop.Name : prefix + "." + prop.Name;
+                PropertyInfo target = default!; // null = no property binds, tested below
+                foreach (PropertyInfo candidate in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
+                {
+                    if (string.Equals(candidate.Name, prop.Name, StringComparison.OrdinalIgnoreCase))
+                    {
+                        target = candidate;
+                        break;
+                    }
+                }
+                if (target == null)
+                {
+                    unknown.Add(path);
+                    continue;
+                }
+                // JSON null (or any non-object) has nothing to walk into; the
+                // deserializer handles those cases itself.
+                if (prop.Value is JObject child && IsConfigSectionType(target.PropertyType))
+                    CollectUnknownKeys(path, child, target.PropertyType, unknown);
             }
         }
 
@@ -451,9 +507,23 @@ namespace EfficientServer
             // Governor thresholds are TICK-INTERVAL milliseconds; the tick rate equals
             // the target frame rate, so calibrate to it: HealthyMs must sit ABOVE the
             // idle frame time (50 ms at fps 20, 25 at 40, 16.7 at 60) or recovery
-            // never triggers. Defaults assume the vanilla fps 20. Clamps are wide
-            // enough for high-fps tunes; the hysteresis gap is still enforced.
-            Governor.OverBudgetMs = FiniteRange("Governor.OverBudgetMs", Governor.OverBudgetMs, 20f, 500f, 57f);
+            // never triggers. Defaults assume the vanilla fps 20; the hysteresis gap
+            // is enforced whatever the target turns out to be.
+            //
+            // OverBudgetMs is compared against the MEASURED frame interval, and an
+            // unloaded loop sits at 1000/TargetFps, so the fps-20 default (57) can
+            // never be exceeded above ~18 fps. Raising Server.TargetFps without
+            // retuning the band would silently switch the governor OFF on exactly
+            // the server that asked for more headroom, so the ceiling moves with the
+            // target: ceil(1000/fps x 1.2), the ratio the docs use for an fps-40 tune
+            // (30 over 25). Integer division, not 1000/fps*1.2f, because the float
+            // product rounds 25 x 1.2 to 30.000002 and the ceil would hand back 31.
+            // A tuned lower OverBudgetMs survives when it fits; "config corrected"
+            // names the ones that do not.
+            float overBudgetCeiling = Server.TargetFps > 0
+                ? Math.Min(500f, (float)Math.Ceiling(1200.0 / Server.TargetFps))
+                : 500f;
+            Governor.OverBudgetMs = FiniteRange("Governor.OverBudgetMs", Governor.OverBudgetMs, 20f, overBudgetCeiling, 57f);
             Governor.HealthyMs = FiniteRange("Governor.HealthyMs", Governor.HealthyMs, 10f, Governor.OverBudgetMs - 5f, 52f);
             Governor.EmergencyOverMs = FiniteRange("Governor.EmergencyOverMs", Governor.EmergencyOverMs, Governor.OverBudgetMs + 5f, 1000f, 80f);
             Governor.WindowTicks = IntRange("Governor.WindowTicks", Governor.WindowTicks, 20, 6000);

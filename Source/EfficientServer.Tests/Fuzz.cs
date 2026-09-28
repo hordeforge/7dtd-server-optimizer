@@ -439,7 +439,13 @@ namespace EfficientServer.Tests
             I(c.Server.TargetFps, 0, 120, "Server.TargetFps");
             I(c.Server.JobWorkerCount, 0, 64, "Server.JobWorkerCount");
 
-            F(c.Governor.OverBudgetMs, 20f, 500f, "Governor.OverBudgetMs");
+            // The band ceiling moves with the frame target (Normalize), so the
+            // mirrored bound has to move with it: a config that survived
+            // Normalize must still satisfy the tightened ceiling.
+            float overCeiling = Math.Max(20f, c.Server.TargetFps > 0
+                ? Math.Min(500f, (float)Math.Ceiling(1200.0 / c.Server.TargetFps))
+                : 500f);
+            F(c.Governor.OverBudgetMs, 20f, overCeiling, "Governor.OverBudgetMs");
             F(c.Governor.HealthyMs, 10f, c.Governor.OverBudgetMs - 5f, "Governor.HealthyMs");
             F(c.Governor.EmergencyOverMs, c.Governor.OverBudgetMs + 5f, 1000f, "Governor.EmergencyOverMs");
             I(c.Governor.WindowTicks, 20, 6000, "Governor.WindowTicks");
