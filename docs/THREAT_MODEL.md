@@ -281,13 +281,13 @@ write APIs under `Source/EfficientServer/`; the only file read is
   privilege.
 - Tampering (restore): `backup_config.py --restore` copies a verified snapshot
   over a target path and refuses to clobber an existing file without `--force`
-  (`backup_config.py:288-311`, refusal at `backup_config.py:304`); the snapshot is re-verified in the same call, so
+  (`backup_config.py:289-312`, refusal at `backup_config.py:306`); the snapshot is re-verified in the same call, so
   a restore never copies a snapshot that would not load.
 - Information disclosure: the destination is operator-named and may be a synced
   folder or another host. The config holds tuning, not secrets, so a leaked copy
   is a gameplay-integrity event rather than a credential event; the tool refuses
   a destination inside the install tree so the copy is not lost with the disk it
-  protects (`backup_config.py:135-152`).
+  protects (`backup_config.py:136-153`).
 - Unbounded growth: snapshots are pruned to `DEFAULT_KEEP = 14`
   (`backup_config.py:51`), and `make backup-config` requires
   `ES_CONFIG_BACKUP_DEST` to be set rather than defaulting to a path inside the
@@ -334,7 +334,7 @@ write APIs under `Source/EfficientServer/`; the only file read is
 6. Snapshot tampered with before restore: the backup destination is a plain
    directory, so an actor who can write it can replace a snapshot or its
    manifest. `verify` re-reads every snapshot and re-checks the recorded sha256
-   before `restore` copies one (`backup_config.py:254`, `288-300`), so a
+   before `restore` copies one (`backup_config.py:255`, `289-301`), so a
    tampered snapshot fails verification and is not restored. What verification
    does not provide is authenticity: a tampered pair that is internally
    consistent (recomputed manifest) is indistinguishable from a real one, and
@@ -370,9 +370,9 @@ write APIs under `Source/EfficientServer/`; the only file read is
 | Failed install preserves the operator's config via EXIT trap | B4 silent config loss (A7) | `scripts/install.sh:98-117` |
 | Install dir that trims to empty or `/` rejected before the wipe | B4 `rm -rf` on a filesystem-root target | `scripts/install.sh:66-71` (same guard in `uninstall.sh`) |
 | Uninstall preserves `Config/` and warns when the copy lands inside the install tree | A7 loss, B4 | `scripts/uninstall.sh:111-121` |
-| Config backup tool refuses a destination inside the install tree; `make backup-config` requires an explicit dest | A7, B8 | `scripts/backup_config.py:135-152`, `Makefile:254-259` |
-| Backup `verify` re-reads every snapshot the way a restore would; `restore` re-verifies its own snapshot and refuses to clobber without `--force` | A7 corruption, B8 destructive restore | `scripts/backup_config.py:254,288-311` |
-| Snapshot retention bound | B8 unbounded growth | `scripts/backup_config.py:51,245` |
+| Config backup tool refuses a destination inside the install tree; `make backup-config` requires an explicit dest | A7, B8 | `scripts/backup_config.py:136-153`, `Makefile:254-259` |
+| Backup `verify` re-reads every snapshot the way a restore would; `restore` re-verifies its own snapshot and refuses to clobber without `--force` | A7 corruption, B8 destructive restore | `scripts/backup_config.py:255,289-313` |
+| Snapshot retention bound | B8 unbounded growth | `scripts/backup_config.py:51,246` |
 | Live-config swap protocol: temp-file + rename writes, managed-keys-only restore, stale-backup quarantine, divergent-file rule | B8 destructive write, B1 partial revert | `scripts/es_cfg_guard.py:1-30,139` |
 | Stranded-temp sweep scoped to this tooling's own names, live pids and recycled pids left alone | B8 destructive delete | `scripts/es_cfg_guard.py:233,240-245`, `scripts/stage_tmp.sh:33` |
 | Atomic config write creates its temp `O_CREAT\|O_EXCL` and gives up rather than reuse a taken name; live file's mode carried onto the temp | B8 pre-planted symlink or squatter redirecting the live-config write | `scripts/es_cfg_guard.py:104-114,122-125` |

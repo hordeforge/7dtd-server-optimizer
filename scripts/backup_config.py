@@ -62,19 +62,20 @@ STAMP_SUFFIX_DIGITS = 3
 # superset of utf-8. Same rule es_cfg_guard.py reads the file under.
 CFG_ENCODING = "utf-8-sig"
 
-USAGE = f"""\
+USAGE = """\
 Snapshot, verify and restore the live config
 (Mods/EfficientServer/Config/efficientserver.json), the one piece of state an
 operator edits on the server host that nothing else regenerates. The install
 root comes from DS/SEVENDTD_DS_DIR.
 
-  --dest DIR     where snapshots live (required; must be OFF this install tree,
-                 otherwise a lost disk takes the backup with the config)
-  --verify       read every snapshot back and check it, exit 1 on any failure
-  --restore STAMP
-  --to PATH      copy snapshot STAMP to PATH instead of over the live config
-  --force        let --to overwrite an existing file
-  --keep N       snapshots to retain (default {DEFAULT_KEEP})
+  python3 scripts/backup_config.py --dest /mnt/backup/es-config
+  python3 scripts/backup_config.py --dest /mnt/backup/es-config --verify
+  python3 scripts/backup_config.py --dest /mnt/backup/es-config \\
+      --restore 20260928_101500 --to ./recovered.json
+
+--verify is the restore drill's cheap half: it reads every snapshot back the
+way a restore would and exits nonzero on the first one that would not load. Run
+it on a schedule; a backup whose failure is silent is not a backup.
 """
 
 
@@ -312,22 +313,73 @@ def restore(dest: Path, stamp: str, to: Path, *, force: bool = False) -> Path:
 def _parse_args(argv: list[str]) -> argparse.Namespace:
     p = argparse.ArgumentParser(
         prog="backup_config.py",
+        # Spelled out instead of derived: --selftest is the one invocation that
+        # needs no --dest, and the derived line would show it as optional for
+        # every other one.
+        usage="backup_config.py [-h] --dest DIR [--verify]\n"
+        "                 [--restore STAMP --to PATH] [--force] [--keep N]\n"
+        "                 [--selftest]",
         description=USAGE,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    p.add_argument("--dest", type=Path, required=True)
-    p.add_argument("--verify", action="store_true")
-    p.add_argument("--restore", default=None, metavar="STAMP")
-    p.add_argument("--to", type=Path, default=None)
-    p.add_argument("--force", action="store_true")
-    p.add_argument("--keep", type=int, default=DEFAULT_KEEP)
+    p.add_argument(
+        "--dest",
+        type=Path,
+        metavar="DIR",
+        help="where snapshots live (must be OFF this install tree, otherwise a "
+        "lost disk takes the backup with the config)",
+    )
+    p.add_argument(
+        "--verify",
+        action="store_true",
+        help="read every snapshot back and check it, exit 1 on any failure",
+    )
+    p.add_argument(
+        "--restore",
+        default=None,
+        metavar="STAMP",
+        help="restore one snapshot by its stamp; needs --to PATH",
+    )
+    p.add_argument(
+        "--to",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help="restore target; copy the snapshot to PATH instead of over the live config",
+    )
+    p.add_argument("--force", action="store_true", help="let --to overwrite an existing file")
+    p.add_argument(
+        "--keep",
+        type=int,
+        default=DEFAULT_KEEP,
+        metavar="N",
+        help=f"snapshots to retain (default {DEFAULT_KEEP})",
+    )
+    p.add_argument(
+        "--selftest",
+        action="store_true",
+        help="run the backup/restore self-test (wired into `make test`)",
+    )
     args = p.parse_args(argv)
+    # --selftest runs no backup work, so it must not be forced to name a
+    # destination; every other invocation does. --selftest is exclusive, the
+    # same contract the run_cli gates give it.
+    if args.selftest:
+        if argv != ["--selftest"]:
+            p.error("--selftest takes no other arguments")
+        return args
+    if args.dest is None:
+        p.error("--dest DIR is required")
     if args.restore and not args.to:
         p.error("--restore needs --to PATH (or copy it by hand from the printed command)")
     if args.restore and args.verify:
         p.error("--verify and --restore are separate operations")
     if args.force and not args.restore:
         p.error("--force only applies to --restore")
+    # prune() deletes every snapshot outside the retained window, so a --keep
+    # below 1 turns a typo into a wiped backup history.
+    if args.keep < 1:
+        p.error(f"--keep must be at least 1, got {args.keep}")
     return args
 
 
@@ -344,7 +396,13 @@ def _run(argv: list[str]) -> int:
 
 
 def _dispatch(args: argparse.Namespace) -> int:
+    if args.selftest:
+        return _selftest()
     dest = args.dest
+    if dest is None:
+        # Unreachable: _parse_args rejects a missing --dest with a usage error
+        # before dispatch. Present so the type is Path here, not Path | None.
+        raise SystemExit(2)
     if args.verify:
         problems = verify(dest)
         for problem in problems:
@@ -497,6 +555,4 @@ def _selftest() -> int:
 
 
 if __name__ == "__main__":
-    if sys.argv[1:] == ["--selftest"]:
-        raise SystemExit(_selftest())
     raise SystemExit(_run(sys.argv[1:]))
