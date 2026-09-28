@@ -547,8 +547,10 @@ the individually-A/B'd levers (RESULTS 3g, 1).
 
 **Design bug caught by the first live test:** a healthy 20 TPS loop *idles at
 exactly ~50 ms interval* - it never goes lower - so the original recovery threshold
-(45 ms) was unreachable and the governor never stepped down. `HealthyMs` is now
-floored at 51 in `Normalize` (regression-tested) and defaults to 52.
+(45 ms) was unreachable and the governor never stepped down. `Normalize` now
+enforces the hysteresis gap instead of a fixed 51 floor: `HealthyMs` is clamped to
+`OverBudgetMs - 5` (regression-tested) and defaults to 52, so a high-fps tune can
+legitimately sit below 50 while the 20 fps tune still cannot.
 
 ## 3g-bis. Parallel interest scan: audited and REJECTED (2026-07-21)
 

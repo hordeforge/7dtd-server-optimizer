@@ -23,8 +23,9 @@ namespace EfficientServer.Patches
     /// uses the supplementary displacement path). Clients still animate locally.
     /// <see cref="GovernorConfig.AnimatorEmergency"/> stays default-false even
     /// though the CullCompletely exit path was live-cleared (2026-08-09 runs
-    /// restored moving rigs with <c>dp &gt; 0</c>): residual dp=0 walkers and a
-    /// missing saturation stress A/B keep it opt-in (RESULTS 3t, CONFIG.md).
+    /// restored moving rigs with <c>dp &gt; 0</c>, and the tick-bound stress run
+    /// measured -15.4% frame with a complete restore, RESULTS 3t): residual dp=0
+    /// walkers keep it opt-in (RESULTS 3t, CONFIG.md).
     ///
     /// Internal like the other support modules (<see cref="AiAlertGate"/>,
     /// <see cref="TickClock"/>): runtime state with

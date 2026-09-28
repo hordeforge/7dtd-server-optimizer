@@ -499,5 +499,5 @@ General modding rules: [`../../MODDING_BEST_PRACTICES.md`](../../MODDING_BEST_PR
   prefix.
 - **2026-08-09:** Path admission + Animator emergency sections moved before the
   changelog (were appended after it) and version corrected v1.18 -> v1.17.0
-  (the shipped release; no v1.18 exists).
+  (v1.18.0 has since shipped; see CHANGELOG.md).
 - **2026-07-19:** Ownership/related docs polish.

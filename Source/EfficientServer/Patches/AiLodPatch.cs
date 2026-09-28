@@ -5,8 +5,11 @@ using HarmonyLib;
 namespace EfficientServer.Patches
 {
     /// <summary>
-    /// Stock EntityActivityUpdate sets aiActiveScale to 1.0 / 0.3 / 0.1 at 8m / 15m.
-    /// We re-apply tighter bands after the stock pass for dedicated servers.
+    /// Stock EntityActivityUpdate sets aiActiveScale to 1.0 for the closest
+    /// N = clamp(60/playerCount, 4, 20) entities regardless of distance, then 0.3
+    /// inside 15 m and 0.1 beyond. We re-apply tighter distance bands after the
+    /// stock pass for dedicated servers; the per-player top-N full-AI quota is not
+    /// replicated, which the band audit accepted (FEATURES.md).
     /// </summary>
     [HarmonyPatch(typeof(World), nameof(World.EntityActivityUpdate))]
     public static class AiLodPatch

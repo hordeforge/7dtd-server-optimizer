@@ -5,8 +5,9 @@ namespace EfficientServer.Patches
     /// <summary>
     /// Stride the per-tick entity-replication pass. NetEntityDistribution.OnUpdateEntities
     /// recomputes per-entity per-player interest and enqueues movement/state packages
-    /// every tick; at blood-moon load it is ~15 ms/frame, one of the two O(N^2)
-    /// player-axis walls. It is a STATE-driven scan (positions and change flags are
+    /// every tick; at the blood-moon standard it measures 7.69 ms avg/frame, one
+    /// of the two O(N^2) player-axis walls. It is a STATE-driven scan (positions
+    /// and change flags are
     /// read from current state; dirty flags persist on the entry until sent), so
     /// skipping a call only delays replication by the stride - nothing is lost.
     /// Clients interpolate entity motion, so a 2-tick stride (10 Hz replication,

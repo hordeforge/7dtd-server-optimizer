@@ -7,8 +7,8 @@ Cross-checks the property names declared in Source/EfficientServer/Config.cs
 against the backticked identifiers used in docs/CONFIG.md. A field is "covered"
 when its bare name appears in a doc token (e.g. `ResolveEveryNTicks` or
 `CrowdCollisionLod.ResolveEveryNTicks`). Then walks the shipped JSON template
-against the C# property schema so a misspelled knob cannot ship (the mod logs
-unknown keys at load, this gate catches them before packaging), and compares
+against the C# property schema so a misspelled knob cannot ship (load itself
+ignores unknown keys silently, so this gate is the only typo check), and compares
 each shipped value against the property initializer so the template and the
 code defaults cannot drift apart silently (CONFIG.md documents one set of
 defaults; two divergent copies would make one of them a lie).

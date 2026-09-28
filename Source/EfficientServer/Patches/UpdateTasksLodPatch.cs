@@ -7,16 +7,16 @@ namespace EfficientServer.Patches
     /// Entity-AI level of detail on `EntityAlive.updateTasks` (the heavy per-entity
     /// tail: path follow + EAI + the 1236-IL UpdateMoveHelper, which stock does NOT
     /// throttle via aiActiveScale). Three distance bands:
-    ///   close (d &lt; MediumAiDistSq)                : full rate, every tick.
-    ///   mid   (MediumAiDistSq &lt;= d &lt; FarDistSq) : run every MidTickStride-th tick,
-    ///                                                 striped by entity id (spreads the
-    ///                                                 per-tick entity cost; TickClock
-    ///                                                 steps per UpdateTick INVOCATION =
-    ///                                                 frames above the vanilla 20 fps,
-    ///                                                 so striping is exact at 20 fps
-    ///                                                 and coverage-complete above only
-    ///                                                 when gcd(fps/20, stride) = 1).
-    ///   far   (d &gt;= SkipTasksFarDistSq)           : skip the tail entirely.
+    ///   close (d &lt; MediumAiDistSq)   : full rate, every tick.
+    ///   mid   (MediumAiDistSq &lt;= d &lt; SkipTasksFarDistSq)
+    ///                                 : run every MidTickStride-th tick, striped by
+    ///                                   entity id (spreads the per-tick entity cost;
+    ///                                   TickClock steps per UpdateTick INVOCATION =
+    ///                                   frames above the vanilla 20 fps, so striping
+    ///                                   is exact at 20 fps and coverage-complete
+    ///                                   above only when gcd(fps/20, stride) = 1).
+    ///   far   (d &gt;= SkipTasksFarDistSq)
+    ///                                 : skip the tail entirely.
     /// CheckDespawn (updateTasks' first step) still runs every tick in mid/far so far
     /// entities cannot accumulate. Alerted / targeting / investigating / active-sleeper
     /// entities are never strided or skipped. All bands gate on aiClosestPlayerDistSq.

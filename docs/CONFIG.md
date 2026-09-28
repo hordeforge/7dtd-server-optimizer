@@ -1,4 +1,4 @@
-# EfficientServer configuration reference (v1.17.0)
+# EfficientServer configuration reference (v1.19.0)
 
 **Hub:** [`README.md`](../README.md).  
 **Owns:** every config option in minute detail - exact mechanism, gameplay impact,
@@ -13,6 +13,8 @@ one WARNING line per key with its section path (`Pathfinding.GraphUpdateEveryTic
 so a typo cannot silently leave a knob at its default; the rest of the file still
 loads, and missing keys keep their built-in defaults. Key names bind
 case-insensitively (Newtonsoft's rule), so a recased key is a bind, not a typo.
+Typos in the shipped template are caught before packaging by
+`scripts/check_config_doc.py`.
 
 **Defaults policy:** ON when a lever improves performance with **no gameplay
 impact** (provable equivalence or headless-only work). OFF when it changes anything
@@ -299,9 +301,9 @@ human A/B (see RESULTS §3r for the null finding).
 
 ### `AnimatorLod.Enabled` (default `false`)
 - **Mechanism:** every zombie runs a full Unity Animator on the headless server
-  (`AlwaysAnimate`; measured 19.9 ms/frame = 28% of the loaded frame at ~380
-  zombies with 24 players). This LOD disables the Animator component for calm,
-  distant zombies (stopping the engine's per-frame evaluation) and manually pumps
+  (engine-side evaluation every frame; measured 19.9 ms/frame = 28% of the loaded
+  frame at ~380 zombies with 24 players). This LOD disables the Animator component
+  for calm, distant zombies (stopping the engine's per-frame evaluation) and manually pumps
   `Animator.Update(FarStride x dt)` on the entity's slot frame - root motion
   arrives in aggregate, state reads lag by at most the stride. Always full rate:
   within `FullRateDistSq` of a player, attacking, stunned, or dead.
@@ -437,8 +439,9 @@ horde.
 ## Diagnostics
 
 The former GC megapause probe (`GcMegapauseTest` + `WarmupSeconds` +
-`GrowSeconds`) was removed after v1.19.0 (unreleased); a config that still
-carries those keys parses fine but nothing reads them, so delete them.
+`GrowSeconds`) was removed after v1.19.0 and is not shipped yet (see CHANGELOG
+`[Unreleased]`); a config that still carries those keys parses fine but nothing
+reads them, so delete them.
 RESULTS.md keeps the evidence the probe produced (measured 479 ms forced
 collect at 6.9 GB). Remaining knobs:
 

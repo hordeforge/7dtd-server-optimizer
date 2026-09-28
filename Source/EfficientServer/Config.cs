@@ -171,10 +171,12 @@ namespace EfficientServer
 
     // Animator LOD: run calm, distant zombies' animation rigs at a reduced rate.
     // Measured prize: engine animator evaluation is ~20 ms/frame (28%) at ~380
-    // endgame zombies on a headless server. Default OFF until the fidelity A/B and
-    // a human visual pass clear it (root motion, attack cadence, and stuns read
-    // animator state; the LOD preserves them with at most FarStride frames of lag,
-    // and near/fighting/stunned/dead zombies always run full rate).
+    // endgame zombies on a headless server. Default OFF because the clustered
+    // blood-moon A/B found no win there: the near/attacking exemptions cover most
+    // of a siege, so the LOD only pays off on DISPERSED populations (root motion,
+    // attack cadence, and stuns read animator state; the LOD preserves them with at
+    // most FarStride frames of lag, and near/fighting/stunned/dead zombies always
+    // run full rate).
     public sealed class AnimatorLodConfig
     {
         public bool Enabled { get; set; } = false;
@@ -211,10 +213,10 @@ namespace EfficientServer
         // cost. 0 = leave vanilla (default 20); 20-60 reasonable.
         public int TargetFps { get; set; } = 0;
         // Unity job-system worker thread count (0 = leave vanilla). Runtime-settable;
-        // applied at game start and on `es reload`. Experimental: the saturated frame
-        // is partly main-thread job-FENCE waiting (RESULTS 3o); worker-pool size is
-        // the one untested variable in that equation. Sweep at saturation before
-        // trusting any value.
+        // applied at game start and on `es reload`. The saturated frame is partly
+        // main-thread job-FENCE waiting (RESULTS 3o), and a 4-24 worker sweep at
+        // saturation measured null: the fences are serial schedule-then-wait, so
+        // pool size does not move them (RESULTS 3p). Ships 0 for experimenters.
         public int JobWorkerCount { get; set; } = 0;
     }
 
@@ -318,11 +320,13 @@ namespace EfficientServer
 
     public sealed class ServerPerfConfig
     {
-        // Feature keys name one patch group to the init log and gate its activity.
+        // Feature keys name one patch GROUP to the init log and gate its activity. A
+        // group can span several patch classes that share one knob (AiLod and
+        // AnimatorLod each have two), so a key may repeat in ModApi's install table.
         // Single source of truth for the ModApi <-> config vocabulary: ModApi.ConfigNote
         // maps patch types to these constants and FeatureActive switches on them, so
-        // the two sides cannot drift by typo. A new patch group adds one constant plus
-        // one entry in each place; not serialized to JSON (internal vocabulary only).
+        // the two sides cannot drift by typo. A genuinely new group adds one constant
+        // plus one entry in each place; not serialized to JSON (internal vocabulary only).
         public const string KeyAiLod = "AiLod";
         public const string KeyGc = "Gc";
         public const string KeyGraphThrottle = "GraphThrottle";

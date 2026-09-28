@@ -340,8 +340,8 @@ namespace EfficientServer
         }
 
         // Live state the config dump above cannot show: which levers are engaged
-        // at this instant, the tick EMA driving the governor/tick-guard, and how
-        // much work the silent hot-path gates have shed so far. The dump above
+        // at this instant, the tick EMA driving the governor, and how much work
+        // the silent hot-path gates have shed so far. The dump above
         // prints the CONFIGURED values; the governor never writes to the config,
         // so the throttled values in force are named here, next to the tier that
         // produced them. Read-only, so it stays console-only (no log echo).

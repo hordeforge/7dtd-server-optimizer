@@ -147,8 +147,10 @@ namespace EfficientServer.Patches
             return Generic(raw);
         }
 
-        // The generic array/list enumerator without System.Linq (the mcs build is
-        // nostdlib against the game's Managed set; no LINQ there).
+        // Direct GetEnumerator, not Enumerable.Cast: the transpiler swaps the
+        // game's enumerator acquisition for a call to this, and the injected call
+        // site stays inside a per-connection hot path where Cast would wrap every
+        // element in a second enumerator.
         static IEnumerator<ClientInfo> Generic(IEnumerable<ClientInfo> source) =>
             ((IEnumerable<ClientInfo>)source).GetEnumerator();
 

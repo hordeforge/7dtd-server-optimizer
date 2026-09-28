@@ -70,9 +70,11 @@ namespace EfficientServer.Patches
         /// Pure slot predicate behind <see cref="OwnsCurrentSlot"/>, taking the tick index
         /// explicitly so tests can replay tick sequences deterministically; also
         /// drives the per-frame animator stripe in <see cref="AnimatorLodPatch"/>
-        /// with Time.frameCount as the cursor. Cast through uint so the signed wrap
-        /// at ~2.1 billion ticks stays a clean monotonic sequence for the modulo
-        /// instead of going negative and freezing whole id classes.
+        /// with this same tick index as the cursor (Time.frameCount was rejected: it
+        /// counts frames outside UpdateTick and a test replay could not reproduce it).
+        /// Cast through uint so the signed wrap at ~2.1 billion ticks stays a clean
+        /// monotonic sequence for the modulo instead of going negative and freezing
+        /// whole id classes.
         /// </summary>
         public static bool OwnsSlot(int entityId, int tickIndex, int everyTicks)
         {

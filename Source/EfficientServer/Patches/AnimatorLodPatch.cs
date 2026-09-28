@@ -6,7 +6,7 @@ namespace EfficientServer.Patches
     /// <summary>
     /// Animator LOD (the 20 ms lever). Measured: engine-side animator evaluation for
     /// zombies is ~19.9 ms/frame (28% of the loaded frame) at ~379 endgame zombies -
-    /// rigs nobody renders, evaluated at AlwaysAnimate because gameplay reads
+    /// rigs nobody renders, evaluated every frame because gameplay reads
     /// animator state (root motion drives authoritative movement, attack cadence
     /// reads the state tag, stuns read stun clips). A permanent skip therefore
     /// breaks combat; this LOD instead runs calm, distant zombies' animators at a
@@ -14,7 +14,7 @@ namespace EfficientServer.Patches
     /// per-frame evaluation) and manually pumped via Animator.Update(stride * dt)
     /// every Nth frame, so root motion arrives in aggregate and state reads lag by
     /// at most the stride. Exempt (always full rate): zombies near any player,
-    /// attacking, stunned, ragdolling, or dead (death animation).
+    /// attacking, stunned, or dead (death animation).
     ///
     /// Managed AvatarZombieController.Update/LateUpdate are also skipped on
     /// off-frames (they only interpret the animator state that has not advanced).

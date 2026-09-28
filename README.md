@@ -55,7 +55,7 @@ so two builds of the same tree zip byte-identically. `make verify-reproducible`
 proves it by rebuilding from scratch at a second path and comparing hashes.
 CI runs `make test` on every PR and on pushes to main.
 
-## Measured impact (v1.17.x)
+## Measured impact (through v1.19.0)
 
 - **Eliminates the GC megapause:** worst stop-the-world **274 ms -> 0**, full
   collections **3 -> 0** in the aggregate A/B window (vanilla lost 5.5 ticks at once

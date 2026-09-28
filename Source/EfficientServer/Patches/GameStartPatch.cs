@@ -35,9 +35,10 @@ namespace EfficientServer.Patches
         static bool _workersApplied;
 
         // Unity job-system worker pool size (0 = vanilla). Runtime-settable; the
-        // saturated frame is partly main-thread job-fence waiting (RESULTS 3o), and
-        // pool size is the one untested variable there. Same logging contract as
-        // ApplyTargetFpsInner: silent when there is nothing to apply or undo; only
+        // saturated frame is partly main-thread job-fence waiting (RESULTS 3o),
+        // and a 4-24 worker sweep at saturation measured null, so the knob ships
+        // default 0 (RESULTS 3p). Same logging contract as ApplyTargetFpsInner:
+        // silent when there is nothing to apply or undo; only
         // real transitions log, so repeated `es reload` stays quiet.
         public static void ApplyJobWorkers()
         {
