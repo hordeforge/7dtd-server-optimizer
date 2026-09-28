@@ -29,7 +29,35 @@ sys.path.insert(0, str(LOADGEN_ROOT / "scripts"))
 # only in the sibling loadgen tree; es_cfg_guard is local to this repo's
 # scripts/, already on sys.path as the script directory); the resulting E402
 # is exempted per-file in ruff.toml instead of inline noqa noise.
-import bloodmoon_profile as B
+#
+# The loadgen sibling is an OPTIONAL checkout: it is absent in a standalone
+# clone of this repo, and a plain `import` there aborts the module BEFORE the
+# entry points can run, so `python3 scripts/measure_es_onoff.py --help` (which
+# every harness advertises in its USAGE) died with a bare traceback instead of
+# printing usage. Defer the failure to the first attribute use, which only a
+# real run reaches, and report it there with the path that was searched.
+class _MissingLoadgenModule:
+    """Stand-in for ``bloodmoon_profile`` when the sibling tree is absent.
+
+    Every attribute access re-raises the original ImportError, so a real run
+    still stops immediately and says what was missing; only import-time use
+    (help text, argument validation) survives without the sibling.
+    """
+
+    def __init__(self, exc: ModuleNotFoundError) -> None:
+        self._exc = exc
+
+    def __getattr__(self, name: str) -> object:
+        raise ModuleNotFoundError(
+            f"{name} needs the sibling 7dtd-loadgen checkout at {LOADGEN_ROOT}; "
+            f"import it directly: {self._exc}"
+        )
+
+
+try:
+    import bloodmoon_profile as B
+except ModuleNotFoundError as exc:  # sibling tree not checked out beside us
+    B = _MissingLoadgenModule(exc)
 
 from es_cfg_guard import CFG_ENCODING, ConfigSwap, unique_path, write_atomic
 

@@ -7,7 +7,10 @@ measured performance gain, default + rationale.
 File: `Config/efficientserver.json` beside the mod DLL. Init logs the exact
 file consulted (`config: <path>`; a missing file logs `NO CONFIG FILE at ...
 - built-in defaults applied` instead of failing). Every lever is individually
-toggleable; a matched-but-disabled patch logs `(matched but config-disabled)` at init.
+toggleable; a matched-but-disabled patch logs `(matched but config-disabled)` at init
+(the replication stride and graph-update cadence are exempt: the governor drives both
+from its own tiers, so an enabled governor means they can be in force whatever the
+configured baseline says - `es status` names what is actually engaged).
 Unknown keys are NAMED and ignored at load (`config unknown key 'X' ignored ...`),
 one WARNING line per key with its section path (`Pathfinding.GraphUpdateEveryTick`),
 so a typo cannot silently leave a knob at its default; the rest of the file still

@@ -158,11 +158,14 @@ namespace EfficientServer
             // CullCompletely (keeps enabled=true so root-motion can restore). Same
             // path the governor tier-2 uses. GAMEPLAY DEGRADES WHILE OFF (timer
             // attack cadence, supplementary movement) - bench or emergency only.
+            // The arm gate is decided BEFORE the world lookup: it is a config
+            // decision that needs no world, and a world-less server must still get
+            // the audited refusal rather than a bare "no world" console line.
+            if (sub == "animoff" && !ArmProbe("animoff")) return;
             World world = GameManager.Instance != null ? GameManager.Instance.World : null;
             if (world == null) { SdtdConsole.Instance.Output(EsLog.LogPrefix + "no world"); return; }
             if (sub == "animoff")
             {
-                if (!ArmProbe("animoff")) return;
                 Patches.AnimatorEmergency.Enter();
                 Output(
                     "animprobe: ENTER CullCompletely emergency "
@@ -281,11 +284,13 @@ namespace EfficientServer
             // raycast, drone lights. Disable/enable by type name to size their
             // per-frame cost without new assembly references. Visual-only per RE
             // (RagdollWhenHit deliberately excluded: touches physics).
+            // Arm gate first, for the same reason as AnimProbe: a refusal is a
+            // config decision and must be audited whether or not a world is up.
+            if (sub == "rigoff" && !ArmProbe("rigoff")) return;
             World world = GameManager.Instance != null ? GameManager.Instance.World : null;
             if (world == null) { SdtdConsole.Instance.Output(EsLog.LogPrefix + "no world"); return; }
             if (sub == "rigoff")
             {
-                if (!ArmProbe("rigoff")) return;
                 // Additive sweep: only still-enabled, not-yet-tracked components
                 // are disabled and appended, so rigoff N times converges to the
                 // same state as rigoff once and one rigon undoes it all.

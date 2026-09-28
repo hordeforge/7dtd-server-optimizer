@@ -58,8 +58,20 @@ namespace EfficientServer.Patches
 
             // Keep full AI when hunting / investigating / recently alerted (the
             // shared probe also covers API drift by failing open to "alerted").
-            if (cfg.SkipTasksUnlessAlerted && AiAlertGate.IsAlertedOrBusy(__instance))
+            // MID striding never applies to such an entity, whatever the knob says
+            // (docs/FEATURES.md: alerted entities are never strided). The knob
+            // governs the FAR skip only, which is the band docs/CONFIG.md scopes
+            // it to; it used to gate both, so `SkipTasksUnlessAlerted: false`
+            // silently strided mid-band attackers too.
+            if (mid)
+            {
+                if (AiAlertGate.IsAlertedOrBusy(__instance))
+                    return true;
+            }
+            else if (cfg.SkipTasksUnlessAlerted && AiAlertGate.IsAlertedOrBusy(__instance))
+            {
                 return true;
+            }
 
             // Run this entity's heavy tail only on its stride tick; otherwise fall
             // through to the despawn-only skip below. Striping by entity id +

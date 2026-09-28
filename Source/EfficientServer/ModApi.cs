@@ -224,11 +224,18 @@ namespace EfficientServer
         // by typo; a new patch group adds one constant plus one row there.
         static string ConfigNote(KeyValuePair<Type, string> row)
         {
-            if (Config == null) return "";
-            return row.Value != null
-                && !Config.FeatureActive(row.Value, Patches.BenchGodPatch.BenchGod)
-                ? " (matched but config-disabled)"
-                : "";
+            if (Config == null || row.Value == null) return "";
+            // The governor drives these two levers itself, off the configured
+            // baseline, so a configured-off note would be wrong on the stock
+            // template (EntityDistributionEveryTicks 1 + Governor enabled): the
+            // patch is in force from governor tier 1 on, and `es status` inForce
+            // would contradict an init log that called it config-disabled.
+            if (Config.Governor != null && Config.Governor.Enabled
+                && (row.Value == ServerPerfConfig.KeyEntityDistributionStride
+                    || row.Value == ServerPerfConfig.KeyGraphThrottle))
+                return "";
+            return Config.FeatureActive(row.Value, Patches.BenchGodPatch.BenchGod)
+                ? "" : " (matched but config-disabled)";
         }
 
         static List<MethodInfo> PatchAllSafe(Type t)

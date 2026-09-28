@@ -19,6 +19,42 @@
 set -euo pipefail
 export LC_ALL=C TZ=UTC
 
+usage() {
+  cat <<'EOF'
+usage: scripts/uninstall.sh [-h | --help]
+
+Removes the installed EfficientServer mod from the dedicated install, copying
+the live Config/ out to a backup dir first. Takes no arguments: the install
+root is read from the environment.
+  -h, --help  show this help and exit
+
+Environment:
+  SEVENDTD_DS_DIR / DS        Dedicated install root (default: ~/.local/share/
+                              Steam/steamapps/common/7 Days to Die Dedicated Server)
+  SEVENDTD_UNINSTALL_BACKUP_DIR
+                              Where the preserved config lands (default:
+                              <DS>/EfficientServer-uninstall-backup)
+  SEVENDTD_UNINSTALL_PURGE   Set to 1 to delete the config too, no copy kept
+EOF
+}
+
+case "${1:-}" in
+  -h | --help)
+    usage
+    exit 0
+    ;;
+  "")
+    ;;
+  *)
+    # An ignored argument is a silent wrong-target rm -rf: `uninstall.sh
+    # DS=/other` would uninstall from the stock path instead. Same rejection
+    # build.sh, install.sh, package.sh and verify_reproducible.sh apply.
+    echo "ERROR: uninstall.sh takes no arguments, got: $*" >&2
+    usage >&2
+    exit 2
+    ;;
+esac
+
 SRV="${SEVENDTD_DS_DIR:-${DS:-$HOME/.local/share/Steam/steamapps/common/7 Days to Die Dedicated Server}}"
 # Exported-but-empty must fail, not fall through to the stock default in the
 # expression above: that would delete the mod from a DIFFERENT install than the

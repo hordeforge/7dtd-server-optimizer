@@ -18,6 +18,9 @@ namespace EfficientServer
         public float MediumScale { get; set; } = 0.2f;
         public float FarScale { get; set; } = 0.05f;
         public float SkipTasksFarDistSq { get; set; } = 2500f;
+        // FAR band only: an alerted/targeting entity keeps full AI in the far
+        // skip. Mid-band striding (MidTickStride) never applies to such an
+        // entity regardless of this knob.
         public bool SkipTasksUnlessAlerted { get; set; } = true;
         // Mid-band entity-AI tick-striding: entities between MediumAiDistSq and
         // SkipTasksFarDistSq run the heavy updateTasks tail (path follow + EAI +
