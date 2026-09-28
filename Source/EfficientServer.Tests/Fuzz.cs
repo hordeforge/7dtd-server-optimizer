@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
@@ -26,6 +27,12 @@ namespace EfficientServer.Tests
     //
     // Every failure line embeds the offending JSON, so an artifact becomes a
     // repro by pasting it as a LoadTemp fixture next to Main.
+    //
+    // Two targets over that one surface: StructureAware mutates the VALUE schema
+    // (what Normalize clamps), FileSurface mutates the FILE bytes (what the
+    // decoder and the JSON reader survive). A value-schema fuzz cannot produce
+    // a malformed byte, and a byte fuzz that only used character soup would
+    // never reach a clamp, so the two are not redundant.
     internal static class ConfigFuzz
     {
         public delegate void CheckFn(bool cond, string what);
@@ -109,6 +116,187 @@ namespace EfficientServer.Tests
                     "combined fuzz iter " + i + ": " + badCombined + " for: " + json);
             }
         }
+
+        // Fuzz target for the other half of the same surface: the FILE, not the
+        // C# string. Load's real input is a byte[] off disk (Mods/EfficientServer/
+        // Config/efficientserver.json), so the byte layer is where hostile input
+        // actually lands: invalid UTF-8, overlong forms, encoded surrogates, NULs,
+        // control bytes, a BOM, a truncated document. StructureAware starts from a
+        // serialized default and can only ever produce well-formed UTF-8 JSON, so
+        // every one of those vectors is invisible to it.
+        //
+        // Contracts asserted per case, all of them things a hostile file must not
+        // be able to do:
+        //   1. Load never throws (fail-soft to defaults) and never returns null.
+        //   2. Whatever comes back satisfies the full post-Normalize invariant
+        //      table, same as StructureAware.
+        //   3. The warning sink stays bounded: one line per corrected knob plus
+        //      at most one parse failure, never unbounded growth per file.
+        //   4. Round trip: re-serializing the loaded config and loading it again
+        //      is value-stable and silent. This is the pair assertion across the
+        //      persistence boundary (write, then read back) - a clamp whose
+        //      fallback sat outside its own range would drift on every `es
+        //      reload`, and only a re-read catches it. Run on the spliced cases,
+        //      where a hostile document usually still parses; the truncated and
+        //      pure-noise cases land on the built-in defaults, whose round trip
+        //      carries no extra signal for a second disk read each.
+        public static void FileSurface(CheckFn check, Func<byte[], ServerPerfConfig> loadBytes, Func<string, ServerPerfConfig> loadText)
+        {
+            string defaultsJson = JsonConvert.SerializeObject(new ServerPerfConfig());
+            byte[] defaults = Encoding.UTF8.GetBytes(defaultsJson);
+
+            // Every prefix of a real config is a real hand-edit accident (a
+            // half-saved file, a truncated copy, an editor that lost the tail).
+            // Sampled on a fixed stride rather than every offset: the config is
+            // ~1.8 kB, and each case is a real file write plus a read, so a
+            // stride keeps the whole target inside the unit suite's time budget
+            // while still cutting mid-token on both key and value text.
+            for (int cut = 0; cut <= defaults.Length; cut += TruncationStride)
+            {
+                var sliced = new byte[cut];
+                Array.Copy(defaults, sliced, cut);
+                OneCase(check, loadBytes, loadText, sliced, "truncation at byte " + cut, roundTrip: false);
+            }
+            OneCase(check, loadBytes, loadText, new byte[0], "empty file", roundTrip: false);
+            OneCase(check, loadBytes, loadText, new byte[] { 0xEF, 0xBB, 0xBF }, "BOM-only file", roundTrip: false);
+            // Past Newtonsoft's default MaxDepth: a hostile operator file must
+            // fail soft to defaults, not blow the stack or abort the load.
+            OneCase(check, loadBytes, loadText,
+                Encoding.UTF8.GetBytes(DeepNest(4000)), "nesting far past the reader depth limit", roundTrip: false);
+
+            var rng = new Random(20260824);
+            for (int i = 0; i < SoupIterations; i++)
+                OneCase(check, loadBytes, loadText, Splice(rng, defaults), "soup iter " + i, roundTrip: true);
+            for (int i = 0; i < NoiseIterations; i++)
+            {
+                var buf = new byte[rng.Next(0, 256)];
+                rng.NextBytes(buf);
+                OneCase(check, loadBytes, loadText, buf, "noise iter " + i, roundTrip: false);
+            }
+        }
+
+        // A load must log at most one correction per Normalize knob plus one parse
+        // failure line. Anything past that means a hostile file can make the server
+        // write unbounded log volume (a disk-fill vector through the log sink).
+        const int MaxWarningsPerLoad = 64;
+
+        const int SoupIterations = 600;
+        const int NoiseIterations = 80;
+        const int TruncationStride = 5;
+
+        static void OneCase(CheckFn check, Func<byte[], ServerPerfConfig> loadBytes,
+            Func<string, ServerPerfConfig> loadText, byte[] bytes, string what, bool roundTrip)
+        {
+            EsLog.Warnings.Clear();
+            ServerPerfConfig loaded;
+            try { loaded = loadBytes(bytes); }
+            catch (Exception ex)
+            {
+                check(false, what + ": Load threw " + ex.GetType().Name
+                    + " for: " + Truncate(Encoding.UTF8.GetString(bytes)));
+                return;
+            }
+            check(loaded != null, what + ": Load returned null");
+            check(EsLog.Warnings.Count <= MaxWarningsPerLoad,
+                what + ": " + EsLog.Warnings.Count + " warnings from one file (max " + MaxWarningsPerLoad + ")");
+            if (loaded == null) return;
+            string? bad = Violations(loaded);
+            check(bad == null, what + ": " + bad + " for: " + Truncate(Encoding.UTF8.GetString(bytes)));
+            if (!roundTrip || bad != null) return;
+
+            // Persistence round trip: what a reload would read back off disk.
+            string reSerialized = JsonConvert.SerializeObject(loaded);
+            EsLog.Warnings.Clear();
+            try
+            {
+                ServerPerfConfig again = loadText(reSerialized);
+                check(JsonConvert.SerializeObject(again) == reSerialized,
+                    what + ": round-trip drifted: " + Truncate(reSerialized) + " -> "
+                    + Truncate(JsonConvert.SerializeObject(again)));
+            }
+            catch (Exception ex)
+            {
+                check(false, what + ": round-trip Load threw " + ex.GetType().Name);
+                return;
+            }
+            check(EsLog.Warnings.Count == 0,
+                what + ": re-loading the normalized config reported " + EsLog.Warnings.Count
+                + " correction(s), first: " + (EsLog.Warnings.Count > 0 ? EsLog.Warnings[0] : ""));
+        }
+
+        // Build a hostile file by cutting and splicing the real default config, so
+        // every case starts from something that actually parses and the mutations
+        // are what break it, rather than soup that only ever exercises the
+        // catch-all branch.
+        static byte[] Splice(Random rng, byte[] defaults)
+        {
+            var buf = new List<byte>(defaults);
+            int edits = 1 + rng.Next(3);
+            for (int e = 0; e < edits; e++)
+            {
+                int at = rng.Next(0, buf.Count + 1);
+                switch (rng.Next(6))
+                {
+                    case 0: Insert(buf, at, Hostile(rng)); break;
+                    case 1: buf.RemoveRange(at, rng.Next(0, Math.Min(24, buf.Count - at))); break;
+                    case 2: Overwrite(buf, at, Hostile(rng)); break;
+                    case 3: if (at < buf.Count) buf.RemoveRange(at, Math.Min(at + 1 + rng.Next(40), buf.Count - at)); break;
+                    // Amplify nesting: replay a span so a well-formed prefix
+                    // becomes deep structural nesting the reader must reject.
+                    case 4: Repeat(buf, at, DeepNest(1 + rng.Next(120))); break;
+                    default: if (at > 0) buf.RemoveRange(0, rng.Next(1, Math.Min(at, 32) + 1)); break;
+                }
+            }
+            return buf.ToArray();
+        }
+
+        // Byte runs that a UTF-8 decoder, a JSON reader, or a text editor meets in
+        // the wild: continuation bytes without a lead, overlong two/three-byte
+        // forms, CESU-8 style encoded surrogates, code points past U+10FFFF, a
+        // BOM in the middle of the file, NUL and control bytes.
+        static byte[] Hostile(Random rng)
+        {
+            switch (rng.Next(9))
+            {
+                case 0: return new byte[] { 0x80, 0xBF, 0x80 };
+                case 1: return new byte[] { 0xC3, 0x28 };
+                case 2: return new byte[] { 0xE0, 0x80, 0xAF };
+                case 3: return new byte[] { 0xED, 0xA0, 0x80 };
+                case 4: return new byte[] { 0xF5, 0x80, 0x80, 0x80 };
+                case 5: return new byte[] { 0xE2, 0x82 };
+                case 6: return new byte[] { 0xEF, 0xBB, 0xBF };
+                case 7: return new byte[] { 0x00, 0x1F, 0x7F };
+                default: return Encoding.UTF8.GetBytes(HostileText[rng.Next(HostileText.Length)]);
+            }
+        }
+
+
+        // Numeric and structural junk that a lenient reader may accept where a
+        // number belongs, plus a mid-file BOM, an escaped NUL, an unterminated
+        // string, and non-ASCII text (the config is UTF-8 on any host locale).
+        static readonly string[] HostileText = {
+            "NaN", "-Infinity", "1e999999", "1e-999999", "0x10", "01", "1.", ".1", "-",
+            "﻿", "  ", "\"\\u0000\"", "\"unterminated",
+            "{\"AiLod\":", "[[[[[", "}}}}}", "\t\r\n", "\"é中文\"",
+        };
+
+        static string DeepNest(int depth) => new string('[', depth) + new string(']', depth);
+
+        static void Insert(List<byte> buf, int at, byte[] payload)
+            => buf.InsertRange(at, payload);
+
+        static void Overwrite(List<byte> buf, int at, byte[] payload)
+        {
+            for (int i = 0; i < payload.Length && at + i < buf.Count; i++)
+                buf[at + i] = payload[i];
+        }
+
+        static void Repeat(List<byte> buf, int at, string text)
+            => buf.InsertRange(at, Encoding.UTF8.GetBytes(text));
+
+        // Failure lines must stay paste-able as a repro, so cap the embedded input.
+        static string Truncate(string s)
+            => s.Length <= 400 ? s : s.Substring(0, 400) + "...[" + s.Length + " chars]";
 
         // Dotted leaf paths derived from the config schema itself, so newly added
         // knobs join the fuzz corpus automatically instead of drifting stale.

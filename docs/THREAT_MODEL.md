@@ -216,8 +216,8 @@ write APIs under `Source/EfficientServer/`; the only file reads are
 | Reflection backfill of JSON-null sections from defaults | B1 null-hole reaching a patch | `Config.cs:404` |
 | Parse-failure fallback to defaults | B1 malformed input | `Config.cs:384` |
 | Config read pinned to UTF-8 | B1 encoding-dependent misparse across hosts | `Config.cs:373` |
-| Shipped template typos caught pre-packaging | B1 silent misconfiguration | `scripts/check_config_doc.py` (run by `Makefile:122`) |
-| Structure-aware + garbage fuzzing of config parsing in CI | B1 parser robustness regressions | `Source/EfficientServer.Tests/Fuzz.cs:36`, run by `Makefile:120` |
+| Shipped template typos caught pre-packaging | B1 silent misconfiguration | `scripts/check_config_doc.py` (run by `Makefile:152`) |
+| Structure-aware value fuzz + byte-level file fuzz (invalid UTF-8, NUL, truncation, runaway nesting) and a write-then-read round trip of the loaded config | B1 parser robustness regressions, reload drift | `Source/EfficientServer.Tests/Fuzz.cs:36,143`, run by `Makefile:144` |
 | Per-group fail-soft Harmony application | B3 partial breakage on version drift | `ModApi.cs:211` (`PatchAllSafe`) |
 | Visible MISSING TARGET init summary | B3 silent target drift | `ModApi.cs:94` |
 | Fail-closed `DedicatedOnly` gate (pure, unit-tested) | B3 activation on wrong host type | `Config.cs:516`, runtime probe `ModApi.cs:263` |

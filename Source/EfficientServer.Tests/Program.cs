@@ -89,6 +89,16 @@ namespace EfficientServer.Tests
             finally { File.Delete(p); }
         }
 
+        // The byte-level entry point the file-surface fuzz target drives: the
+        // bytes land on disk exactly as generated, so invalid UTF-8, NULs and a
+        // BOM reach Load's real decode path.
+        static ServerPerfConfig LoadTempBytes(byte[] bytes)
+        {
+            string p = WriteTempBytes(bytes);
+            try { return ServerPerfConfig.Load(p); }
+            finally { File.Delete(p); }
+        }
+
         // Load with a clean warning sink so channel assertions see only this file.
         static ServerPerfConfig LoadTempTracked(string json)
         {
@@ -958,6 +968,12 @@ namespace EfficientServer.Tests
             // table, so a wrong-but-non-crashing load fails the run instead of
             // hiding.
             ConfigFuzz.StructureAware(Check, LoadTemp);
+            // Second fuzz target, same surface one layer down: the file BYTES.
+            // StructureAware can only build well-formed UTF-8, so malformed
+            // encodings, NULs, mid-token truncation and runaway nesting are only
+            // reachable here. Asserts the same clamp table plus the persistence
+            // round trip (write the loaded config back out, read it in again).
+            ConfigFuzz.FileSurface(Check, LoadTempBytes, LoadTemp);
 
             // Dedicated-only gate (ShouldRunFor): disabled config never runs.
             Check(!ServerPerfConfig.ShouldRunFor(false, true, true, true), "active=false -> no run");
