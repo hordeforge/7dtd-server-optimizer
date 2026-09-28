@@ -73,8 +73,10 @@ from harness_common import (
     OUT_DIR,
     B,
     ensure_server_ready,
+    join_cohort,
     kill_matching_processes,
     log,
+    restore_and_reload,
     teardown_bots,
     write_diag_config,
     write_path_config,
@@ -228,13 +230,11 @@ def main() -> int:
             log("WARN: es status did not look like EfficientServer; continuing")
 
         log(f"=== join {PLAYERS} bots ===")
-        bots, joined = B.join_ramped(PLAYERS)
+        bots, joined, join_verdict = join_cohort(PLAYERS)
         report["joined"] = joined
-        if joined < max(1, int(PLAYERS * 0.5)):
-            log(f"FAIL: only {joined}/{PLAYERS} players joined")
-            verdicts["join"] = "FAIL"
+        verdicts["join"] = join_verdict
+        if join_verdict != "PASS":
             return 2
-        verdicts["join"] = "PASS"
         B.set_gamestage(GAMESTAGE)
         # Bench-god needs the runtime allow switch (the console gate refuses to
         # arm without it): write it swap-guarded, reload, then arm. CFG_SWAP
@@ -354,26 +354,7 @@ def main() -> int:
     finally:
         # Isolated per step: a restore failure must not skip bot teardown, and
         # neither cleanup failure may go unlogged.
-        restored = True
-        try:
-            CFG_SWAP.restore()
-        except Exception as e:
-            log(f"WARN: config restore failed ({e}); backup kept for next run")
-            restored = False
-        # Re-apply the restored file to the live server. Skipped when the
-        # restore failed, so a reload cannot re-arm the harness values the
-        # restore just failed to revert.
-        if restored:
-            try:
-                B.telnet(["es reload"], settle=1.0)
-            except Exception as e:
-                # Best effort, since the sampled server may already be gone -
-                # but never silent: a failed reload leaves this server running
-                # the harness' path knobs until someone reloads it by hand.
-                log(
-                    f"  es reload after restore failed ({e}); the running server "
-                    "still has this run's path knobs until someone reloads it"
-                )
+        restored, _ = restore_and_reload(CFG_SWAP)
         # animoff is console-side session state no config restore can undo, so
         # it is cleared on its own: a failed reload above must not leave the
         # animator LOD probe armed on a live server.

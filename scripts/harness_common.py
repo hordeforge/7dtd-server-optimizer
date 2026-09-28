@@ -58,8 +58,10 @@ __all__ = [
     "OUT_DIR",
     "B",
     "ensure_server_ready",
+    "join_cohort",
     "kill_matching_processes",
     "log",
+    "restore_and_reload",
     "teardown_bots",
     "write_diag_config",
     "write_path_config",
@@ -234,6 +236,60 @@ def write_report(prefix: str, report: dict[str, object]) -> Path:
     write_atomic(out, json.dumps(report, indent=2) + "\n")
     log(f"report -> {out}")
     return out
+
+
+def restore_and_reload(swap: ConfigSwap, *, reload: bool = True) -> tuple[bool, bool]:
+    """Undo the harness' config edits and re-apply the operator's file live.
+
+    Returns ``(restored, reloaded)``. Every patch reads the config object per
+    call, so a disk-only restore leaves the running server on this run's
+    values until someone reloads it by hand; the reload is part of the
+    restore, not a separate cleanup step. It is skipped when the restore
+    failed (a reload would re-arm what the restore just failed to revert) and
+    best effort (the sampled server may be gone), but never silent.
+
+    ``reload=False`` is for a run that toggled nothing: the restore still
+    runs, and ``reloaded`` comes back False so a caller reporting it does not
+    claim a reload that was not attempted.
+    """
+    restored = True
+    try:
+        swap.restore()
+    except Exception as e:
+        log(f"WARN: config restore failed ({e}); backup kept for next run")
+        restored = False
+    reloaded = restored
+    if restored and reload:
+        try:
+            B.telnet(["es reload"], settle=1.0)
+        except Exception as e:
+            log(
+                f"  es reload after restore failed ({e}); the running server "
+                "still has this run's config until someone reloads it"
+            )
+            reloaded = False
+    return restored, reloaded
+
+
+# A run that got fewer than this fraction of its requested cohort is not the
+# load the harness asked to measure, so it cannot produce a usable verdict.
+# max(1, ...) so a small PLAYERS cannot demand zero joins and pass vacuously.
+JOIN_QUORUM_FRACTION = 0.5
+
+
+def join_cohort(players: int) -> tuple[subprocess.Popen[bytes] | None, int, str]:
+    """Ramp ``players`` bots in; return ``(runner, joined, verdict)``.
+
+    One definition of the quorum floor for every harness, so the threshold
+    cannot drift between an A/B run and the run it is compared against. The
+    caller records the verdict and picks the exit code; a failed join still
+    returns the runner so its teardown can reap the partial cohort.
+    """
+    bots, joined = B.join_ramped(players)
+    if joined < max(1, int(players * JOIN_QUORUM_FRACTION)):
+        log(f"FAIL: only {joined}/{players} bots joined")
+        return bots, joined, "FAIL"
+    return bots, joined, "PASS"
 
 
 def teardown_bots(bots: subprocess.Popen[bytes] | None) -> None:

@@ -78,7 +78,9 @@ from harness_common import (
     OUT_DIR,
     B,
     ensure_server_ready,
+    join_cohort,
     log,
+    restore_and_reload,
     teardown_bots,
     write_report,
 )
@@ -199,10 +201,9 @@ def main() -> int:
             return 2
         report["server_log"] = str(logf)
 
-        bots, joined = B.join_ramped(PLAYERS)
+        bots, joined, join_verdict = join_cohort(PLAYERS)
         report["joined"] = joined
-        if joined < max(1, int(PLAYERS * 0.5)):
-            log(f"FAIL: only {joined}/{PLAYERS} joined")
+        if join_verdict != "PASS":
             return 2
         # Same helper as the sibling harnesses: there is no `gamestage` console
         # command (stage derives from player XP), so set_gamestage grants XP.
@@ -275,32 +276,12 @@ def main() -> int:
         toggle_mode = not ARM_MODE
         # Each cleanup step is isolated so one failure cannot skip the rest:
         # a restore error must not leak the bot cohort (it keeps loading the
-        # server until its own wall clock expires) or lose the report.
-        restored = True
-        try:
-            ES_SWAP.restore()
-        except Exception as e:
-            log(f"WARN: config restore failed ({e}); backup kept for next run")
-            restored = False
+        # server until its own wall clock expires) or lose the report. A
+        # matched-arm run toggled nothing, so it has nothing to reload back;
+        # the report must then say neither "restored" nor "reloaded", rather
+        # than claim a live swap that never happened.
+        restored, reloaded = restore_and_reload(ES_SWAP, reload=toggle_mode)
         if toggle_mode:
-            # Best effort only: the sampled server may already be gone. Skipped
-            # when the restore failed, so a reload cannot re-apply the harness
-            # values the restore just failed to revert; the report must say
-            # "restored": false then, not claim success.
-            reloaded = True
-            if restored:
-                try:
-                    B.telnet(["es reload"], settle=1.0)
-                except Exception as e:
-                    # Never silent: a failed reload leaves this server running the
-                    # harness's Enabled value even though the file on disk is the
-                    # operator's again, which is exactly the state the run is
-                    # supposed to end without.
-                    log(
-                        f"  es reload after restore failed ({e}); the running server "
-                        "still has this run's Enabled value until someone reloads it"
-                    )
-                    reloaded = False
             report["restored"] = restored
             report["reloaded"] = reloaded
         teardown_bots(bots)
