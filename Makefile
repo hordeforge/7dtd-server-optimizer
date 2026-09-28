@@ -123,9 +123,9 @@ help:
 	@echo "  make uninstall         Remove \$$DS/Mods/EfficientServer, keeping the"
 	@echo "                         live config under \$$DS/EfficientServer-uninstall-backup"
 	@echo "  make backup-config ES_CONFIG_BACKUP_DEST=/mnt/backup/es-config"
-	@echo "                         Copy the live mod config and serverconfig*.xml"
-	@echo "                         off the install tree and verify the copy"
-	@echo "                         (--verify re-checks it later)"
+	@echo "                         Copy the live mod config, serverconfig*.xml and"
+	@echo "                         admin/whitelist file off the install tree and"
+	@echo "                         verify the copy (--verify re-checks it later)"
 	@echo "  make run               Launch the dedicated server with tuned env"
 	@echo "  make package           Build and zip dist/EfficientServer-<version>.zip"
 	@echo "  make verify-reproducible   Package twice, compare hashes (repro proof)"
@@ -269,8 +269,9 @@ install:
 # place. SEVENDTD_UNINSTALL_PURGE=1 opts into deleting the config as well.
 uninstall:
 	$(ROOT)/scripts/uninstall.sh
-# Off-host snapshot of the host-only server config: the mod tuning and the
-# serverconfig*.xml in the install root. The destination must be OFF the
+# Off-host snapshot of the host-only server config: the mod tuning, the
+# serverconfig*.xml in the install root, and the admin/whitelist file the
+# settings locate under UserDataFolder/Saves. The destination must be OFF the
 # install tree: a copy on the same disk is lost by the same disaster as the
 # config it protects, and backup_config.py refuses it. Verify on a schedule
 # with

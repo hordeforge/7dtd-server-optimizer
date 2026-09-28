@@ -174,7 +174,8 @@ state that is NOT regenerable is what an operator edits on the server host:
 | State | Where | Regenerable |
 |---|---|---|
 | Live config (tuning) | `<DS>/Mods/EfficientServer/Config/efficientserver.json`, or the file `$ES_CONFIG_PATH` names | No. The repo copy is the shipped default; the host copy holds the tuned values |
-| Server settings | `<DS>/serverconfig*.xml` (ports, password, whitelist, world and generation options), plus the `<name>.pre-optimized` copy `run_server.sh` keeps | No. The tracked `serverconfig.optimized.xml` is a shipped default; the live set has never existed anywhere else. Backed up by `scripts/backup_config.py` (7.1) |
+| Server settings | `<DS>/serverconfig*.xml` (ports, password, world and generation options), plus the `<name>.pre-optimized` copy `run_server.sh` keeps | No. The tracked `serverconfig.optimized.xml` is a shipped default; the live set has never existed anywhere else. Backed up by `scripts/backup_config.py` (7.1) |
+| Admin and whitelist | `<UserDataFolder>/Saves/<AdminFileName>` (default `serveradmin.xml`), or the install root on a host that keeps it there | No. The game owns the file, it is created on the host, and it decides who may in. Backed up by `scripts/backup_config.py` (7.1), which resolves the location out of `serverconfig.xml` |
 | Guard backup | `.../Config/efficientserver.json.swap-bak` | No. Only exists mid-bench-run; crash recovery for a killed swap |
 | Quarantined guard backups | `.../Config/efficientserver.json.swap-bak*.stale` | No. Evidence a leftover backup was stale rather than an interrupted restore. Bounded: the newest `STALE_KEEP` (5) are kept, older ones pruned, so a bench loop cannot grow them without limit |
 | Installed DLL | `<DS>/Mods/EfficientServer/` | Yes: `make build && make install` |
@@ -196,12 +197,15 @@ state that is NOT regenerable is what an operator edits on the server host:
 - **RPO against host loss, disk loss, or a deleted instance: whatever your
   snapshot cadence is, plus one interval, and only if you take one.** Every copy
   this repo makes lives inside the install tree, so the disaster that takes the
-  server takes them too. `scripts/backup_config.py` moves the live config AND
-  the live `serverconfig*.xml` off the host and proves both parse; run it on a
-  schedule (section 7.1). With no snapshot the RPO is unbounded: the tuning is
+  server takes them too. `scripts/backup_config.py` moves the live config, the
+  live `serverconfig*.xml` and the live admin/whitelist file off the host and
+  proves all of them parse; run it on a schedule (section 7.1). With no snapshot
+  the RPO is unbounded: the tuning is
   worth a re-derivation from `docs/CONFIG.md` plus the measured defaults, or the
   copy, and the server settings (a changed port, a rotated admin password, a
-  tuned world seed) are worth considerably less than a re-derivation.
+  tuned world seed) are worth considerably less than a re-derivation. The admin
+  list is the one piece with no re-derivation at all: ids and passwords are
+  facts about your players, not settings.
 - **RTO for a config restore: under a minute** (one `cp` plus `es reload`; no
   restart). **RTO for a full mod reinstall: one `make install`.** Neither path
   needs a rebuild once `dist/` is present. A `serverconfig.xml` restore is a
@@ -219,13 +223,20 @@ make backup-config ES_CONFIG_BACKUP_DEST=/mnt/backup/es-config
 
 Each run writes a UTC-stamped copy of `Config/efficientserver.json` plus every
 live `serverconfig*.xml` and `<name>.pre-optimized` sibling in the install root,
-alongside a manifest recording each file's sha256, keeps the newest `--keep`
+plus the admin/whitelist file the settings themselves locate (`AdminFileName`,
+default `serveradmin.xml`, under `UserDataFolder/Saves`, so a host that moved
+its user data to another disk is covered where it keeps the file; the install
+root is searched too). All of it goes in alongside a manifest recording each
+file's sha256, keeps the newest `--keep`
 (default 14), and re-reads every copy back before reporting success: a snapshot
 whose JSON does not parse, whose XML does not parse, or whose keys have drifted
 from the shipped template is a failed run, not a backup. A run against a real
 dedicated install that finds no `serverconfig*.xml` fails for the same reason
 (one that would quietly cover the mod config and nothing else); a mod-only
-staging tree, which `install.sh` supports, warns instead.
+staging tree, which `install.sh` supports, warns instead. No admin file
+anywhere is a WARNING rather than a failure (the game creates one on first use),
+but it is a loud one, because an admin list and a whitelist are state nothing
+here can re-derive.
 A retry inside the same second adds a
 suffix-numbered snapshot rather than replacing the earlier one, and retention
 counts by creation order, so a rerun never deletes the snapshot it just took.
@@ -275,6 +286,20 @@ cp -a "$HOME/es-recovered.xml" "$DS/serverconfig.xml"   # then restart the serve
 rm -f "$HOME/es-recovered.xml"
 ```
 
+The admin file is the same call, and the printed `cp` names the path the game's
+own settings point at, not the install root:
+
+```bash
+python3 scripts/backup_config.py --dest /mnt/backup/es-config \
+    --restore 20260928_101500 --item serveradmin.xml --to "$HOME/es-recovered-admin.xml"
+cp -a "$HOME/es-recovered-admin.xml" "$DS/UserDataFolder/Saves/serveradmin.xml"
+rm -f "$HOME/es-recovered-admin.xml"
+```
+
+Without it, a lost disk takes the admin accounts with it: on most builds a new
+server starts with no admins and no whitelist, and the first thing the console
+asks for is the password you no longer have.
+
 ### Restore the live config
 
 ```bash
@@ -302,7 +327,8 @@ before deciding.
 
 There is no scheduled backup of the install tree, no off-host copy of the DLL,
 and no restore drill for the mod install itself. `backup_config.py` covers the
-mod config and the server settings as far as a script can: it cannot run on a
+mod config, the server settings and the admin/whitelist file as far as a script
+can: it cannot run on a
 schedule, so scheduling it is yours, and a snapshot nobody verifies is still a
 hypothesis. Do not treat a green `make install` as proof the config survives:
 nothing in this repo verifies that copy, it only makes it. World saves

@@ -6,9 +6,16 @@ because both are edited on the server host and never in this repo:
 
 - `Mods/EfficientServer/Config/efficientserver.json`, the mod's tuning.
 - `serverconfig*.xml` in the install root, the game's own settings (ports,
-  password, whitelist, world and generation options). `run_server.sh` copies the
+  password, world and generation options). `run_server.sh` copies the
   tuned XML in beside the binary and keeps a one-off `<name>.pre-optimized`, so
   the live set is normally `serverconfig.xml` plus those siblings.
+
+The admin and whitelist file is a third set, and the one that decides who may
+in: `AdminFileName` (the shipped default spells it `serveradmin.xml`) under
+`UserDataFolder/Saves`, as the settings themselves document. It is found
+through those properties, so a host that moved its user data to another disk is
+covered where it keeps the file, and a dedicated install with no admin file
+under any of those names is a WARNING, not a silently narrower backup.
 
 `install.sh` and `uninstall.sh` preserve the mod config, and `run_server.sh`
 keeps the pre-optimized copy, but every one of those copies lives inside the
@@ -27,6 +34,8 @@ that `verify` re-checks later. A backup nobody has read back is a hypothesis.
         --restore 20260928_101500 --to ./recovered.json
     python3 scripts/backup_config.py --dest /mnt/backup/es-config \
         --restore 20260928_101500 --item serverconfig.xml --to ./recovered.xml
+    python3 scripts/backup_config.py --dest /mnt/backup/es-config \
+        --restore 20260928_101500 --item serveradmin.xml --to ./recovered-admin.xml
 
 `--verify` is the restore drill's cheap half: it reads every snapshot back the way
 a restore would and exits nonzero on the first one that would not load. Run it on
@@ -71,6 +80,23 @@ CONFIG_NAME = "efficientserver.json"
 # serverconfig.optimized.xml is a shipped default and the install tree is the
 # only place either file has ever existed.
 SERVERCONFIG_GLOBS = ("serverconfig*.xml", "serverconfig*.pre-optimized")
+# The admin and whitelist file is a third set of host-only state, and the one
+# that decides who may in. serverconfig.xml says where the game keeps it:
+# `AdminFileName` (the shipped default spells it `serveradmin.xml`) is
+# documented in that file as a path relative to `UserDataFolder/Saves`, and
+# `UserDataFolder` itself is the game's own override, commented out by default.
+# A name resolved through the properties below is the documented location; the
+# glob is the same file on a host that keeps it in the install root instead.
+ADMIN_FILENAME_PROPERTY = "AdminFileName"
+USERDATA_PROPERTY = "UserDataFolder"
+DEFAULT_ADMIN_FILENAME = "serveradmin.xml"
+DEFAULT_USERDATA_DIR = "UserDataFolder"
+SAVES_SUBDIR = "Saves"
+ADMIN_GLOB = "serveradmin*.xml"
+# The name of the serverconfig whose properties are read. A tree with only
+# siblings still resolves, through the first file in the set, because every
+# copy of the settings carries the same two properties.
+PRIMARY_SERVERCONFIG = "serverconfig.xml"
 # Snapshots are small (a JSON file, a few XMLs and a manifest); a fortnight of
 # daily copies costs nothing and bounds how far back a restore can reach.
 DEFAULT_KEEP = 14
@@ -92,10 +118,11 @@ ALL_ITEMS = "all"
 
 USAGE = """\
 Snapshot, verify and restore the host-only server config: the installed
-Mods/EfficientServer/Config/efficientserver.json and the serverconfig*.xml in
-the install root (the game's ports, password, whitelist and world settings).
-Both exist only on the server host. The install root comes from
-DS/SEVENDTD_DS_DIR.
+Mods/EfficientServer/Config/efficientserver.json, the serverconfig*.xml in
+the install root (the game's ports, password and world settings), and the
+admin/whitelist file the settings name through AdminFileName (default
+serveradmin.xml, under UserDataFolder/Saves). All of it exists only on the
+server host. The install root comes from DS/SEVENDTD_DS_DIR.
 
   python3 scripts/backup_config.py --dest /mnt/backup/es-config
   python3 scripts/backup_config.py --dest /mnt/backup/es-config --verify
@@ -103,6 +130,8 @@ DS/SEVENDTD_DS_DIR.
       --restore 20260928_101500 --to ./recovered.json
   python3 scripts/backup_config.py --dest /mnt/backup/es-config \\
       --restore 20260928_101500 --item serverconfig.xml --to ./recovered.xml
+  python3 scripts/backup_config.py --dest /mnt/backup/es-config \\
+      --restore 20260928_101500 --item serveradmin.xml --to ./recovered-admin.xml
   python3 scripts/backup_config.py --dest /mnt/backup/es-config \\
       --restore 20260928_101500 --item all --to ./recovered/
 
@@ -128,6 +157,9 @@ class Manifest(TypedDict):
     # `.get`: a snapshot an operator took last month must still verify, or
     # adding a file to the backup silently invalidated their history.
     serverconfig: dict[str, str]
+    # Same shape, for the admin/whitelist files. Absent from a manifest written
+    # before this tool covered them, read through `.get` for the same reason.
+    admin: dict[str, str]
 
 
 def utc_stamp(now: datetime | None = None) -> str:
@@ -242,6 +274,43 @@ def serverconfig_files(server_root: Path) -> list[Path]:
             if path.is_file():
                 seen[path.name] = path
     return [seen[name] for name in sorted(seen)]
+
+
+def serverconfig_property(data: bytes, name: str) -> str | None:
+    """The value of one `<property name=... value=.../>` in a serverconfig.
+
+    None when the document declares no such property, which is what a
+    commented-out entry looks like once the file is parsed. `data` must
+    already have parsed (see parse_serverconfig_bytes); the caller read it to
+    prove exactly that.
+    """
+    for prop in ET.fromstring(data).iter("property"):
+        if prop.get("name") == name:
+            return prop.get("value")
+    return None
+
+
+def admin_files(server_root: Path, sc_bytes: dict[str, bytes]) -> list[Path]:
+    """Live admin/whitelist files in the install tree, by name.
+
+    The documented location comes out of the server settings themselves
+    (AdminFileName under UserDataFolder/Saves), so an operator who moved their
+    user data to another disk is covered where they actually keep it, and the
+    install root is searched as well for a host that keeps the file there
+    instead. A candidate that is not a file costs nothing; a real one that is
+    never reported is admin accounts and a whitelist nothing here can
+    regenerate, so the caller warns when the set comes back empty.
+    """
+    primary = sc_bytes.get(PRIMARY_SERVERCONFIG) or next(iter(sc_bytes.values()), b"")
+    if not primary:
+        # No server settings to read a location out of (a mod-only staging
+        # tree); the install-root glob below is all that is left to search.
+        candidates = list(server_root.glob(ADMIN_GLOB))
+        return sorted({p for p in candidates if p.is_file()}, key=lambda p: p.name)
+    admin_name = serverconfig_property(primary, ADMIN_FILENAME_PROPERTY) or DEFAULT_ADMIN_FILENAME
+    userdata = serverconfig_property(primary, USERDATA_PROPERTY) or DEFAULT_USERDATA_DIR
+    candidates = [server_root / userdata / SAVES_SUBDIR / admin_name, *server_root.glob(ADMIN_GLOB)]
+    return sorted({p for p in candidates if p.is_file()}, key=lambda p: p.name)
 
 
 def template_keys(template: Path = TEMPLATE_JSON) -> frozenset[str]:
@@ -411,7 +480,7 @@ def snapshot(
             msg += (
                 "; a dedicated install always has one, so this snapshot would"
                 " cover the mod config only and leave the operator's server"
-                " settings (ports, password, whitelist) unbacked"
+                " settings (ports, password, world) unbacked"
             )
             raise BackupError(msg)
         print(
@@ -424,6 +493,32 @@ def snapshot(
     sc_bytes = {sc.name: read_config_bytes(sc) for sc in serverconfigs}
     for sc in serverconfigs:
         parse_serverconfig_bytes(sc_bytes[sc.name], sc)
+
+    # The admin/whitelist file, resolved through the settings just read and
+    # proven loadable the same way: a copy that would not parse is not a
+    # backup. Two files wanting one name in the flat snapshot dir is a
+    # misconfiguration to name, not to resolve by renaming, since the rename
+    # would leave a restore putting the wrong file back.
+    admins = admin_files(server_root, sc_bytes)
+    clash = {a.name for a in admins} & ({CONFIG_NAME} | {sc.name for sc in serverconfigs})
+    if clash:
+        msg = (
+            f"admin file {', '.join(sorted(clash))} has the same name as another"
+            f" file the snapshot copies; rename the game's {ADMIN_FILENAME_PROPERTY}"
+            " so each can be restored to its own path"
+        )
+        raise BackupError(msg)
+    if not admins and is_dedicated_install(server_root):
+        print(
+            f"WARNING: no {ADMIN_GLOB} under {server_root}"
+            f" (nor {DEFAULT_USERDATA_DIR}/{SAVES_SUBDIR}/{DEFAULT_ADMIN_FILENAME})."
+            " This snapshot does not cover the admin accounts or the whitelist;"
+            " if this host keeps them elsewhere, add that path to the backup.",
+            file=sys.stderr,
+        )
+    ad_bytes = {a.name: read_config_bytes(a) for a in admins}
+    for admin in admins:
+        parse_serverconfig_bytes(ad_bytes[admin.name], admin)
 
     stamp = utc_stamp(now)
     target = dest / stamp
@@ -440,6 +535,7 @@ def snapshot(
         "source": str(live),
         "sha256": sha256_of_bytes(live_bytes),
         "serverconfig": {name: sha256_of_bytes(data) for name, data in sc_bytes.items()},
+        "admin": {name: sha256_of_bytes(data) for name, data in ad_bytes.items()},
     }
     # Build under a name no reader matches, then publish with one rename. The
     # stamp in the manifest is the FINAL name, so the manifest is built here,
@@ -451,7 +547,7 @@ def snapshot(
     staging = _new_staging(dest)
     try:
         (staging / CONFIG_NAME).write_bytes(live_bytes)
-        for name, data in sc_bytes.items():
+        for name, data in (*sc_bytes.items(), *ad_bytes.items()):
             (staging / name).write_bytes(data)
         (staging / MANIFEST_NAME).write_text(
             json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
@@ -590,11 +686,12 @@ def verify(dest: Path) -> list[str]:
         if stray:
             problems.append(f"{d.name}: keys not in the shipped template: {sorted(stray)}")
         problems.extend(_verify_serverconfigs(d, manifest))
+        problems.extend(_verify_admins(d, manifest))
     return problems
 
 
-def _verify_serverconfigs(d: Path, manifest: object) -> list[str]:
-    """Check every serverconfig the manifest records, the way a restore would.
+def _verify_recorded(d: Path, manifest: object, key: str, label: str) -> list[str]:
+    """Check every file of one manifest key the way a restore would.
 
     A name in the manifest with no file beside it is the failure a bare sha256
     comparison cannot see: the record exists, the bytes it stands for are gone,
@@ -602,16 +699,17 @@ def _verify_serverconfigs(d: Path, manifest: object) -> list[str]:
     """
     if not isinstance(manifest, dict):
         return []
-    recorded = manifest.get("serverconfig")
+    recorded = manifest.get(key)
     if not isinstance(recorded, dict):
-        # A manifest written before this tool covered the XML. Its snapshot is
-        # what the operator actually has, so it still verifies.
+        # A manifest written before this tool covered the XML, or the admin
+        # files. Its snapshot is what the operator actually has, so it still
+        # verifies.
         return []
     problems: list[str] = []
     for name in sorted(recorded):
         path = d / name
         if not path.is_file():
-            problems.append(f"{d.name}: serverconfig {name} is in the manifest but missing")
+            problems.append(f"{d.name}: {label} {name} is in the manifest but missing")
             continue
         expected = recorded[name]
         # One read serves the digest and the parse proof below; the array form
@@ -630,6 +728,14 @@ def _verify_serverconfigs(d: Path, manifest: object) -> list[str]:
         except BackupError as exc:
             problems.append(str(exc))
     return problems
+
+
+def _verify_serverconfigs(d: Path, manifest: object) -> list[str]:
+    return _verify_recorded(d, manifest, "serverconfig", "serverconfig")
+
+
+def _verify_admins(d: Path, manifest: object) -> list[str]:
+    return _verify_recorded(d, manifest, "admin", "admin file")
 
 
 def newest_age_hours(dest: Path, now: datetime | None = None) -> float | None:
@@ -727,10 +833,13 @@ def _live_hint(name: str) -> str:
 
     The mod config lives under `Mods/EfficientServer/Config/`; the game's own
     settings sit in the install root next to the binary, which is where
-    run_server.sh put them.
+    run_server.sh put them. The admin file is neither: the game reads it from
+    `UserDataFolder/Saves`, or wherever `AdminFileName` in the settings points.
     """
     if name == CONFIG_NAME:
         return f"<DS>/Mods/EfficientServer/Config/{CONFIG_NAME}"
+    if Path(name).match(ADMIN_GLOB):
+        return f"<UserDataFolder>/{SAVES_SUBDIR}/{name}"
     return f"<DS>/{name}"
 
 
@@ -802,8 +911,8 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
         default=CONFIG_NAME,
         metavar="NAME",
         help=f"file to restore: {CONFIG_NAME} (default), a serverconfig*.xml "
-        f"from the snapshot, or '{ALL_ITEMS}' to write the whole set into a "
-        "directory",
+        f"or admin file from the snapshot, or '{ALL_ITEMS}' to write the whole "
+        "set into a directory",
     )
     p.add_argument(
         "--to",
@@ -1044,10 +1153,10 @@ def _selftest() -> int:
         )
         try:
             restore(odd, alien.name, td / "alien-out.json")
-            refused = False
+            undated_refused = False
         except BackupError:
-            refused = True
-        t.check("--restore refuses an unstamped directory name", refused)
+            undated_refused = True
+        t.check("--restore refuses an unstamped directory name", undated_refused)
         t.check(
             "the age gate reads the newest real snapshot beside an unstamped one",
             newest_age_hours(odd, now=t1 + timedelta(hours=30)) == 30.0,
@@ -1241,8 +1350,8 @@ def _selftest() -> int:
     # The game's server settings, which the install tree holds and nothing
     # regenerates. Every check above ran against a mod-only tree, where a
     # snapshot legitimately covers one file; these run against a real dedicated
-    # install, where the ports, password, whitelist and world settings are the
-    # other half of what a lost disk takes.
+    # install, where the ports, password and world settings are the other half
+    # of what a lost disk takes.
     with tempfile.TemporaryDirectory(prefix="es-backup-serverconfig.") as raw:
         td = Path(raw)
         srv, live = make_tree(td)
@@ -1389,6 +1498,104 @@ def _selftest() -> int:
             t.check("restoring a file the snapshot lacks raises", False)
         except BackupError:
             t.check("restoring a file the snapshot lacks raises", True)
+
+    # The admin/whitelist file: the third set of host-only state, the one that
+    # decides who may in, and the one an install-root glob never sees because
+    # the game keeps it under UserDataFolder/Saves.
+    with tempfile.TemporaryDirectory(prefix="es-backup-admin.") as raw:
+        td = Path(raw)
+        srv, _ = make_tree(td)
+        (srv / "7DaysToDieServer_Data").mkdir()
+        sc = srv / PRIMARY_SERVERCONFIG
+        sc.write_text(
+            '<?xml version="1.0" encoding="UTF-8"?>\n'
+            '<ServerSettings><property name="AdminFileName" value="serveradmin.xml"/>'
+            '<property name="UserDataFolder" value="UserDataFolder"/>'
+            "</ServerSettings>\n",
+            encoding="utf-8",
+        )
+        admin = srv / DEFAULT_USERDATA_DIR / SAVES_SUBDIR / DEFAULT_ADMIN_FILENAME
+        admin.parent.mkdir(parents=True)
+        admin.write_text(
+            '<ServerSettings><Whitelist><player id="76561190000000000"/></Whitelist>'
+            "</ServerSettings>\n",
+            encoding="utf-8",
+        )
+        dest = td / "offhost"
+        target, _ = snapshot(srv, dest, now=t0)
+
+        t.check(
+            "the admin file is covered where the settings say it lives",
+            (target / DEFAULT_ADMIN_FILENAME).read_bytes() == admin.read_bytes(),
+        )
+        t.check("a snapshot with the admin file verifies", verify(dest) == [])
+        t.check(
+            "the live hint points the admin file back at UserDataFolder",
+            _live_hint(DEFAULT_ADMIN_FILENAME) == "<UserDataFolder>/Saves/serveradmin.xml",
+        )
+
+        # The same file on a host that moved its user data elsewhere, named by
+        # the game's own property. A fixed path would miss it, and the state it
+        # holds is the one nobody can re-derive.
+        moved = td / "moved"
+        moved_srv, _ = make_tree(moved)
+        (moved_srv / "7DaysToDieServer_Data").mkdir()
+        far = td / "fast-volume"
+        (moved_srv / PRIMARY_SERVERCONFIG).write_text(
+            '<?xml version="1.0" encoding="UTF-8"?>\n'
+            f'<ServerSettings><property name="AdminFileName" value="serveradmin.xml"/>'
+            f'<property name="UserDataFolder" value="{far}"/>'
+            "</ServerSettings>\n",
+            encoding="utf-8",
+        )
+        moved_admin = far / SAVES_SUBDIR / DEFAULT_ADMIN_FILENAME
+        moved_admin.parent.mkdir(parents=True)
+        moved_admin.write_text(admin.read_text(encoding="utf-8"), encoding="utf-8")
+        moved_snap, _ = snapshot(moved_srv, td / "moved-offhost", now=t0)
+        t.check(
+            "a relocated UserDataFolder is covered through the settings",
+            (moved_snap / DEFAULT_ADMIN_FILENAME).read_bytes() == moved_admin.read_bytes(),
+        )
+
+        # Corruption and a vanished file are the two failures the manifest's
+        # record of the admin file exists to catch, exactly as for the XML.
+        (target / DEFAULT_ADMIN_FILENAME).write_text("<ServerSettings><Whitelist", encoding="utf-8")
+        t.check(
+            "a corrupted admin file is reported",
+            any(DEFAULT_ADMIN_FILENAME in p for p in verify(dest)),
+        )
+        (target / DEFAULT_ADMIN_FILENAME).write_bytes(admin.read_bytes())
+        t.check("a repaired admin file verifies again", verify(dest) == [])
+        (target / DEFAULT_ADMIN_FILENAME).unlink()
+        t.check(
+            "an admin file in the manifest but missing from the snapshot is reported",
+            any("missing" in p for p in verify(dest)),
+        )
+        shutil.copy2(admin, target / DEFAULT_ADMIN_FILENAME)
+
+        out = td / "recovered-admin.xml"
+        restore(dest, target.name, out, item=DEFAULT_ADMIN_FILENAME)
+        t.check(
+            "the admin file restores byte-exact",
+            out.read_bytes() == admin.read_bytes(),
+        )
+
+        # No admin file anywhere is a WARNING, not a failed run: the game
+        # creates one on first use and a mod-only staging tree has none, while
+        # failing here would train operators to ignore a loud tool.
+        bare = td / "bare"
+        cfg = bare / CONFIG_REL
+        cfg.parent.mkdir(parents=True)
+        cfg.write_text(json.dumps({"DedicatedOnly": True}), encoding="utf-8")
+        (bare / "7DaysToDieServer_Data").mkdir()
+        (bare / PRIMARY_SERVERCONFIG).write_text(
+            '<?xml version="1.0" encoding="UTF-8"?>\n<ServerSettings/>\n', encoding="utf-8"
+        )
+        bare_snap, _ = snapshot(bare, td / "bare-offhost", now=t0)
+        t.check(
+            "a dedicated install with no admin file still snapshots",
+            _snapshot_files(bare_snap) == [CONFIG_NAME, PRIMARY_SERVERCONFIG],
+        )
 
     # A backup job that stopped running leaves snapshots that all verify, which
     # is the one failure the read-back cannot see. --max-age-hours is the only

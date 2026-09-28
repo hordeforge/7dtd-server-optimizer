@@ -85,9 +85,21 @@ chosen up front:
   1.18.0 added; the default (false) is what refuses a fresh install.
 
 ### Added
+- `backup_config.py` now snapshots the admin/whitelist file alongside the mod
+  config and the server settings. It lives where the game's own settings put it
+  (`AdminFileName`, default `serveradmin.xml`, under `UserDataFolder/Saves`), not
+  in the install root, so the coverage added for `serverconfig*.xml` never
+  reached it: a lost disk took the admin accounts and the whitelist with it, and
+  nothing in this repo can re-derive either. The location is resolved from
+  `serverconfig.xml` (`AdminFileName` and `UserDataFolder`), so a host that moved
+  its user data to another disk is covered where it keeps the file, and the
+  install root is searched as well. Each file is parsed and hashed into the
+  manifest like the others, `--verify` reports a corrupted or vanished one, and
+  a dedicated install with no admin file under any of those names warns instead
+  of quietly publishing narrower coverage.
 - `backup_config.py` now snapshots the live `serverconfig*.xml` in the install
   root alongside the mod config, and proves both parse before reporting success.
-  Those files hold the ports, password, whitelist and world settings; they are
+  Those files hold the ports, password and world settings; they are
   written into the install tree by `run_server.sh` (including the
   `<name>.pre-optimized` copy it keeps) and have never existed anywhere else,
   so until now a lost disk took them with no copy at all. A run against a real
