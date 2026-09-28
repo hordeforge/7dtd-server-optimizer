@@ -2,35 +2,59 @@
 # Efficient dedicated server launcher: config override, timestamped logs, Mono GC /
 # JIT friendly env with A/B-measured defaults, optional CPU affinity.
 #
-# Usage:
-#   scripts/run_server.sh [--ds /path/to/server] [extra server args...]
-#
-# Environment (all optional; see docs/DEVELOPMENT.md and docs/CONFIG.md):
-#   SEVENDTD_DS_DIR / DS   Dedicated install root (default: ~/.local/share/Steam/
-#                          steamapps/common/7 Days to Die Dedicated Server)
-#   SEVENDTD_CONFIG        Serverconfig XML passed as -configfile. Default:
-#                          server/serverconfig.optimized.xml if present, else the
-#                          tracked repo-root one
-#   SEVENDTD_LOGDIR        Log directory for the timestamped server log
-#                          (default: server/logs)
-#   MALLOC_ARENA_MAX       glibc memory arena cap (default 2; prevents arena-per-core
-#                          fragmentation)
-#   GC_FREE_SPACE_DIVISOR  Boehm heap headroom divisor (default 1; ~2x live set).
-#                          Legacy spelling FREE_SPACE_DIVISOR still accepted
-#   GC_NPROCS              Boehm marking processors (default: nproc)
-#   MONO_ENV_OPTIONS       Mono JIT options (default -O=all; set empty to disable)
-#   GC_INITIAL_HEAP_SIZE   Optional heap preallocation, passed through when set
-#   GC_USE_ENTIRE_HEAP     Set 1 to collect only when the whole heap is full
-#   SEVENDTD_GC_INCREMENTAL  Set to enable incremental GC (GC_ENABLE_INCREMENTAL=1)
-#   GC_PAUSE_TIME_TARGET   Forwarded ONLY together with SEVENDTD_GC_INCREMENTAL
-#   SEVENDTD_CPU_AFFINITY  taskset -c mask for the whole process; silently skipped
-#                          when taskset is absent. Leave off by default (measured
-#                          loss on naive pinning, see docs/HOST_TUNING.md)
+# Flags, environment and defaults: `scripts/run_server.sh --help`. Additional
+# context: docs/DEVELOPMENT.md, docs/CONFIG.md, docs/HOST_TUNING.md.
 
 set -euo pipefail
 
 SCRIPTDIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$SCRIPTDIR/.." && pwd)"
+
+usage() {
+  cat <<'EOF'
+usage: scripts/run_server.sh [--ds /path/to/server] [extra server args...]
+
+Launches the dedicated server with the tuned GC/JIT environment below. Every
+setting is optional and read from the environment; the command-line --ds
+overrides SEVENDTD_DS_DIR, which overrides DS.
+
+Flags:
+  --ds PATH      dedicated install root (overrides SEVENDTD_DS_DIR / DS)
+  -h, --help     show this help and exit
+  Anything after --ds is passed to the server binary unchanged.
+
+Environment:
+  SEVENDTD_DS_DIR / DS   Dedicated install root (default: ~/.local/share/Steam/
+                         steamapps/common/7 Days to Die Dedicated Server)
+  SEVENDTD_CONFIG        Serverconfig XML passed as -configfile. Default:
+                         server/serverconfig.optimized.xml if present, else the
+                         tracked repo-root one
+  SEVENDTD_LOGDIR        Log directory for the timestamped server log
+                         (default: server/logs)
+  MALLOC_ARENA_MAX       glibc memory arena cap (default 2; prevents arena-per-core
+                         fragmentation)
+  GC_FREE_SPACE_DIVISOR  Boehm heap headroom divisor (default 1; ~2x live set).
+                         Legacy spelling FREE_SPACE_DIVISOR still accepted
+  GC_NPROCS              Boehm marking processors (default: nproc)
+  MONO_ENV_OPTIONS       Mono JIT options (default -O=all; set empty to disable)
+  GC_INITIAL_HEAP_SIZE   Optional heap preallocation, passed through when set
+  GC_USE_ENTIRE_HEAP     Set 1 to collect only when the whole heap is full
+  SEVENDTD_GC_INCREMENTAL  Set to enable incremental GC (GC_ENABLE_INCREMENTAL=1)
+  GC_PAUSE_TIME_TARGET   Forwarded ONLY together with SEVENDTD_GC_INCREMENTAL
+  SEVENDTD_CPU_AFFINITY  taskset -c mask for the whole process; silently skipped
+                         when taskset is absent. Leave off by default (measured
+                         loss on naive pinning, see docs/HOST_TUNING.md)
+EOF
+}
+
+# Help must print and exit here, before anything is validated or launched: a
+# forwarded --help would reach the server binary as a stray launch argument.
+case "${1:-}" in
+  -h | --help)
+    usage
+    exit 0
+    ;;
+esac
 
 # Resolve dedicated server directory
 SRV="${SEVENDTD_DS_DIR:-${DS:-$HOME/.local/share/Steam/steamapps/common/7 Days to Die Dedicated Server}}"
@@ -46,11 +70,13 @@ for _var in SEVENDTD_DS_DIR DS; do
 done
 unset _var
 # A bare --ds with no path must fail here, not fall through and pass "--ds"
-# to the server binary as a stray launch argument.
+# to the server binary as a stray launch argument. Usage error, hence exit 2
+# (matches the python gates: 1 runtime failure, 2 bad invocation).
 if [[ "${1:-}" == "--ds" ]]; then
   if [[ $# -lt 2 ]]; then
-    echo "ERROR: --ds needs a path argument: scripts/run_server.sh [--ds /path/to/server] [extra server args...]" >&2
-    exit 1
+    echo "ERROR: --ds needs a path argument" >&2
+    usage >&2
+    exit 2
   fi
   SRV="$2"
   shift 2

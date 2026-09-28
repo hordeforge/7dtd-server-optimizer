@@ -1,10 +1,27 @@
 #!/usr/bin/env python3
-"""Render the line-coverage badge SVG from a Cobertura XML report."""
+"""Render the line-coverage badge SVG from a Cobertura XML report.
+
+Run: python3 scripts/coverage_badge.py COBERTURA_XML OUTPUT.svg
+     python3 scripts/coverage_badge.py --selftest     (wired into `make test`)
+"""
 from __future__ import annotations
 
 import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
+
+USAGE = """\
+usage: coverage_badge.py COBERTURA_XML OUTPUT.svg [--selftest] [-h | --help]
+
+Render the README coverage badge from a Cobertura report (the one `make
+coverage` writes); CI commits the resulting SVG. --selftest is wired into
+`make test`.
+  COBERTURA_XML  report to read the `line-rate` attribute from
+  OUTPUT.svg     badge file to write
+  --selftest  exercise the threshold/band logic and the report->badge path
+              (a silently wrong threshold ships a misleading shield)
+  -h, --help  show this help\
+"""
 
 
 def colour(pct: int) -> str:
@@ -44,7 +61,12 @@ def badge(pct: int, fill: str) -> str:
 
 def main(argv: list[str]) -> int:
     if len(argv) != 3:
-        print(f"usage: {argv[0]} COBERTURA_XML OUTPUT.svg", file=sys.stderr)
+        print(
+            f"coverage_badge.py: expected COBERTURA_XML and OUTPUT.svg,"
+            f" got {len(argv) - 1}: {' '.join(argv[1:])}",
+            file=sys.stderr,
+        )
+        print(USAGE, file=sys.stderr)
         return 2
     root = ET.parse(argv[1]).getroot()
     pct = round(float(root.get("line-rate", "0")) * 100)
@@ -134,4 +156,10 @@ def _selftest() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(_selftest() if "--selftest" in sys.argv[1:] else main(sys.argv))
+    argv = sys.argv[1:]
+    if argv in (["-h"], ["--help"]):
+        print(USAGE)
+        raise SystemExit(0)
+    if argv == ["--selftest"]:
+        raise SystemExit(_selftest())
+    raise SystemExit(main(sys.argv))

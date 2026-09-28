@@ -48,6 +48,8 @@ help:
 	@echo "  make test              Every CI gate: shellcheck + ruff + mypy +"
 	@echo "                         script syntax + config harness + doc/version"
 	@echo "  make clean             Remove dist/ and bin/obj build outputs"
+	@echo "  make coverage          Run the unit suite under dotnet-coverage into"
+	@echo "                         TestResults/coverage.cobertura.xml"
 	@echo
 	@echo "Game-backed targets (need DS=/path/to/'7 Days to Die Dedicated Server',"
 	@echo "default: ~/.local/share/Steam/steamapps/common/7 Days to Die Dedicated Server):"

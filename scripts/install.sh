@@ -1,6 +1,35 @@
 #!/usr/bin/env bash
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+usage() {
+  cat <<'EOF'
+usage: scripts/install.sh [-h | --help]
+
+Builds the mod and copies dist/EfficientServer into <DS>/Mods/EfficientServer.
+A user-edited installed config is preserved across the reinstall. Takes no
+arguments; everything is read from the environment.
+  -h, --help  show this help and exit
+
+Environment:
+  SEVENDTD_DS_DIR / DS  dedicated install root; the mod is installed into
+                       $SEVENDTD_DS_DIR/Mods/EfficientServer
+EOF
+}
+
+case "${1:-}" in
+  -h | --help)
+    usage
+    exit 0
+    ;;
+  "")
+    ;;
+  *)
+    echo "ERROR: install.sh takes no arguments, got: $*" >&2
+    usage >&2
+    exit 2
+    ;;
+esac
+
 # Resolve and validate the install dir BEFORE the build: an empty override
 # must not spend a compile, and must not reach the rm -rf below.
 SRV="${SEVENDTD_DS_DIR:-$HOME/.local/share/Steam/steamapps/common/7 Days to Die Dedicated Server}"

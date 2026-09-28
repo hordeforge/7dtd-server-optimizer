@@ -16,6 +16,40 @@
 set -euo pipefail
 export LC_ALL=C TZ=UTC
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+
+usage() {
+  cat <<'EOF'
+usage: scripts/package.sh [-h | --help]
+
+Builds the mod and zips dist/EfficientServer into
+dist/EfficientServer-<version>.zip, reproducibly. Takes no arguments;
+everything is read from the environment.
+  -h, --help  show this help and exit
+
+Environment:
+  VERSION             version suffix for the zip name (default: newest git tag,
+                      with -dirty on a modified tree, else the short commit id)
+  SOURCE_DATE_EPOCH   zip entry mtime epoch (default: last commit time). Held
+                      constant across builds, so two builds of one tree are
+                      byte-identical
+  SEVENDTD_DS_DIR     game install used for the compile (see scripts/build.sh)
+EOF
+}
+
+case "${1:-}" in
+  -h | --help)
+    usage
+    exit 0
+    ;;
+  "")
+    ;;
+  *)
+    echo "ERROR: package.sh takes no arguments, got: $*" >&2
+    usage >&2
+    exit 2
+    ;;
+esac
+
 # Stage on disk, never the stock /tmp: it is tmpfs on most Linux hosts, so a
 # full mod staging tree would be held in RAM and lost on reboot. mktemp honors
 # TMPDIR, and .scratch/ is gitignored.

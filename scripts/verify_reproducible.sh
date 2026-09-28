@@ -14,6 +14,37 @@
 set -euo pipefail
 export LC_ALL=C TZ=UTC
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+
+usage() {
+  cat <<'EOF'
+usage: scripts/verify_reproducible.sh [-h | --help]
+
+Packages twice in the same tree, then recompiles from a copy of the tree at
+another path and compares hashes (proves the reproducibility claim in README.md).
+Takes no arguments; needs a game install, like make package.
+  -h, --help  show this help and exit
+
+Environment:
+  SOURCE_DATE_EPOCH  epoch held constant across the three legs (default: last
+                     commit time)
+  SEVENDTD_DS_DIR    game install used for the compile (see scripts/build.sh)
+EOF
+}
+
+case "${1:-}" in
+  -h | --help)
+    usage
+    exit 0
+    ;;
+  "")
+    ;;
+  *)
+    echo "ERROR: verify_reproducible.sh takes no arguments, got: $*" >&2
+    usage >&2
+    exit 2
+    ;;
+esac
+
 # Leg 3 copies the whole tree including .git; the stock /tmp is tmpfs on most
 # Linux hosts, so that copy plus a full recompile would run out of RAM instead
 # of disk. mktemp honors TMPDIR, and .scratch/ is gitignored (and excluded from

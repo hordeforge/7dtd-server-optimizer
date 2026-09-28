@@ -4,6 +4,39 @@ set -euo pipefail
 # with the build host's environment.
 export LC_ALL=C TZ=UTC
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+
+usage() {
+  cat <<'EOF'
+usage: scripts/build.sh [-h | --help]
+
+Compiles Source/EfficientServer into dist/EfficientServer. Takes no arguments;
+everything is read from the environment.
+  -h, --help  show this help and exit
+
+Environment:
+  SEVENDTD_DS_DIR / DS      dedicated install root (falls back to the Steam
+                            client install for the game DLLs)
+  SEVENDTD_GAME_DIR         Steam client install root
+  SEVENDTD_BUILD_BACKEND    auto (default) | dotnet | mcs. 'dotnet' fails loudly
+                            when no SDK is present instead of falling back
+  DOTNET_ROOT               SDK directory to prepend to PATH when set
+EOF
+}
+
+case "${1:-}" in
+  -h | --help)
+    usage
+    exit 0
+    ;;
+  "")
+    ;;
+  *)
+    echo "ERROR: build.sh takes no arguments, got: $*" >&2
+    usage >&2
+    exit 2
+    ;;
+esac
+
 # Prefer local SDK installs (not /tmp)
 if [[ -x "${DOTNET_ROOT:-}/dotnet" ]]; then
   export PATH="${DOTNET_ROOT}:$PATH"
