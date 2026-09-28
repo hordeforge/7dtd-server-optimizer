@@ -154,7 +154,10 @@ write APIs under `Source/EfficientServer/`; the only file reads are
   only, inherited feeds cleared), push trigger scoped to main
   (`.github/workflows/ci.yml:6`). Dependency surface is small: Newtonsoft.Json
   comes from the game's own Managed folder for the mod; test deps are lock-pinned
-  (`Source/EfficientServer.Tests/packages.lock.json`).
+  (`Source/EfficientServer.Tests/packages.lock.json`); the `dotnet-coverage`
+  local tool is version-pinned (`.config/dotnet-tools.json`) but not hash-pinned,
+  so `make coverage` fetches an unhashed tool graph. Dependabot watches all three
+  surfaces (`.github/dependabot.yml`).
 - Stale install: `run_server.sh` never builds or installs. It execs whatever
   `Mods/EfficientServer` the server tree already holds (`scripts/install.sh`
   is the only writer), so a launch can run a DLL that no longer matches the

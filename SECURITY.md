@@ -67,6 +67,12 @@ What ships and how it is protected:
   sources are pinned in-repo by `NuGet.config` (nuget.org only, with inherited
   machine- and user-level feeds cleared), so a feed added outside this repo
   cannot satisfy the package.
+- The `dotnet-coverage` local tool is the one fetch that is not hash-locked:
+  `.config/dotnet-tools.json` pins its version, but the .NET 8 SDK this repo
+  pins has no tool lock file, so `make coverage` resolves that tool's
+  transitive graph from nuget.org at run time. It is CI-only and never touches
+  a shipped artifact. Dependabot watches it weekly
+  (`.github/dependabot.yml`), the same as the packages above.
 - Packaging is reproducible (`make verify-reproducible`);
   `SOURCE_DATE_EPOCH` normalizes timestamps so two builds of the same tree
   zip byte-identically.

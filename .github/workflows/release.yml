@@ -20,9 +20,10 @@ permissions:
 
 jobs:
   verify-tag:
-    # Pinned image, same as ci.yml: a floating runner changes the resolved
-    # glibc and the preinstalled tool set under the gate, so a green run today
-    # can go red with no change in this repository.
+    # Pinned image, same reason as ci.yml: a floating runner changes the
+    # resolved glibc, the preinstalled tool set and the base image's own
+    # supply chain under the gate, so a green tag check today can go red with
+    # no change in this repository.
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:

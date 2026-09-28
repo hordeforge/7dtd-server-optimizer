@@ -145,6 +145,11 @@ supported retarget: rebuild with `make build` and reinstall.
   `packages.lock.json` and restored in locked mode by `make test`; the restore
   source list is pinned in-repo by [`NuGet.config`](NuGet.config) (nuget.org
   only, inherited machine/user feeds cleared)
+- `make coverage` additionally fetches the `dotnet-coverage` local tool pinned
+  by version in [`.config/dotnet-tools.json`](.config/dotnet-tools.json); that
+  restore is not hash-locked (the .NET 8 SDK the repo pins has no tool lock
+  file), so it needs the network and a reviewed version bump. `make test` does
+  not use it
 
 **Troubleshooting (from the mod's own log lines):**
 - `MISSING TARGET: <Patch> matched no game method (version drift?) - this
