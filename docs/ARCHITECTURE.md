@@ -55,15 +55,16 @@ must preserve:
   governor transitions can interleave only at main-thread frame boundaries.
 - **Cross-thread reads are reference/int atomic only:** patches snapshot
   `ModApi.Config` per call; `ReloadConfig` swaps the whole object rather than
-  mutating fields, so readers see one consistent snapshot (no torn state). The
-  swap is *published*, not merely stored: `ModApi.Config` and `ModApi.Active`
-  live behind `ConfigPublication`, whose `volatile` reference gives the write
-  release and the read acquire, so a reader that sees a config also sees a
-  fully built one (a plain static field would let the reference store overtake
-  the constructor's field stores). Nothing mutates a published object except
-  the governor's throttle levers, which are main-thread fields the receive
-  thread never reads. State the governor derives from that object is re-based
-  explicitly via `GovernorPatch.OnConfigReloaded()` inside `ReloadConfig`.
+  mutating fields, so readers see one consistent snapshot (no torn state).
+  The swap is *published*, not merely stored: `ModApi.Config` and `ModApi.Active`
+  live behind `volatile` storage (`ConfigPublication.Current` and the
+  `_active` field), which gives the write release and the read acquire, so a
+  reader that sees a config also sees a fully built one (a plain static field
+  would let the reference store overtake the constructor's field stores).
+  Nothing mutates a published object. The governor derives no cached state from
+  it: the throttled lever values are computed per read from the configured ones
+  plus the current tier, so `OnConfigReloaded()` only has to settle the TIER
+  (release a standing emergency the new config no longer authorizes).
 - **Rule for new patches:** static mutable fields are only safe if the patched
   method is proven main-thread (trace callers in the game IL first); anything
   reached from A* workers, DynamicMesh threads, LiteNet reader/writer threads,

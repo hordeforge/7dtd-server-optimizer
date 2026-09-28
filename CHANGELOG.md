@@ -41,6 +41,16 @@ So `EfficientServer-0.1.0.zip` logging `mod=1.17.0` is correct, not drift.
 - The .NET SDK pin is exact within its band: `global.json` moves from
   `rollForward: latestFeature` to `latestPatch`, so a new 8.0.5xx SDK can no
   longer be picked up silently. Bump `version` there to move bands.
+- Governor no longer writes the throttled replication and nav-graph cadences
+  into the loaded config. The levers are derived per read from the configured
+  values plus the current tier, so `es status` shows the configured numbers and
+  the values in force separately, and a reload can no longer restore a stale
+  cached baseline. The tier arithmetic moved to `Patches/GovernorTiers.cs`
+  (game-type-free, unit-tested) next to `TickClock` and `TickIntervalEma`.
+- `ModApi.Config` and `ModApi.Active` are published through `volatile` storage
+  (`ConfigPublication.Current` and the `_active` field), so the receive-thread
+  surfaces that read them per call see a whole config generation, never a
+  half-swapped one.
 
 ## [1.19.0] - 2026-09-20
 

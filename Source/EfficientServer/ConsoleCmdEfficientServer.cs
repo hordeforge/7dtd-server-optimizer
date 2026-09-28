@@ -315,8 +315,10 @@ namespace EfficientServer
 
         // Live state the config dump above cannot show: which levers are engaged
         // at this instant, the tick EMA driving the governor/tick-guard, and how
-        // much work the silent hot-path gates have shed so far. Read-only, so it
-        // stays console-only (no log echo).
+        // much work the silent hot-path gates have shed so far. The dump above
+        // prints the CONFIGURED values; the governor never writes to the config,
+        // so the throttled values in force are named here, next to the tier that
+        // produced them. Read-only, so it stays console-only (no log echo).
         static void OutputRuntime()
         {
             bool modActive = ModApi.ShouldRun();
@@ -334,6 +336,8 @@ namespace EfficientServer
                 $"{EsLog.LogPrefix}runtime: modActive={modActive} "
                 + $"governorTier={Patches.GovernorPatch.Level} tickEmaMs={tickEma} "
                 + $"animatorEmergency={Patches.AnimatorEmergency.Active} | "
+                + $"inForce(replication /{Patches.GovernorPatch.EffectiveEntityStride()}, "
+                + $"graph updates /{Patches.GovernorPatch.EffectiveGraphEvery()}) | "
                 + $"gcSafetyCollects={Patches.GcGuardPatch.SafetyCollects} "
                 + $"tickGuardShedTotal={Patches.TickGuardPatch.ShedTotal}");
             SdtdConsole.Instance.Output(

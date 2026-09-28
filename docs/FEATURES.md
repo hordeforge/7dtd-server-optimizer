@@ -361,13 +361,14 @@ no stagger); nothing despawns, clients see no visual change. Steps down one tier
 a time. Live-validated: full autonomous chain THROTTLED -> ANIMATOR EMERGENCY ->
 step-down + EXIT. See [`RESULTS.md`](RESULTS.md) §3i, §3o.
 
-`es reload` re-bases a mid-tier governor onto the fresh config object
-(`GovernorPatch.OnConfigReloaded`): the reloaded vanilla base is kept for step-down
-instead of being clobbered by the stale cached value, active throttles are re-applied
-to the new object, disabling the governor mid-tier-2 exits an active animator
-emergency instead of leaving rigs culled with no recovery path, and turning
-`Governor.AnimatorEmergency` off mid-emergency steps down to tier 1 and restores the
-rigs immediately (the flag is opt-in; reload applies live).
+`es reload` settles a mid-tier governor against the fresh config object
+(`GovernorPatch.OnConfigReloaded`): the throttle levers are never written to the
+config in the first place, so the reloaded values are in force on the next read
+with nothing to re-apply and no cached baseline that could clobber them;
+disabling the governor mid-tier-2 exits an active animator emergency instead of
+leaving rigs culled with no recovery path, and turning `Governor.AnimatorEmergency`
+off mid-emergency steps down to tier 1 and restores the rigs immediately (the flag
+is opt-in; reload applies live).
 
 **Stays default-off** (policy, bench lever): uses `Animator.cullingMode =
 CullCompletely` (keeps `enabled=true`, so the old enabled-toggle root-motion

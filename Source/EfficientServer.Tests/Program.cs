@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Threading;
+using EfficientServer.Patches;
 
 // Stub the only external symbols Config.cs touches (game-type-free), so the real
 // Config source compiles and runs under the plain .NET SDK. Warnings are recorded
@@ -256,6 +257,96 @@ namespace EfficientServer.Tests
             // Leave the holder on built-in defaults so a later check cannot inherit
             // this test's last generation.
             ConfigPublication.Current = new ServerPerfConfig();
+        }
+
+        // Governor tier machine (the pure half of GovernorPatch): hysteresis,
+        // windows, cooldown, lever math, and the reload stand-down. Driven with
+        // explicit tick intervals, so no host scheduler jitter decides a tier.
+        static GovernorConfig GovCfg(bool animatorEmergency, int cooldown)
+        {
+            var c = new GovernorConfig();
+            c.WindowTicks = 5;
+            c.CooldownTicks = cooldown;
+            c.AnimatorEmergency = animatorEmergency;
+            return c;
+        }
+
+        // Feed n ticks at one smoothed interval; returns the transition count.
+        static int Drive(GovernorTiers tiers, GovernorConfig cfg, double emaMs, int ticks)
+        {
+            int transitions = 0;
+            for (int i = 0; i < ticks; i++)
+                if (tiers.Advance(cfg, emaMs)) transitions++;
+            return transitions;
+        }
+
+        static void CheckGovernorTiers()
+        {
+            const double Over = 100.0;   // past OverBudgetMs, so escalating
+            const double Healthy = 40.0; // under HealthyMs, so stepping down
+            GovernorConfig plain = GovCfg(false, 3);
+
+            var t = new GovernorTiers();
+            Check(t.Level == 0, "governor starts at the configured baseline");
+            Check(Drive(t, plain, Over, 4) == 0 && t.Level == 0,
+                "no escalation before WindowTicks of over-budget ticks");
+            Check(t.Advance(plain, Over) && t.Level == 1, "escalates to tier 1 on the window");
+            Check(Drive(t, plain, Over, 3) == 0, "cooldown holds the tier right after a transition");
+            Check(Drive(t, plain, Over, 20) == 0 && t.Level == 1,
+                "tier 2 never entered without the AnimatorEmergency opt-in");
+
+            // Hysteresis band: between the thresholds neither window advances.
+            var band = new GovernorTiers();
+            Drive(band, plain, plain.OverBudgetMs - 1.0, 100);
+            Check(band.Level == 0 && Drive(band, plain, plain.OverBudgetMs - 1.0, 100) == 0,
+                "hysteresis band never accumulates into a transition");
+
+            // Levers are derived from the operator's own value, doubled and
+            // capped, never faster than configured.
+            Check(t.EffectiveEntityStride(1) == 2, "stride 1 -> 2 while throttled");
+            Check(t.EffectiveEntityStride(3) == 4 && t.EffectiveEntityStride(4) == 4,
+                "stride caps at the Normalize ceiling of 4");
+            Check(t.EffectiveGraphEvery(4) == 8, "graph cadence 4 -> 8 while throttled");
+            Check(t.EffectiveGraphEvery(200) == 200, "graph cadence caps at 200");
+            Check(GovernorTiers.ThrottleLever(1, 4) == 2, "ThrottleLever doubles");
+            Check(GovernorTiers.ThrottleLever(0, 4) == 0, "ThrottleLever never lowers a 1..N cadence");
+
+            // Tier 2 and its periodic rig sweep.
+            GovernorConfig em = GovCfg(true, 0);
+            var e = new GovernorTiers();
+            Drive(e, em, Over, 5);
+            Check(e.Level == 1, "tier 1 before the emergency");
+            Check(Drive(e, em, Over, 5) == 1 && e.Level == 2, "tier 2 entered once opted in");
+            Check(!e.SweepDue, "the entry tick does not also sweep");
+            Drive(e, em, Over, 99);
+            Check(!e.SweepDue, "no rig sweep before the period elapses");
+            e.Advance(em, Over);
+            Check(e.SweepDue, "tier 2 asks for a periodic rig sweep");
+
+            // Recovery steps down one tier at a time and restores the levers.
+            Drive(e, em, Healthy, 5);
+            Check(e.Level == 1, "recovery steps 2 -> 1 first");
+            Check(e.EffectiveEntityStride(1) == 2, "tier 1 keeps the throttles applied");
+            Drive(e, em, Healthy, 5);
+            Check(e.Level == 0 && e.EffectiveEntityStride(1) == 1,
+                "recovery steps 1 -> 0 and the levers read as configured again");
+
+            // Reload stand-down: a tier the new config no longer authorizes ends
+            // now, because the postfix that would step it down may never run.
+            GovernorConfig em2 = GovCfg(true, 0);
+            var r = new GovernorTiers();
+            Drive(r, em2, Over, 10);
+            Check(r.Level == 2, "reload setup: standing in the emergency tier");
+            Check(!r.ApplyReloadedConfig(em2, true), "an authorized reload keeps the rigs");
+            Check(r.ApplyReloadedConfig(em2, false) && r.Level == 0,
+                "a disabled governor stands down to baseline and releases the rigs");
+            Check(r.EffectiveEntityStride(1) == 1, "levers read as configured after the stand-down");
+            Check(!r.ApplyReloadedConfig(em2, false), "stand-down is idempotent");
+            var r2 = new GovernorTiers();
+            Drive(r2, em2, Over, 10);
+            Check(r2.ApplyReloadedConfig(GovCfg(false, 0), true) && r2.Level == 1,
+                "AnimatorEmergency off mid-emergency releases the rigs but keeps throttling");
+            Check(r2.EffectiveEntityStride(1) == 2, "tier 1 throttles stay in force after that step-down");
         }
 
         static int Main()
@@ -993,6 +1084,8 @@ namespace EfficientServer.Tests
             Check(EsLog.Warnings.Count == 0, "re-normalize is silent (no repeated 'config corrected' warnings)");
             Check(corrected.Pathfinding.GraphUpdateEveryTicks == 200 && corrected.Governor.HealthyMs == 15f,
                 "re-normalize keeps the already-corrected values stable");
+
+            CheckGovernorTiers();
 
             if (_failures == 0)
             {

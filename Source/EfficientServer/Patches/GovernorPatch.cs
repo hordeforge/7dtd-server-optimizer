@@ -1,52 +1,79 @@
-using System;
 using System.Globalization;
 using HarmonyLib;
 
 namespace EfficientServer.Patches
 {
     /// <summary>
-    /// Adaptive load governor (default on). Watches the real tick interval and moves
-    /// the two proven throttle levers between their configured baselines and doubled
-    /// throttled settings:
+    /// Adaptive load governor (default on). Watches the real tick interval and
+    /// moves the two proven throttle levers between the operator's configured
+    /// values and doubled, capped ones:
     ///
-    ///   - Network.EntityDistributionEveryTicks: configured value <-> 2x (capped 4;
-    ///     from the default 1 that is 1 <-> 2 = 20 <-> 10 Hz, -45% on the replication
+    ///   - Network.EntityDistributionEveryTicks: configured value &lt;-&gt; 2x (capped 4;
+    ///     from the default 1 that is 1 &lt;-&gt; 2 = 20 &lt;-&gt; 10 Hz, -45% on the replication
     ///     wall, see RESULTS 3g)
-    ///   - Pathfinding.GraphUpdateEveryTicks: configured value <-> 2x that value
+    ///   - Pathfinding.GraphUpdateEveryTicks: configured value &lt;-&gt; 2x that value
     ///
-    /// Sustained over-budget ticks (interval EMA > OverBudgetMs for WindowTicks)
-    /// escalate one step; sustained healthy ticks (EMA < HealthyMs) after a cooldown
-    /// step back down. Hysteresis (OverBudgetMs > HealthyMs gap) plus the cooldown
-    /// prevent oscillation. Every transition is logged so an operator can see exactly
-    /// when and why fidelity was traded for tick rate.
+    /// Sustained over-budget ticks (interval EMA &gt; OverBudgetMs for WindowTicks)
+    /// escalate one step; sustained healthy ticks (EMA &lt; HealthyMs) after a
+    /// cooldown step back down. Hysteresis (OverBudgetMs &gt; HealthyMs gap) plus the
+    /// cooldown prevent oscillation. Every transition is logged so an operator can
+    /// see exactly when and why fidelity was traded for tick rate.
     ///
     /// The governor only moves levers between the OPERATOR'S CONFIGURED BASELINE and
-    /// a doubled, capped throttle value - it introduces
-    /// no new behavior, it schedules existing, individually-validated ones. Baselines
-    /// are captured at first transition and restored on full recovery, so an
-    /// operator's non-vanilla steady state (e.g. EntityDistributionEveryTicks=3)
-    /// survives a governor cycle unchanged.
+    /// a doubled, capped throttle value - it introduces no new behavior, it
+    /// schedules existing, individually-validated ones. It never writes to the
+    /// config: the throttled values are derived per read from the configured ones
+    /// plus the current tier (see <see cref="GovernorTiers"/>), so an operator's
+    /// non-vanilla steady state (e.g. EntityDistributionEveryTicks=3) survives a
+    /// governor cycle and a `es reload` unchanged.
+    ///
+    /// The hysteresis arithmetic itself lives in <see cref="GovernorTiers"/> (pure,
+    /// unit-tested); this class is the game-facing adapter: it advances the EMA,
+    /// drives the machine, and performs the tier-2 side effect on the rigs.
     /// </summary>
     [HarmonyPatch(typeof(GameManager), "UpdateTick")]
     public static class GovernorPatch
     {
         static readonly TickIntervalEma TickEma = new TickIntervalEma();
-        static int _overTicks;
-        static int _healthyTicks;
-        static int _cooldown;
-        static int _level; // 0 = baseline, 1 = throttled
-        static int _baseGraphEvery = -1;
-        static int _baseEntityStride = -1;
-
-        // Period between the tier-2 re-sweeps that cover mid-emergency spawns
-        // (~5 s at the vanilla 20 TPS).
-        const int SweepPeriodTicks = 100;
+        static readonly GovernorTiers Tiers = new GovernorTiers();
 
         // Live state for `es status` / incident response: which tier is applied
-        // RIGHT NOW (config alone cannot tell you this) and the smoothed tick
-        // interval driving it.
-        public static int Level { get { return _level; } }
+        // RIGHT NOW (config alone cannot tell you this, since config is intent) and
+        // the smoothed tick interval driving it.
+        public static int Level { get { return Tiers.Level; } }
         public static double EmaMs { get { return TickEma.Value; } }
+
+        // The two levers a throttled tier touches, as the CONSUMING patches see
+        // them: the configured value at baseline, doubled and capped above it.
+        // Callers pass the value they read from the config; the governor is never
+        // the writer of the file's own numbers. A disabled governor reads as
+        // baseline even if a tier was somehow left standing, so the effective
+        // value can never outlive the lever that produced it.
+        public static int EffectiveEntityStride(int configured)
+            => GovernorEnabled() ? Tiers.EffectiveEntityStride(configured) : configured;
+
+        public static int EffectiveGraphEvery(int configured)
+            => GovernorEnabled() ? Tiers.EffectiveGraphEvery(configured) : configured;
+
+        // Config-reading twins, for `es status`, which reports the configured
+        // values in the dump and the values actually in force here.
+        public static int EffectiveEntityStride()
+        {
+            NetworkConfig net = ModApi.Config != null ? ModApi.Config.Network : null;
+            return net == null ? 1 : EffectiveEntityStride(net.EntityDistributionEveryTicks);
+        }
+
+        public static int EffectiveGraphEvery()
+        {
+            PathfindingConfig path = ModApi.Config != null ? ModApi.Config.Pathfinding : null;
+            return path == null ? 1 : EffectiveGraphEvery(path.GraphUpdateEveryTicks);
+        }
+
+        static bool GovernorEnabled()
+        {
+            GovernorConfig cfg = ModApi.Config != null ? ModApi.Config.Governor : null;
+            return cfg != null && cfg.Enabled;
+        }
 
         static void Postfix()
         {
@@ -55,191 +82,85 @@ namespace EfficientServer.Patches
                 return;
 
             double emaMs = TickEma.Advance();
-            if (_cooldown > 0) _cooldown--;
-
-            if (emaMs > cfg.OverBudgetMs)
+            if (Tiers.Advance(cfg, emaMs))
             {
-                _healthyTicks = 0;
-                _overTicks++;
-                if (_cooldown == 0 && _overTicks >= cfg.WindowTicks)
+                if (Tiers.Level == 2)
                 {
-                    if (_level == 0)
-                        SetLevel(1, cfg, emaMs);
-                    // Tier 2 (opt-in): throttling did not fix it and the EMA is past
-                    // the emergency threshold - shut down zombie animators (~40% of
-                    // the saturated 64p frame, RESULTS 3o + fence check).
-                    else if (_level == 1 && cfg.AnimatorEmergency && emaMs > cfg.EmergencyOverMs)
-                        SetLevel(2, cfg, emaMs);
+                    LogEmergencyEnter(cfg, emaMs);
                 }
-                // Periodic sweep while in tier 2 so mid-emergency spawns are covered.
-                // _overTicks > 0 skips the entry tick: SetLevel(2) just swept the
-                // world and reset the counter, and 0 % period == 0 would re-run it
-                // immediately in the same tick.
-                if (_level == 2 && _overTicks > 0 && _overTicks % SweepPeriodTicks == 0)
-                    AnimatorEmergency.Enter();
+                else if (Tiers.Level == 1)
+                {
+                    // Tier 2 keeps the tier-1 throttles in force, so a step down
+                    // from the emergency leaves them applied; only the rigs go.
+                    LogStepDown(cfg, emaMs, "stepped down from emergency to THROTTLED");
+                    AnimatorEmergency.Exit();
+                }
+                else
+                    LogRestored(cfg, emaMs);
             }
-            else if (emaMs < cfg.HealthyMs)
+            else if (Tiers.SweepDue)
             {
-                _overTicks = 0;
-                if (++_healthyTicks >= cfg.WindowTicks && _level > 0 && _cooldown == 0)
-                    SetLevel(_level - 1, cfg, emaMs); // step down one tier at a time
-            }
-            else
-            {
-                _overTicks = 0;
-                _healthyTicks = 0;
-            }
-        }
-
-        static void SetLevel(int level, GovernorConfig cfg, double emaMs)
-        {
-            PathfindingConfig path = ModApi.Config.Pathfinding;
-            NetworkConfig net = ModApi.Config.Network;
-            // Baselines are captured once per config generation (reset by reload):
-            // the values the operator actually configured, which recovery restores.
-            if (_baseGraphEvery < 0)
-                _baseGraphEvery = path.GraphUpdateEveryTicks;
-            if (_baseEntityStride < 0)
-                _baseEntityStride = net.EntityDistributionEveryTicks;
-
-            int previous = _level;
-            _level = level;
-            _overTicks = 0;
-            _healthyTicks = 0;
-            _cooldown = cfg.CooldownTicks;
-            if (level == 2)
-            {
-                // Tier 2 keeps the tier-1 throttles active (early return below),
-                // so a mid-tier-2 reload must re-apply those tier-1 values too.
-                // WARNING, not info: tier 2 globally degrades combat fidelity and is
-                // opt-in, so firing means the operator both opted in AND the server
-                // is past the emergency threshold - exactly what grepping WRN finds.
-                // Log floats render invariant, same convention as es status / es
-                // animstate: the log is grepped across hosts, and a comma-decimal
-                // locale must not reformat these values.
-                EsLog.Emit(LogLevel.Warn, $"Governor: tick EMA {emaMs.ToString("F1", CultureInfo.InvariantCulture)}ms > "
-                    + $"{cfg.EmergencyOverMs.ToString(CultureInfo.InvariantCulture)}ms despite throttles "
-                    + "- ANIMATOR EMERGENCY CullCompletely (combat timing degrades; clients see no visual change)");
+                // Still in tier 2: re-sweep so rigs spawned mid-emergency are covered.
                 AnimatorEmergency.Enter();
-                return;
-            }
-            if (previous == 2)
-                AnimatorEmergency.Exit();
-            if (level == 1)
-            {
-                ApplyThrottledLevers(path, net);
-                EsLog.Emit(LogLevel.Info, previous == 2
-                    ? $"Governor: tick EMA {emaMs.ToString("F1", CultureInfo.InvariantCulture)}ms < "
-                      + $"{cfg.HealthyMs.ToString(CultureInfo.InvariantCulture)}ms - stepped down from emergency to THROTTLED"
-                    : $"Governor: tick EMA {emaMs.ToString("F1", CultureInfo.InvariantCulture)}ms > "
-                      + $"{cfg.OverBudgetMs.ToString(CultureInfo.InvariantCulture)}ms - THROTTLED "
-                      + $"(replication /{net.EntityDistributionEveryTicks}, graph updates /{path.GraphUpdateEveryTicks})");
-            }
-            else
-            {
-                net.EntityDistributionEveryTicks = _baseEntityStride;
-                path.GraphUpdateEveryTicks = _baseGraphEvery;
-                EsLog.Emit(LogLevel.Info, $"Governor: tick EMA {emaMs.ToString("F1", CultureInfo.InvariantCulture)}ms < "
-                    + $"{cfg.HealthyMs.ToString(CultureInfo.InvariantCulture)}ms - restored baseline "
-                    + $"(replication /{_baseEntityStride}, graph updates /{_baseGraphEvery})");
             }
         }
 
-        // The one place that maps baseline -> doubled lever values. Shared by the
-        // escalate path and the mid-tier config reload so they cannot drift apart.
-        // Escalation DOUBLES each lever from its configured baseline (never runs it
-        // faster than the operator set it), capped at the same ceilings Normalize
-        // enforces (stride 4, graph cadence 200).
-        static void ApplyThrottledLevers(PathfindingConfig path, NetworkConfig net)
+        static void LogRestored(GovernorConfig cfg, double emaMs)
         {
-            net.EntityDistributionEveryTicks = ThrottleLever(_baseEntityStride, 4);
-            path.GraphUpdateEveryTicks = ThrottleLever(_baseGraphEvery, 200);
+            EsLog.Emit(LogLevel.Info, $"Governor: tick EMA {Ms(emaMs)}ms < "
+                + $"{Ms(cfg.HealthyMs)}ms - restored baseline "
+                + $"(replication /{EffectiveEntityStride()}, graph updates /{EffectiveGraphEvery()})");
         }
 
-        static int ThrottleLever(int baseValue, int maxValue)
-            => Math.Min(maxValue, Math.Max(baseValue, baseValue * 2));
+        static void LogStepDown(GovernorConfig cfg, double emaMs, string what)
+        {
+            EsLog.Emit(LogLevel.Info, $"Governor: tick EMA {Ms(emaMs)}ms < "
+                + $"{Ms(cfg.HealthyMs)}ms - {what}");
+        }
+
+        // WARNING, not info: tier 2 globally degrades combat fidelity and is
+        // opt-in, so firing means the operator both opted in AND the server
+        // is past the emergency threshold - exactly what grepping WRN finds.
+        // Log floats render invariant, same convention as es status / es
+        // animstate: the log is grepped across hosts, and a comma-decimal
+        // locale must not reformat these values.
+        static void LogEmergencyEnter(GovernorConfig cfg, double emaMs)
+        {
+            EsLog.Emit(LogLevel.Warn, $"Governor: tick EMA {Ms(emaMs)}ms > "
+                + $"{Ms(cfg.EmergencyOverMs)}ms despite throttles "
+                + "- ANIMATOR EMERGENCY CullCompletely (combat timing degrades; clients see no visual change)");
+            AnimatorEmergency.Enter();
+        }
+
+        static string Ms(double value) => value.ToString("F1", CultureInfo.InvariantCulture);
 
         /// <summary>
         /// Re-base the governor after <see cref="ModApi.ReloadConfig"/> swaps the
-        /// config object. The governor mutates Pathfinding.GraphUpdateEveryTicks and
-        /// Network.EntityDistributionEveryTicks IN PLACE as its throttle channel, so
-        /// a reload would otherwise desync it: the cached baselines still held the
-        /// previous object's values and the next step-down would clobber the
-        /// operator's reloaded values with them, while a reload mid-tier
-        /// silently dropped the applied throttles (fresh object carries operator
-        /// values) until the next transition. Main-thread only (console/telnet/web
-        /// commands queue through SdtdConsole's main-thread drain, same thread as the
-        /// UpdateTick postfix), so plain field writes suffice.
+        /// config object. The levers need no re-applying (they are derived from the
+        /// new object on every read); what a reload must settle is the TIER, so a
+        /// tier-2 emergency the new config no longer authorizes is released NOW
+        /// rather than left to a postfix that may never run again.
+        /// Main-thread only (console/telnet/web commands queue through
+        /// SdtdConsole's main-thread drain, same thread as the UpdateTick postfix).
         /// </summary>
         public static void OnConfigReloaded()
         {
-            _baseGraphEvery = -1;
-            _baseEntityStride = -1;
-            if (_level <= 0)
-            {
-                // Baseline tier. A stray BENCH-PROBE emergency (`es animoff`; the
-                // probe never raises _level) must not survive a reload that turns
-                // the mod or governor off: no postfix/tier machine remains to step
-                // down, so rigs would keep CullCompletely plus skipped managed
-                // updates forever, and Enabled=false promises inert/vanilla. Under
-                // an active governor the probe stays operator-owned (`es animon`
-                // exits it), matching the manual enter/exit contract.
-                GovernorConfig baselineCfg = ModApi.Config != null ? ModApi.Config.Governor : null;
-                bool inactiveAtBaseline = ModApi.Config == null || !ModApi.Config.Enabled
-                    || baselineCfg == null || !baselineCfg.Enabled;
-                if (inactiveAtBaseline && AnimatorEmergency.Active)
-                {
-                    AnimatorEmergency.Exit();
-                    EsLog.Emit(LogLevel.Info, "config reloaded: governor inactive (disabled or master off) - "
-                        + "released animator emergency left armed by the es animoff probe");
-                }
-                return;
-            }
-
             GovernorConfig cfg = ModApi.Config != null ? ModApi.Config.Governor : null;
             // The master switch counts too: Enabled=false promises "every patch
-            // installed but inert", and the postfix stops running under it, so a
-            // tier-2 emergency left standing would freeze every enemy rig at
-            // CullCompletely with no code path left to restore it.
-            bool governorInactive = ModApi.Config == null || !ModApi.Config.Enabled
-                || cfg == null || !cfg.Enabled;
-            if (governorInactive)
-            {
-                // Governor removed/disabled (or mod disabled) mid-tier: stand the
-                // levers down on the new object; exit an active tier-2 emergency
-                // so rigs cannot stay CullCompletely with no governor left to
-                // recover them.
-                if (_level >= 2)
-                    AnimatorEmergency.Exit();
-                _level = 0;
-                EsLog.Emit(LogLevel.Info, "config reloaded: governor inactive (disabled or master off) - "
-                    + "levers left at reloaded (baseline) values");
-                return;
-            }
-
-            // Tier 2 is opt-in, so flipping AnimatorEmergency off mid-emergency must
-            // release the rigs NOW (reload applies live). Without this the postfix's
-            // periodic tier-2 sweep would keep re-entering CullCompletely despite the
-            // flag being false; step down to tier 1, which keeps the throttle levers.
-            if (_level >= 2 && !cfg.AnimatorEmergency)
+            // installed but inert", and the postfix stops running under it.
+            bool active = ModApi.Config != null && ModApi.Config.Enabled
+                && cfg != null && cfg.Enabled;
+            bool releaseRigs = Tiers.ApplyReloadedConfig(cfg, active);
+            if (releaseRigs)
             {
                 AnimatorEmergency.Exit();
-                _level = 1;
-                EsLog.Emit(LogLevel.Info, "config reloaded: AnimatorEmergency off - stepped down from emergency to THROTTLED");
+                EsLog.Emit(LogLevel.Info, "config reloaded: animator emergency no longer authorized "
+                    + "(governor disabled, or AnimatorEmergency off) - released rigs, "
+                    + "levers read at configured values again");
             }
-
-            // Active tier (1 or 2): re-capture the baselines from the new object and
-            // re-apply the tier-1 throttle values so throttling stays coherent across
-            // the swap. Tier 2 keeps those same lever values (SetLevel(2) never
-            // touches them). Tick-health windows and cooldown describe recent tick
-            // history, not config state - keep them.
-            PathfindingConfig path = ModApi.Config.Pathfinding;
-            NetworkConfig net = ModApi.Config.Network;
-            _baseGraphEvery = path.GraphUpdateEveryTicks;
-            _baseEntityStride = net.EntityDistributionEveryTicks;
-            ApplyThrottledLevers(path, net);
-            EsLog.Emit(LogLevel.Info, $"config reloaded: governor tier {_level} re-applied to new config "
-                + $"(replication /{net.EntityDistributionEveryTicks}, graph updates /{path.GraphUpdateEveryTicks})");
+            if (!active)
+                EsLog.Emit(LogLevel.Info, "config reloaded: governor inactive (disabled or master off) - "
+                    + "levers left at reloaded (baseline) values");
         }
     }
 }

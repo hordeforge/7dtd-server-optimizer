@@ -36,7 +36,10 @@ namespace EfficientServer.Patches
         {
             PathfindingConfig cfg = ModApi.Config != null ? ModApi.Config.Pathfinding : null;
             if (!ModApi.ShouldRun() || cfg == null) return true;
-            int every = cfg.GraphUpdateEveryTicks;
+            // The cadence in force: the configured one, or the governor's doubled
+            // one while it is throttling (the governor decides in the UpdateTick
+            // POSTFIX, so a tier set at the end of tick N-1 is what runs here).
+            int every = GovernorPatch.EffectiveGraphEvery(cfg.GraphUpdateEveryTicks);
             if (every <= 1) return true; // 1 = vanilla, run every tick (no throttle)
             // UpdateGraphs runs once per UpdateTick invocation, so the shared
             // TickClock index is a valid cadence cursor; id 0 holds the Nth

@@ -10,11 +10,21 @@ namespace EfficientServer
     public class ModApi : IModApi
     {
         public const string HarmonyId = "com.7dtd.efficientserver";
-        // Config and Active are read from the LiteNetLib receive thread
-        // (ClientListSnapshotPatch), so both go out through ConfigPublication, whose
-        // volatile reference carries the release/acquire pair the cross-thread read
-        // needs. A plain auto-property here would leave a reader able to observe the
-        // new reference before the object's fields were visible.
+        // Both of these are the mod's whole read-mostly cross-thread state, and
+        // both are SWAPPED at runtime (InitMod, ReloadConfig) while non-main
+        // threads read them: the LiteNetLib receive thread through
+        // ClientListSnapshotPatch's duplicate-IP scan, the connection writer
+        // through the send path. Plain static fields give no publication
+        // guarantee there - a reader can observe the new Config reference before
+        // the field writes that built it are visible, i.e. a config whose
+        // sections are still null, and `Active` can be observed true before the
+        // config it gates. Volatile makes each write a release, so a reader either
+        // sees the whole previous generation or the whole new one, never a
+        // half-built mix. Config goes out through ConfigPublication, whose
+        // volatile reference carries the release/acquire pair the cross-thread
+        // read needs; `Active` gets the same guarantee from its own volatile
+        // backing field. (Same reasoning, and the same qualifier, for the
+        // dedicated flag resolved in ShouldRun below.)
         public static ServerPerfConfig Config
         {
             get { return ConfigPublication.Current; }

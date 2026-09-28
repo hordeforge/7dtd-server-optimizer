@@ -469,7 +469,9 @@ their defaults, so a fresh install refuses.
 ## Console command (`es`, v1.13.1+)
 
 `es status` prints every active lever value plus a runtime line (governor tier,
-tick EMA, lifetime shed/drop counters from the silent hot-path gates); `es reload`
+tick EMA, the replication/graph cadences actually in force after the governor
+derives them, lifetime shed/drop counters from the silent hot-path gates);
+`es reload`
 re-reads `efficientserver.json` and applies it LIVE (all patches read the config
 object per call - no restart needed). Diagnostics (BENCH ONLY, gameplay breaks while active):
 `es animoff` / `es animon` toggle all enemy animators' culling mode

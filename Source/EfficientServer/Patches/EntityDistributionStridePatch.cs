@@ -22,12 +22,18 @@ namespace EfficientServer.Patches
         static bool Prefix()
         {
             NetworkConfig cfg = ModApi.Config != null ? ModApi.Config.Network : null;
-            if (!ModApi.ShouldRun() || cfg == null || cfg.EntityDistributionEveryTicks <= 1)
+            if (!ModApi.ShouldRun() || cfg == null)
                 return true;
+            // The stride in force: the configured cadence, or the governor's
+            // doubled one while it is throttling. The governor decides in the
+            // UpdateTick POSTFIX, so a tier set at the end of tick N-1 is what
+            // this tick runs at, exactly as when it rewrote the config in place.
+            int stride = GovernorPatch.EffectiveEntityStride(cfg.EntityDistributionEveryTicks);
+            if (stride <= 1) return true;
             // OnUpdateEntities runs once per UpdateTick invocation; id 0 keeps
             // the Nth-run crossing, fail open to vanilla before the clock livers.
             return !TickClock.Alive
-                || TickClock.OwnsSlot(0, TickClock.Ticks, cfg.EntityDistributionEveryTicks);
+                || TickClock.OwnsSlot(0, TickClock.Ticks, stride);
         }
     }
 }
