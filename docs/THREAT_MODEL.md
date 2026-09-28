@@ -17,7 +17,7 @@ patch group, every change to `scripts/install.sh` / `run_server.sh`.
 | R1 | Full-host-authority code runs inside the game server process | Mod to host | By design: a Harmony mod is arbitrary code with the server's privileges. No isolation exists or is possible while it stays a C# mod. Every bug is a server crash or worse, not a sandbox escape |
 | R2 | Unverified build artifact installed over the game tree | Build to runtime | `install.sh` wipes and copies `dist/EfficientServer/` into `Mods/` with no hash or signature check (`scripts/install.sh:17`). Nothing on the install path compares the artifact to a trusted build. Whoever controls `dist/` or the Mods directory controls the server process |
 | R3 | Dangerous operator toggles reachable from any console-level actor, no runtime guard | Console to mod | `es benchgod on` makes ALL players damage-immune server-side; `es animoff` degrades combat; `es rigoff` strips entity rig behaviours. All are one command away for anyone with telnet/console access; the "bench only" restriction is procedural, not enforced |
-| R4 | Config-file self-denial-of-service paths | Filesystem to mod | Partly removed in 2.6.0: the GC megapause probe (`GcMegapauseTest`) was deleted. Residual: gameplay-degrading levers (`Governor.AnimatorEmergency`, `TickGuard`) remain config-enableable |
+| R4 | Config-file self-denial-of-service paths | Filesystem to mod | Partly removed after v1.19.0 (unreleased): the GC megapause probe (`GcMegapauseTest`) was deleted. Residual: gameplay-degrading levers (`Governor.AnimatorEmergency`, `TickGuard`) remain config-enableable |
 | R5 | Inherited telnet exposure | Network to console | Both shipped serverconfig templates enable telnet on port 8082 (`server/serverconfig.optimized.xml:33`, root copy identical); safety depends entirely on the game's loopback-fallback and failed-login limit, not on this repo |
 
 Not risks here: the mod opens no sockets, spawns no processes, stores no
@@ -33,7 +33,7 @@ write APIs under `Source/EfficientServer/`; only config reads,
 | E1 | Mod load into game process (`InitMod`) | `Source/EfficientServer/ModApi.cs:18` | Game loads the DLL at startup and calls `InitMod`; Harmony patches install here per group. Post-start setup registers on the sanctioned `GameStartDone` hook, not a patched game method (`ModApi.cs:85`) |
 | E2 | Config JSON file read | `Source/EfficientServer/Config.cs:301` (`Load`), path resolution `Config.cs:487` | Read once at init and again on every `es reload`. Parsed with Newtonsoft.Json (game-bundled); read pinned to UTF-8 (`Config.cs:310`). No file watcher; disk changes apply only via E3 |
 | E3 | Operator console command `es` / `efficientserver` | `Source/EfficientServer/ConsoleCmdEfficientServer.cs:20` (`Execute`) | Subcommands: `reload`, `status`, `animoff`/`animon`, `animstate`, `rigoff`/`rigon`, `benchgod on\|off`. Reachable from the server terminal, the telnet remote console, and in-game clients the game's permission system admits to console commands |
-| E4 | P/Invoke into bundled Boehm GC library | `Source/EfficientServer/GcIncremental.cs` | `libmonobdwgc-2.0`; flips collector mode and sets the pause limit (the megapause probe P/Invokes were removed in 2.6.0) |
+| E4 | P/Invoke into bundled Boehm GC library | `Source/EfficientServer/GcIncremental.cs` | `libmonobdwgc-2.0`; flips collector mode and sets the pause limit (the megapause probe P/Invokes were removed after v1.19.0, unreleased) |
 | E5 | Install/run scripts | `scripts/install.sh`, `scripts/uninstall.sh`, `scripts/run_server.sh`, `Makefile` (targets `install`, `uninstall`, `run`) | Build, back up user config, wipe and copy artifacts into `<DS>/Mods/EfficientServer/`, export GC/JIT env vars, exec the server binary. `uninstall.sh` copies `Config/` out to a timestamped backup before the same wipe, and `run_server.sh` keeps the `<DS>/serverconfig*.xml` it replaces |
 | E6 | CI workflow | `.github/workflows/ci.yml:5` | Runs `make test` on pushes to main and on PRs |
 
@@ -55,7 +55,7 @@ write APIs under `Source/EfficientServer/`; only config reads,
 | A1 | Server availability and tick latency | The mod's own levers (GC mode, entity shedding, animator culling) can freeze or degrade the tick; a bad patch crashes the process for all players |
 | A2 | Game world and save integrity | `TickGuardPatch` despawns enemies (`Patches/TickGuardPatch.cs:88`); `AnimatorEmergency` degrades combat timing; both alter live world state |
 | A3 | Fair-play integrity | Server runs EAC-off by necessity of loading a C# mod (`docs/FEATURES.md:396`); `benchgod` is aimbot-grade damage immunity for every player while active (`Patches/BenchGodPatch.cs:19`) |
-| A4 | Host RAM and CPU | GC env vars trade RAM for pause length (the heap-growing megapause diagnostic was removed in 2.6.0) |
+| A4 | Host RAM and CPU | GC env vars trade RAM for pause length (the heap-growing megapause diagnostic was removed after v1.19.0, unreleased) |
 | A5 | Trust in the packaged DLL | Anything installed from `dist/` executes with full server authority; tampered artifacts are indistinguishable from releases unless a deployer manually compares the recorded SHA-256 |
 | A6 | Game-owned data in-process | Save games, `serveradmin.xml`, session tokens held by the game are all reachable from mod code because there is no isolation. Not read or written by current mod code, but within blast radius of any code-execution event |
 
@@ -75,13 +75,14 @@ write APIs under `Source/EfficientServer/`; only config reads,
 - Denial of service: config levers can degrade gameplay under load
   (`Governor.AnimatorEmergency` engages itself past `EmergencyOverMs`;
   `TickGuard` despawns entities). The heap-growing GC megapause diagnostic that
-  used to sit here was removed in 2.6.0 (RESULTS.md keeps its evidence). The
+  used to sit here was removed after v1.19.0, unreleased (RESULTS.md keeps its
+  evidence). The
   remaining DoS surface is bounded by clamps but nothing prevents enabling
   gameplay-degrading levers on a live server.
 - Repudiation: corrections and parse failures are logged as WARN with values
-  (`EsLog.Warn`, `EsLog.cs:26`), giving an after-the-fact trail. Reload apply
-  failures are surfaced and rethrown so no success echo covers a partial apply
-  (`ModApi.cs:138`).
+  (`EsLog.Emit(LogLevel.Warn, ...)`, `EsLog.cs:26`), giving an after-the-fact
+  trail. Reload apply failures are surfaced and rethrown so no success echo
+  covers a partial apply (`ModApi.cs:138`).
 
 ### B2: console actor to mod commands
 
@@ -176,7 +177,8 @@ write APIs under `Source/EfficientServer/`; only config reads,
    who sets a weak password or forwards port 8082 inherits full console access,
    and with it every `es` toggle above. This repo's contribution to the fix is
    documentation accuracy, not code.
-3. Diagnostic on production: removed with the megapause probe in 2.6.0.
+3. Diagnostic on production: removed with the megapause probe after v1.19.0
+   (unreleased).
 4. Reload-window drift: an operator edits the config between init and a later
    `es reload`; because the file has no watcher and `reload` re-reads from disk,
    whatever sits in the file at that moment becomes live policy, including

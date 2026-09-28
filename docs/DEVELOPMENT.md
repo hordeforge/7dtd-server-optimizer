@@ -124,9 +124,20 @@ The GitHub release tag numbers the repo release (first cut: `v0.1.0`). The
 mod's own version (`ModInfo.xml`, pinned by `check_version.py` in `make test`)
 tracks the target game baseline and is independent of the release tag. The
 mapping and per-release changes are recorded in
-[`CHANGELOG.md`](../CHANGELOG.md): move `[Unreleased]` items under the new
-version before tagging (`check_version.py` fails if the shipped mod version has
-no changelog entry).
+[`CHANGELOG.md`](../CHANGELOG.md). Releasing is one commit that does all of:
+rename `## [Unreleased]` to `## [<new mod version>] - <today>`, open a fresh
+`## [Unreleased]` above it, and bump `ModInfo.xml` plus `AssemblyInfo.cs` to
+the same version. `check_version.py` (in `make test`) fails when the newest
+release section is not the version the mod reports, when sections are not
+newest-first, and when a section is undated or repeated, so notes and manifest
+cannot be tagged out of sync.
+
+Write entries for the operator, not the maintainer: what changed for a running
+server, and, under `### Breaking`, what a configured key or console command now
+does instead. A removed config key belongs under `### Breaking` with its
+migration step, not only under `### Removed`: config load fails soft, so a
+deleted key still parses and the lever is simply gone with no error to notice
+it by.
 
 ```bash
 make test        # CI gate; also runs on every PR / main push via .github/workflows/ci.yml

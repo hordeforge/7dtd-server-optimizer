@@ -427,8 +427,10 @@ horde.
 ## Diagnostics
 
 The former GC megapause probe (`GcMegapauseTest` + `WarmupSeconds` +
-`GrowSeconds`) was removed in 2.6.0; RESULTS.md keeps the evidence it produced
-(measured 479 ms forced collect at 6.9 GB). Remaining knobs:
+`GrowSeconds`) was removed after v1.19.0 (unreleased); a config that still
+carries those keys parses fine but nothing reads them, so delete them.
+RESULTS.md keeps the evidence the probe produced (measured 479 ms forced
+collect at 6.9 GB). Remaining knobs:
 
 ### `AllowBenchGod` (false) and `AllowFidelityProbes` (false)
 Runtime allow-switches for the bench-only console commands. `AllowBenchGod`

@@ -10,6 +10,9 @@ Checks that:
    drift class where docs referenced a release that never shipped).
 4. CHANGELOG.md exists and mentions the shipped mod version, so a release
    cannot tag without its changelog entry.
+5. The CHANGELOG's released sections parse, run newest-first without repeats,
+   and the newest one is the shipped mod version (a bump with no notes, or
+   notes for a version the manifest does not carry, is caught).
 
 Run: python3 scripts/check_version.py
      python3 scripts/check_version.py --selftest     (both wired into `make test`)
@@ -18,6 +21,7 @@ from __future__ import annotations
 
 import re
 import sys
+from itertools import pairwise
 from pathlib import Path
 
 from repo_root import repo_root
@@ -34,7 +38,8 @@ usage: check_version.py [--selftest] [-h | --help]
 
 Gate: ModInfo.xml, AssemblyInfo.cs and the dist ModInfo must carry consistent
 versions, docs must not claim a version newer than shipped, and CHANGELOG.md
-must mention the shipped version. Wired into `make test`.
+must mention the shipped version in a well-formed, newest-first release
+section list. Wired into `make test`.
   --selftest  exercise the version extraction/normalization logic itself (the
               repo gate above only fails on tree drift; it stays green if this
               script's own matching logic silently breaks)
@@ -49,6 +54,72 @@ def modinfo_version(path: Path) -> str | None:
 
 def norm(v: str) -> tuple[int, ...]:
     return tuple(int(x) for x in v.split("."))
+
+
+# `## [1.19.0] - 2026-09-20` is a released section; `## [Unreleased]` is the
+# staging section; `## Version numbering` is prose above the list. Anything
+# else at that level is not a release record.
+_SECTION_RE = re.compile(
+    r"^## \[(?P<label>[^\]]+)\](?:\s+-\s+(?P<date>\S+))?\s*$", re.MULTILINE
+)
+
+
+def changelog_sections(text: str) -> list[tuple[str, str | None]]:
+    """Every `## [label] - date` section in file order, as (label, date)."""
+    return [(m.group("label"), m.group("date")) for m in _SECTION_RE.finditer(text)]
+
+
+def released_sections(text: str) -> list[tuple[str, str | None]]:
+    """Version-numbered sections in file order, dropping `[Unreleased]`."""
+    return [
+        (label, date)
+        for label, date in changelog_sections(text)
+        if re.fullmatch(r"[0-9]+(?:\.[0-9]+)+", label)
+    ]
+
+
+def _changelog_fails(text: str, shipped: str) -> list[str]:
+    """Structure of the release list against the version the mod reports.
+
+    A release bump moves ModInfo and adds a dated section in the same commit;
+    anything else leaves the notes and the shipped version disagreeing about
+    what shipped, which is the drift this gate exists to stop.
+    """
+    fails: list[str] = []
+    released = released_sections(text)
+    if not released:
+        return ["CHANGELOG.md has no `## [X.Y.Z] - date` release section"]
+
+    seen: list[tuple[int, ...]] = []
+    for label, date in released:
+        if not date:
+            fails.append(f"CHANGELOG.md section [{label}] has no release date")
+        if not re.fullmatch(r"[0-9]+(?:\.[0-9]+)+", label):
+            fails.append(f"CHANGELOG.md section [{label}] is not a version number")
+            continue
+        version = norm(label)
+        if version in seen:
+            fails.append(f"CHANGELOG.md repeats release section [{label}]")
+        seen.append(version)
+
+    # Newest first: every section must be a strictly lower version than the
+    # one above it.
+    for above, below in pairwise(seen):
+        if above <= below:
+            fails.append(
+                "CHANGELOG.md release sections are not newest-first "
+                f"({'.'.join(str(p) for p in below)} above "
+                f"{'.'.join(str(p) for p in above)})"
+            )
+            break
+
+    newest = norm(released[0][0])
+    if newest != norm(shipped):
+        fails.append(
+            f"CHANGELOG.md newest release section is [{released[0][0]}], "
+            f"but the mod reports {shipped}"
+        )
+    return fails
 
 
 def _selftest() -> int:
@@ -98,6 +169,52 @@ def _selftest() -> int:
     check(
         "norm exposes a real version mismatch",
         norm(other_mi) != norm(other_asm)[: len(norm(other_mi))],
+    )
+
+    # The release-list gate, on synthetic changelogs: the repo gate above only
+    # fails on tree drift, so a broken section regex would stay green here.
+    good = (
+        "## Version numbering\n\nprose\n\n"
+        "## [Unreleased]\n\n### Added\n- thing\n\n"
+        "## [1.19.0] - 2026-09-20\n\n### Fixed\n- thing\n\n"
+        "## [1.18.0] - 2026-09-11\n\n### Fixed\n- thing\n"
+    )
+    check(
+        "_changelog_fails accepts a well-formed newest-first list",
+        _changelog_fails(good, "1.19.0") == [],
+    )
+    check(
+        "released_sections drops Unreleased and prose headings",
+        [label for label, _ in released_sections(good)] == ["1.19.0", "1.18.0"],
+    )
+    # A version bump that never reached the notes: manifest ahead of the list.
+    check(
+        "_changelog_fails catches a manifest bump with no release section",
+        any("1.20.0" in f for f in _changelog_fails(good, "1.20.0")),
+    )
+    # Notes for a release the manifest does not carry.
+    check(
+        "_changelog_fails catches notes ahead of the manifest",
+        any("1.19.0" in f for f in _changelog_fails(good, "1.18.0")),
+    )
+    undated = "## [1.19.0]\n\n### Fixed\n- thing\n"
+    check(
+        "_changelog_fails rejects an undated release section",
+        any("no release date" in f for f in _changelog_fails(undated, "1.19.0")),
+    )
+    repeated = "## [1.19.0] - 2026-09-20\n\nx\n\n## [1.19.0] - 2026-09-19\n\nx\n"
+    check(
+        "_changelog_fails rejects a repeated release section",
+        any("repeats" in f for f in _changelog_fails(repeated, "1.19.0")),
+    )
+    ascending = "## [1.18.0] - 2026-09-11\n\nx\n\n## [1.19.0] - 2026-09-20\n\nx\n"
+    check(
+        "_changelog_fails rejects an oldest-first list",
+        any("newest-first" in f for f in _changelog_fails(ascending, "1.19.0")),
+    )
+    check(
+        "_changelog_fails rejects a changelog with no release section",
+        _changelog_fails("## [Unreleased]\n\n- thing\n", "1.19.0") != [],
     )
 
     if failures:
@@ -156,6 +273,8 @@ def main() -> int:
     changelog_src = read_or(CHANGELOG) if CHANGELOG.exists() else None
     if mi and (changelog_src is None or mi not in changelog_src):
         fails.append(f"CHANGELOG.md missing or has no entry for shipped mod version {mi}")
+    if mi and changelog_src is not None:
+        fails.extend(_changelog_fails(changelog_src, mi))
 
     if fails:
         print("FAIL:", file=sys.stderr)

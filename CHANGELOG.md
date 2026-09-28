@@ -25,6 +25,18 @@ So `EfficientServer-0.1.0.zip` logging `mod=1.17.0` is correct, not drift.
 
 ## [Unreleased]
 
+### Breaking
+- The opt-in GC megapause diagnostic is gone: `Diagnostics.GcMegapauseTest`,
+  `Diagnostics.WarmupSeconds` and `Diagnostics.GrowSeconds` no longer exist,
+  and `GcDiagnostics` (the background thread that disabled the collector, grew
+  the heap and timed one forced `GC_gcollect`) is deleted with them. A config
+  still carrying those keys keeps them on disk, but nothing reads them: the
+  probe is simply never armed, so delete them. Nothing else consumed the
+  removal: the production GC path is `Gc.Incremental` plus the `Gc` safety
+  ceiling, both untouched. The measurement the probe produced (479 ms forced
+  collect on a 6.91 GB heap) stays in `docs/RESULTS.md`; the shipped lever it
+  informed is the allocation work it argued for.
+
 ### Added
 - `Diagnostics.AllowFidelityProbes` (default false) gates the console arms of
   the fidelity probes: `es animoff` (every enemy animator culled, timer-only
@@ -33,6 +45,32 @@ So `EfficientServer-0.1.0.zip` logging `mod=1.17.0` is correct, not drift.
   existing `es benchgod on` gate. The restore commands (`es animon`,
   `es rigon`) and `es animstate` stay ungated. `es status` shows the switch as
   `probeAllow=`.
+
+### Fixed
+- `es status` reported `tickEmaMs` as a live number even with the governor
+  disabled, where no tick was ever sampled and the EMA just holds its 50 ms
+  seed. A server at 3 TPS read as a healthy idle tick. The field now prints
+  `n/a` whenever the governor is off or the mod is inactive, so a number in
+  that line always means something is measuring it.
+- The GC safety guard suppressed its forced collect when the ceiling could not
+  be resolved (host RAM unreadable) without saying so, leaving a long-lived
+  server free to grow unbounded with no log. The unresolvable case now warns
+  once; the recurring "heap above ceiling" warning is unchanged.
+- A tick-guard shed that fired but was withheld (no world, no players, or
+  living enemies at or below `TickGuard.MinEnemiesKept`) was silent, so an
+  operator could not tell "never triggered" from "triggered and did nothing".
+  Each suppression logs on the same WARNING channel with its reason, the tick
+  EMA, and the lifetime shed count.
+- `Gc.Incremental` was marked applied before the mode flip ran, so a host whose
+  Boehm entry point was missing reported a mode flip that never happened and
+  never retried it. The one-shot guard is now set only after `GC_enable_incremental`
+  lands, a failed pause-target P/Invoke warns on its own instead of failing the
+  whole apply, and `es reload` retries a flip that did not take.
+- Governor tier 2 saved enemy animator culling modes by Unity instance ID only.
+  Unity recycles those IDs after a destroy, so a newly spawned rig could inherit
+  a dead rig's saved mode and have it restored on exit. Each entry now carries
+  the rig it was read from and is dropped at the next sweep when the live rig no
+  longer owns the ID.
 
 ### Changed
 - The governor throttle-ceiling constants (`EntityStrideMax`, `GraphUpdateMax`)
