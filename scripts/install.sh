@@ -56,6 +56,19 @@ for _var in SEVENDTD_DS_DIR DS; do
   fi
 done
 unset _var
+# Same failure mode uninstall.sh guards: an install dir that is empty, "/", or
+# a run of whitespace resolves the target below to "/Mods/EfficientServer", and
+# the rm -rf fires on a path at the filesystem root rather than on a dedicated
+# install the operator named. Unlike uninstall.sh this script cannot require
+# 7DaysToDieServer_Data/ to be present, because staging an install for another
+# host is a supported use (the Harmony check below only warns), so the guard
+# stops at the paths that are never a valid target.
+SRV="${SRV#"${SRV%%[![:space:]]*}"}"
+SRV="${SRV%"${SRV##*[![:space:]]}"}"
+if [[ -z "$SRV" || "$SRV" == "/" ]]; then
+  echo "ERROR: install dir is empty or the filesystem root: pass DS=\"/path/to/7 Days to Die Dedicated Server\"." >&2
+  exit 1
+fi
 
 # Back up on disk, never the stock /tmp: it is tmpfs on most Linux hosts, and
 # after a failed install that copy is the only place the operator's tuning

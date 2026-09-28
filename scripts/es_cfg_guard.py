@@ -36,6 +36,7 @@ from __future__ import annotations
 import json
 import os
 import random
+import stat
 import sys
 from collections.abc import Callable, Sequence
 from pathlib import Path
@@ -54,8 +55,20 @@ CFG_ENCODING = "utf-8-sig"
 
 STALE_SUFFIX = ".stale"
 # Marker write_atomic puts between a file name and its writer's pid, so a
-# temp stranded by a killed run is attributable to that run.
+# temp stranded by a killed run is attributable to that run. The pid is
+# followed by an attempt counter; _temp_owner parses both halves.
 TEMP_INFIX = ".tmp"
+# How many temp names one write may try before giving up. Each attempt is a
+# name this call did not create yet, so exhausting them means something is
+# squatting on every name (see _write_atomic), which is a fail-loud condition.
+TEMP_ATTEMPTS = 8
+
+
+def _temp_owner(name: str, base_name: str) -> str:
+    """The pid that wrote temp ``name`` of ``base_name``, or "" when unparseable."""
+    tail = name[len(base_name) + len(TEMP_INFIX) :]
+    owner = tail.split("_", 1)[0]
+    return owner if owner.isdigit() else ""
 
 USAGE = """\
 usage: scripts/es_cfg_guard.py [--selftest] [-h | --help]
@@ -79,9 +92,37 @@ def _canonical(doc: dict[str, object]) -> str:
 
 
 def _write_atomic(path: Path, data: bytes) -> None:
-    tmp = path.with_name(path.name + f"{TEMP_INFIX}{os.getpid()}")
+    # The temp name is fully predictable (base name, this process's pid, a
+    # counter), and it lands in the LIVE install directory, so anything else on
+    # the host can pre-plant that name before this call runs. O_CREAT|O_EXCL
+    # fails on an existing entry instead of following it, so a pre-planted
+    # symlink cannot redirect the write to a file this process can write but
+    # does not own: each attempt takes the next counter, and exhausting them
+    # raises rather than picking a name someone else owns.
+    tmp: Path | None = None
+    fd = -1
+    for attempt in range(TEMP_ATTEMPTS):
+        candidate = path.with_name(f"{path.name}{TEMP_INFIX}{os.getpid()}_{attempt}")
+        try:
+            fd = os.open(candidate, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        except FileExistsError:
+            continue
+        tmp = candidate
+        break
+    else:
+        msg = f"every atomic-write temp name for {path} is taken; refusing to write"
+        raise FileExistsError(msg)
     try:
-        tmp.write_bytes(data)
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(data)
+        # Carry the live file's own permissions over, so an operator who
+        # tightened them (or a umask that made the original 0600) does not get
+        # a silently widened file; a target that does not exist yet keeps the
+        # owner-only mode the temp was created with.
+        try:
+            os.chmod(tmp, stat.S_IMODE(path.stat().st_mode))
+        except OSError:
+            pass
         os.replace(tmp, path)
     except BaseException:
         # The temp file is this call's only copy of the data until the rename
@@ -192,19 +233,22 @@ class ConfigSwap:
     def _sweep_abandoned_temps(self) -> None:
         """Delete the atomic-write temp files killed runs stranded beside the config.
 
-        ``write_atomic`` names its temp ``<file>.tmp<pid>`` and renames it into
-        place, so a run SIGKILLed (or power-cut) between the write and the
-        rename leaves one file per killed run in the LIVE install directory,
+        ``write_atomic`` names its temp ``<file>.tmp<pid>_<attempt>`` and renames
+        it into place, so a run SIGKILLed (or power-cut) between the write and
+        the rename leaves one file per killed run in the LIVE install directory,
         under a name nothing in the protocol ever matches again. These runs are
         routinely killed by tool timeouts, so a bench host accumulates them
         without bound. A temp whose owning pid is gone cannot be an in-flight
         write, so it is garbage; one whose pid is still running (a concurrent
-        harness, or a recycled pid) is left alone.
+        harness, or a recycled pid) is left alone. The pid is the whole
+        attributable identity: only that decides liveness, never the attempt
+        counter, and a name with no leading pid is not a temp of this protocol
+        at all and is left untouched.
         """
         for base in (self.cfg, self.bak):
             for tmp in base.parent.glob(f"{base.name}{TEMP_INFIX}*"):
-                owner = tmp.name[len(base.name) + len(TEMP_INFIX) :]
-                if not owner.isdigit():
+                owner = _temp_owner(tmp.name, base.name)
+                if not owner:
                     continue
                 try:
                     os.kill(int(owner), 0)
@@ -1012,6 +1056,43 @@ def _selftest() -> int:
         s10.restore()
         live_tmp.unlink()
         not_a_temp.unlink()
+
+        # 14b. The temp name carries an attempt counter after the pid, so the
+        # sweep must read the pid off the front of the name and not treat the
+        # whole suffix as one unparseable token.
+        s10b = mk()
+        dead_numbered = root / f"{cfg.name}{TEMP_INFIX}{dead_pid}_3"
+        live_numbered = root / f"{cfg.name}{TEMP_INFIX}{os.getppid()}_3"
+        for stray in (dead_numbered, live_numbered):
+            stray.write_text("{}", encoding="utf-8")
+        cfg.write_text(json.dumps(original, indent=2) + "\n", encoding="utf-8")
+        s10b.begin()
+        t.check("counter-suffixed temp of a dead run is swept", not dead_numbered.exists())
+        t.check("counter-suffixed temp of a live pid is kept", live_numbered.is_file())
+        s10b.restore()
+        live_numbered.unlink()
+
+        # 14c. The temp name is predictable, so anything else on the host can
+        # squat it first. A pre-planted symlink must not redirect the write
+        # (O_EXCL refuses the name and the next attempt takes it), and the
+        # squatting name itself is not this call's to delete.
+        s10c = mk()
+        s10c.recover()
+        victim = root / "victim.json"
+        victim.write_text("untouched", encoding="utf-8")
+        squat = root / f"{cfg.name}{TEMP_INFIX}{os.getpid()}_0"
+        squat.symlink_to(victim)
+        write_atomic(cfg, json.dumps(original, indent=2) + "\n")
+        t.check(
+            "a pre-planted symlink at the temp name is not followed",
+            victim.read_text(encoding="utf-8") == "untouched",
+        )
+        t.check(
+            "the write lands on the live file anyway",
+            _canonical(_read_doc(cfg)) == _canonical(original),
+        )
+        t.check("the squatting entry is left in place", squat.is_symlink())
+        squat.unlink()
 
         # 15. TWO QUARANTINES must both leave evidence. A bench host that keeps
         # hitting a damaged config quarantines on every run, and a fixed
