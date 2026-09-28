@@ -69,7 +69,12 @@ OUT_DIR = Path(os.environ.get("VALIDATE_OUT", str(OPT_ROOT / "server" / "logs"))
 
 
 def log(msg: str) -> None:
-    print(f"[{time.strftime('%H:%M:%S')}] {msg}", flush=True)
+    # UTC, like every other artifact this repo stamps (report names, backup
+    # dirs, run_server.sh's server log). A local stamp repeats its whole hour at
+    # every DST fall-back, so an A/B pair that straddles the transition prints
+    # 02:47 twice, an hour apart, and the console timeline no longer orders
+    # against the UTC-named report the run writes at the end.
+    print(f"[{time.strftime('%H:%M:%S', time.gmtime())}] {msg}", flush=True)
 
 
 # argv substrings, as they appear in /proc/<pid>/cmdline, of the two long-lived
