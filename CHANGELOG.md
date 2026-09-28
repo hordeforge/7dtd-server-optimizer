@@ -67,8 +67,19 @@ version 1.17.0; every release after them takes its number from the tag.
   same-second `_N` counter sorted bytewise (`..._101500_10` before
   `..._101500_9`) and `--keep` could prune the newest snapshot as the oldest
   once a second held ten or more copies. Ordering is now the parsed stamp plus
-  the counter, and the selftest runs on a fixed clock instead of wall time,
-  which had made `make test` fail on roughly one run in three.
+  the counter, and the same-second suffix is zero-padded to the same width.
+  The selftest runs on a fixed clock instead of wall time, which had made
+  `make test` fail on roughly one run in three.
+- A console-armed bench probe outlived the config that allowed it. `es
+  benchgod on` sets a process latch, so a bench harness killed before its own
+  `es benchgod off` (or an operator setting `Diagnostics.AllowBenchGod` back to
+  false) left every player damage-immune on a live server, and an armed
+  `es animoff` / `es rigoff` kept enemy combat timing and rig visuals degraded
+  after `Diagnostics.AllowFidelityProbes` was taken back. The damage-immunity
+  prefix now re-checks the live allow-switch on every hit, and `es reload`
+  clears the benchgod latch and releases an armed animator/rig probe when the
+  reloaded config no longer allows it. Repeats are no-ops, so a second reload
+  changes nothing.
 - `scripts/install.sh` ignored the `DS=` spelling it documents: only
   `SEVENDTD_DS_DIR` resolved the target, so `DS=/path scripts/install.sh` fell
   through to the stock Steam path and installed (and `rm -rf`'d the mod folder

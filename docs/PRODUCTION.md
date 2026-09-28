@@ -158,7 +158,10 @@ make backup-config ES_CONFIG_BACKUP_DEST=/mnt/backup/es-config
 Each run writes a UTC-stamped copy of `Config/efficientserver.json` plus a
 manifest recording its sha256, keeps the newest `--keep` (default 14), and
 re-reads the copy back before reporting success: a snapshot that would not load
-is a failed run, not a backup. The destination must be off this install tree
+is a failed run, not a backup. A retry inside the same second adds a
+suffix-numbered snapshot rather than replacing the earlier one, and retention
+counts by creation order, so a rerun never deletes the snapshot it just took.
+The destination must be off this install tree
 (the tool refuses it), so a lost disk cannot take the copy with the config.
 
 Verify on a schedule; this is the sample-restore drill, and it exits 1 on a

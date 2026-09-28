@@ -315,12 +315,47 @@ namespace EfficientServer
             }
             else
             {
-                int restored = 0;
-                for (int i = 0; i < _rigDisabled.Count; i++)
-                    if (_rigDisabled[i] != null) { _rigDisabled[i].enabled = true; restored++; }
-                _rigDisabled.Clear();
+                int restored = RestoreRigProbe();
                 Output($"rigprobe: restored {restored} components");
             }
+        }
+
+        // Re-enable every tracked rig component and forget the tracking.
+        // Returns the number actually re-enabled (destroyed wrappers are skipped
+        // and still dropped, so the table cannot accumulate dead entries).
+        // A call with nothing tracked is a no-op, which is what makes a second
+        // `es rigon` and the config-driven release below the same operation.
+        static int RestoreRigProbe()
+        {
+            int restored = 0;
+            for (int i = 0; i < _rigDisabled.Count; i++)
+                if (_rigDisabled[i] != null) { _rigDisabled[i].enabled = true; restored++; }
+            _rigDisabled.Clear();
+            return restored;
+        }
+
+        /// <summary>
+        /// Undo both fidelity-degrading probes (animator emergency, rig sweep) that
+        /// are armed right now; return how many were released.
+        ///
+        /// Both are process latches, so restoring
+        /// <c>Diagnostics.AllowFidelityProbes</c> in the config and reloading has to
+        /// release them: the restore path of a killed bench harness, or of an
+        /// operator taking the opt-in back, must not leave enemy combat timing and
+        /// rig visuals degraded on a live server with no knob showing why. Each
+        /// release is a no-op when nothing is armed, so repeated reloads converge
+        /// instead of logging (and re-restoring) every time.
+        /// </summary>
+        public static int ReleaseArmedProbes()
+        {
+            int released = 0;
+            if (Patches.AnimatorEmergency.Active && Patches.AnimatorEmergency.Exit()) released++;
+            if (_rigDisabled.Count > 0)
+            {
+                RestoreRigProbe();
+                released++;
+            }
+            return released;
         }
 
         static void BenchGod(List<string> _params)

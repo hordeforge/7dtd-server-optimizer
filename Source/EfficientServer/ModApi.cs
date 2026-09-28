@@ -141,6 +141,21 @@ namespace EfficientServer
                 return false;
             }
             Config = loaded;
+            // A probe armed through the console is process state, not config state:
+            // it outlives the config edit that armed it, and a bench harness that
+            // was killed before its own restore (or an operator taking the opt-in
+            // back) leaves players damage-immune / enemy rigs culled with no knob
+            // explaining it. Releasing here makes the reload that re-reads the
+            // allow-switches the same undo, and both releases are no-ops when
+            // nothing is armed, so a repeated reload converges.
+            if (!ServerPerfConfig.BenchGodArmAllowed(Config))
+                Patches.BenchGodPatch.BenchGod = false;
+            if (!ServerPerfConfig.FidelityProbeArmAllowed(Config)
+                && ConsoleCmdEfficientServer.ReleaseArmedProbes() > 0)
+            {
+                EsLog.Emit(LogLevel.Warn, "config reloaded without Diagnostics.AllowFidelityProbes: "
+                    + "armed animator/rig probes released");
+            }
             try
             {
                 // The governor holds state derived from the PREVIOUS config object

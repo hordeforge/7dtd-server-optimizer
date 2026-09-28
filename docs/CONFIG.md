@@ -471,6 +471,12 @@ not enough to make every player immortal or to degrade enemy combat timing on
 a live server. The flags are independent, and the restore commands
 (`es benchgod off`, `es animon`, `es rigon`) plus the read-only
 `es animstate` are never gated, so an armed probe can always be walked back.
+An armed probe is process state and outlives the config that allowed it, so
+`es reload` closes that gap: with `AllowBenchGod` false it clears the latch,
+and with `AllowFidelityProbes` false it releases an armed animator/rig probe
+(the damage-immunity prefix also re-checks its allow-switch on every hit).
+Both releases are no-ops when nothing is armed, so a repeated reload changes
+nothing.
 `es status` shows the switches as `benchgodAllow=` and `probeAllow=`. The
 shipped template omits the whole Diagnostics group on purpose: absent keys keep
 their defaults, so a fresh install refuses.
@@ -524,4 +530,7 @@ synthetic bench bots survive endgame hordes and the load stays an active siege
 additionally requires `Diagnostics.AllowBenchGod: true` (see above); without it
 the command refuses and logs. Arming `es animoff` / `es rigoff` likewise
 requires `Diagnostics.AllowFidelityProbes: true`; the restore commands stay
-ungated.
+ungated. Taking either allow-switch back in the config and running
+`es reload` is itself a restore: the armed benchgod / animator / rig probe is
+released, so a run that was killed before its own cleanup cannot leave a
+degraded server behind.

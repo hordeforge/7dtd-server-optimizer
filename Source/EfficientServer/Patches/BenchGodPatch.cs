@@ -20,7 +20,17 @@ namespace EfficientServer.Patches
         {
             // Same gate as every other patch: DedicatedOnly must hold even for the
             // bench flag, so a client host cannot toggle itself damage-immune.
-            if (!ModApi.ShouldRun() || !BenchGod) return true;
+            //
+            // The arm is DERIVED from the live config, not only from the latch: the
+            // flag is process state that survives a config restore, so a bench
+            // harness killed before its `es benchgod off` (or an operator who
+            // turns Diagnostics.AllowBenchGod back to false) left every player
+            // damage-immune on a live server with no knob explaining it. Re-reading
+            // the allow-switch here makes the damage-immunity stop as soon as the
+            // config that armed it stops allowing it, and costs one field read on
+            // a path that already reads the config.
+            if (!ModApi.ShouldRun() || !BenchGod
+                || !ServerPerfConfig.BenchGodArmAllowed(ModApi.Config)) return true;
             __result = 0;
             return false;
         }

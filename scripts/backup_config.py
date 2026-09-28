@@ -33,7 +33,7 @@ import os
 import re
 import shutil
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import TypedDict
 
@@ -53,6 +53,9 @@ STAMP_FORMAT = "%Y%m%d_%H%M%S"
 # A snapshot dir is the stamp, plus "_N" for the Nth copy taken inside that
 # second. Both halves are parsed for ordering; see _snapshot_order.
 _SNAPSHOT_NAME = re.compile(r"(\d{8}_\d{6})(?:_(\d+))?")
+# Width of the same-second collision suffix, so directory names sort in
+# creation order (see snapshot's suffix loop and snapshot_dirs).
+STAMP_SUFFIX_DIGITS = 3
 
 # The game's own reader (Config.Load) decodes the config as UTF-8 with a leading
 # BOM tolerated, so a BOM is a legal config here too; utf-8-sig is a strict
@@ -186,7 +189,11 @@ def snapshot(
     target = dest / stamp
     n = 1
     while target.exists():
-        target = dest / f"{stamp}_{n}"
+        # Zero-padded so snapshot_dirs' "the UTC stamp sorts chronologically"
+        # holds for same-second snapshots too: bare `_2`, `_10` sort as
+        # text, and prune would then keep an OLDER snapshot and delete a newer
+        # one, which is the exact loss a rerun must not cause.
+        target = dest / f"{stamp}_{n:0{STAMP_SUFFIX_DIGITS}d}"
         n += 1
     target.mkdir(parents=True)
     manifest: Manifest = {
@@ -366,6 +373,10 @@ def _selftest() -> int:
     import tempfile
 
     t = Checks("backup_config")
+    # Fixed clock base: every snapshot in this self-test names itself from an
+    # explicit instant, so no assertion below can hinge on a wall-clock second
+    # boundary the test happens to straddle.
+    t0 = datetime(2026, 9, 28, 12, 0, 0, tzinfo=timezone.utc)
 
     def make_tree(td: Path) -> tuple[Path, Path]:
         srv = td / "server"
@@ -394,11 +405,9 @@ def _selftest() -> int:
         except BackupError:
             t.check("fails loud on a missing live config", True)
 
-        # Fixed clock: the ordering checks below depend on which stamp a
-        # snapshot got, so wall-clock time would make them pass or fail
-        # depending on where the run crossed a second boundary.
-        t0 = datetime(2026, 9, 28, 10, 15, 0, tzinfo=timezone.utc)
-        t1 = datetime(2026, 9, 28, 10, 15, 1, tzinfo=timezone.utc)
+        # Second fixed instant, one after t0, so the retention checks below
+        # order a stamp across a second boundary without a live clock.
+        t1 = t0 + timedelta(seconds=1)
 
         first, _ = snapshot(srv, dest, now=t0)
         t.check(
@@ -437,6 +446,22 @@ def _selftest() -> int:
             _snapshot_order("20260928_101500_10") > _snapshot_order("20260928_101500_9")
             and sorted(["20260928_101500_10", "20260928_101500_9"], key=_snapshot_order)
             == ["20260928_101500_9", "20260928_101500_10"],
+        )
+
+        # The same inversion through the real suffix loop: a second holding more
+        # than ten snapshots is where a text-sorting suffix breaks (`_2` sorts
+        # after `_10`), so prune would keep an older snapshot and delete the
+        # newest, the one a rerun just took.
+        crowd = td / "crowded"
+        made = [snapshot(srv, crowd, now=t0)[0] for _ in range(12)]
+        t.check(
+            "same-second snapshots stay in creation order",
+            [p.name for p in snapshot_dirs(crowd)] == [p.name for p in made],
+        )
+        prune(crowd, 1)
+        t.check(
+            "prune of a crowded second keeps the newest",
+            [p.name for p in snapshot_dirs(crowd)] == [made[-1].name],
         )
 
         # Corruption is the disaster this catches, so it must be detected.
