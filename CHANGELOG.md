@@ -52,6 +52,26 @@ chosen up front:
 ## [Unreleased]
 
 ### Fixed
+- A retry of `make install` after a FAILED install no longer loses the operator's
+  config. The preserved `Config/` went to a `mktemp` name that only the failure
+  message named, so the next run found an install tree whose config the failed
+  run's `rm -rf` had already destroyed, installed the shipped default over it,
+  and left the tuning in a directory nothing read again. The copy now goes to a
+  fixed path (`SEVENDTD_INSTALL_BACKUP_DIR`, default
+  `<DS>/EfficientServer-install-backup`, overridable and warned about when it
+  sits inside the install tree like the uninstall backup is), and a run that
+  finds one adopts it instead of overwriting it. A successful install removes
+  it. A live config that differs from both the shipped default and the
+  preserved copy is an edit made after the failure and still wins, with a NOTE
+  naming which copy the install kept.
+- Quarantined `.stale` config backups no longer accumulate without bound beside
+  the installed `Config/`. The quarantine name is suffix-resolved so a repeat
+  never destroys the previous run's evidence, which meant a bench loop that
+  kept hitting a damaged config wrote one more file per run forever, in the
+  directory the game reads at boot and `install.sh` copies verbatim on every
+  reinstall. The newest `STALE_KEEP` (5) are kept, older ones pruned; count, not
+  age, because a burst of kills inside one bench session is exactly when the
+  history is wanted.
 - `scripts/bench_parse.py --selftest` no longer fails on a loaded host. The fuzz
   gate asserted its 4000 rounds finished inside a fixed 30s wall-clock budget,
   which grades the machine rather than the parser: the same run took 49.3s here

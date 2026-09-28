@@ -67,6 +67,13 @@ TEMP_INFIX = ".tmp"
 # name this call did not create yet, so exhausting them means something is
 # squatting on every name (see _write_atomic), which is a fail-loud condition.
 TEMP_ATTEMPTS = 8
+# How many quarantined (`.stale`) backups of one config are kept beside it. The
+# quarantine name is suffix-resolved so a repeat never destroys the previous
+# run's evidence, which without a bound means the LIVE install directory grows
+# one file per killed harness run forever (see ConfigSwap._prune_quarantines).
+# A handful covers the burst a single bench session produces; the point is that
+# the count is finite, not that it is large.
+STALE_KEEP = 5
 
 
 # A pid as it appears in a temp name: plain ASCII digits, and few enough of them
@@ -316,6 +323,54 @@ class ConfigSwap:
         self._log(
             f"config guard: leftover backup {self.bak.name} is stale ({why}); "
             f"kept as evidence at {stale.name}, live file NOT touched"
+        )
+        self._prune_quarantines()
+
+    def _prune_quarantines(self) -> None:
+        """Keep only the newest STALE_KEEP quarantines of this config.
+
+        The quarantine name is suffix-resolved, so a bench loop that keeps
+        hitting damaged state writes one `.stale` per run and NOTHING ever
+        removes them: they pile up in the LIVE install directory, which the
+        game reads on every boot and install.sh preserves verbatim on every
+        reinstall. The evidence a run needs is the most recent few (which
+        config was live when the divergence appeared); older ones cannot
+        describe a state any later run can still be compared against, because
+        the config has moved on since.
+
+        Bounded by count, not age: a burst of kills inside one bench session is
+        exactly when the operator wants the history, and it is the NEXT session
+        that has no use for it. Ordered by mtime with the name as the tie-break,
+        so the newest rename wins the tie on a coarse-mtime filesystem.
+        """
+        parent = self.bak.parent
+        found: list[tuple[float, str, Path]] = []
+        for path in parent.glob(self.bak.name + "*" + STALE_SUFFIX):
+            if not path.is_file():
+                continue
+            try:
+                found.append((path.stat().st_mtime, path.name, path))
+            except OSError:
+                continue  # swept out from under this scan
+        if len(found) <= STALE_KEEP:
+            return
+        found.sort(key=lambda row: (row[0], row[1]))
+        doomed = found[: len(found) - STALE_KEEP]
+        # One boundary around the whole drop, not one per file: a file already
+        # gone is not a failure of the sweep, and naming every one of them would
+        # bury the count that matters.
+        try:
+            for _mtime, _name, path in doomed:
+                path.unlink(missing_ok=True)
+        except OSError as ex:
+            self._log(
+                f"config guard: pruning old quarantined backups for {self.bak.name}"
+                f" stopped early ({ex}); the rest are still on disk"
+            )
+            return
+        self._log(
+            f"config guard: pruned up to {len(doomed)} quarantined backup(s) beyond"
+            f" the newest {STALE_KEEP} for {self.bak.name}"
         )
 
     def recover(self) -> None:
@@ -1203,7 +1258,32 @@ def _selftest() -> int:
             len(stales_a) == 1 and len(stales_b) == 2 and stales_a[0] in stales_b,
         )
         t.check("second quarantine consumed its own backup", not s11.bak.exists())
-        for name in stales_b:
+
+        # The bound: the suffix above makes the sequence grow without limit, and
+        # a bench host that keeps hitting a damaged config quarantines on every
+        # run, so the LIVE install directory accumulated one file per killed run
+        # forever (and install.sh preserves them all on every reinstall). Only the
+        # newest few describe a state any later run can be compared against.
+        s12 = mk()
+        for i in range(STALE_KEEP + 3):
+            s12.bak.write_text(f"{{ truncated {i}", encoding="utf-8")
+            s12.recover()
+        kept = sorted(p.name for p in root.glob(s12.bak.name + "*" + STALE_SUFFIX))
+        bodies = {(root / name).read_text(encoding="utf-8") for name in kept}
+        t.check(
+            "quarantines are bounded, not one per run forever",
+            len(kept) == STALE_KEEP,
+        )
+        # Newest kept, oldest dropped: the operator's evidence after a burst of
+        # kills is the recent one, and a count bound that kept the OLDEST
+        # would satisfy the length check above while being useless.
+        last = STALE_KEEP + 2
+        t.check(
+            "the newest quarantines are the ones kept",
+            f"{{ truncated {last}" in bodies and "{ truncated 0" not in bodies,
+        )
+        t.check("the bounded prune consumed its own backup", not s12.bak.exists())
+        for name in kept:
             (root / name).unlink()
 
     # 16. THE WHOLE PROTOCOL, RUN TWICE, MUST CONVERGE. Everything above

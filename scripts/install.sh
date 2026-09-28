@@ -17,6 +17,10 @@ Environment:
   SEVENDTD_DS_DIR / DS  dedicated install root (SEVENDTD_DS_DIR wins, then DS,
                        then the stock Steam path); the mod is installed into
                        $SEVENDTD_DS_DIR/Mods/EfficientServer
+  SEVENDTD_INSTALL_BACKUP_DIR
+                       where a FAILED install's preserved Config/ lives
+                       (default: <DS>/EfficientServer-install-backup). Outside
+                       Mods/ so the game's mod scan never sees it
 EOF
 }
 
@@ -115,25 +119,95 @@ fi
 # .stale files are the only crash-recovery snapshot of a config a killed bench
 # run left half-swapped, and nothing regenerates them. Same rule uninstall.sh
 # applies, and the RPO claim in docs/PRODUCTION.md depends on it.
+#
+# The copy is taken to a STABLE path, not a mktemp name, because a failed
+# install must be recoverable by simply running the script again. A temp name
+# is only recoverable if the operator transcribes it out of the log, and the
+# rm -rf below has already destroyed the installed config by the time the
+# failure is reported: a retry found no Config/ to preserve, installed the
+# shipped default, and the operator's tuning was left in a directory nothing
+# ever reads again. The preserved dir exists only between a failure and the
+# retry that consumes it, so it needs no retention window.
+PRESERVED="${SEVENDTD_INSTALL_BACKUP_DIR:-$SRV/EfficientServer-install-backup}"
 BACKUP=""
 INSTALL_OK=0
-# Success consumes the backup copy; a FAILED install must keep it. The rm -rf
-# below has already destroyed the installed config by then, so the temp copy
-# is the only place the operator's tuning still exists.
+# Success consumes the backup copy; a FAILED install must keep it, at a path
+# the next run looks in.
 finish() {
-  if [[ -n "$BACKUP" ]]; then
-    if [[ "$INSTALL_OK" == 1 ]]; then
-      rm -rf "$BACKUP"
-    else
-      echo "WARNING: install failed; your previous EfficientServer Config/ was preserved at $BACKUP" >&2
-    fi
+  if [[ -z "$BACKUP" ]]; then
+    return
+  fi
+  if [[ "$INSTALL_OK" == 1 ]]; then
+    rm -rf "$BACKUP"
+    # A Config/ a still-failed earlier run preserved, now superseded by a
+    # successful install of a newer one, must not sit in the install tree
+    # waiting to be adopted by a later retry.
+    [[ "$BACKUP" == "$PRESERVED" ]] || rm -rf "$PRESERVED"
+  elif [[ "$BACKUP" != "$PRESERVED" ]]; then
+    rm -rf "$PRESERVED"
+    mv "$BACKUP" "$PRESERVED"
+    echo "WARNING: install failed; your previous EfficientServer Config/ was preserved at $PRESERVED" >&2
+    echo "  Rerun this script to install over it, or copy the files back by hand." >&2
+  else
+    echo "WARNING: install failed; your previous EfficientServer Config/ is still preserved at $PRESERVED" >&2
   fi
 }
 trap finish EXIT
-# nullglob covers both globs below: an empty (or absent) Config/ must expand to
+# nullglob covers the globs below: an empty (or absent) Config/ must expand to
 # no operands, never to the literal pattern.
 shopt -s nullglob
-if [[ -d "$DEST/Config" ]]; then
+# A preserved dir is present only when an earlier install failed mid-way, so
+# its copy is the operator's config from BEFORE that failure, and the live tree
+# is either that same config, the untouched shipped default, or gone (the
+# failed run's rm -rf landed and the copy-out never got to finish). Adopt the
+# preserved copy in all three cases, because in each of them it is the only
+# record of the operator's tuning. It is superseded only by a live config that
+# differs from BOTH the shipped default and the preserved copy, which is an
+# edit made after that failure; there the live tree wins and the stale copy is
+# dropped by finish() on success.
+if [[ -d "$PRESERVED" ]]; then
+  # The preserved copy exists to survive a failed install, and the default
+  # location is inside the install tree, so a lost disk takes it with the
+  # config. Say so while the operator is reading the output, and point at the
+  # same tool uninstall.sh points at.
+  case "$(readlink -f "$PRESERVED")/" in
+    "$(readlink -f "$SRV")"/*)
+      echo "WARNING: preserved-config dir is inside the install tree $SRV; a lost disk takes" >&2
+      echo "WARNING: this copy with the config. scripts/backup_config.py moves it off-host." >&2
+      ;;
+  esac
+  if [[ -z "$(ls -A "$PRESERVED" 2>/dev/null)" ]]; then
+    # An empty one is debris, not a recovery point: there is nothing in it to
+    # restore, and leaving it would have the next run re-warn about it.
+    rmdir "$PRESERVED"
+  else
+    LIVE="$DEST/Config/efficientserver.json"
+    SUPERSEDED=0
+    if [[ -f "$LIVE" && -f "$PRESERVED/efficientserver.json" ]] \
+       && ! cmp -s "$LIVE" "$PRESERVED/efficientserver.json" \
+       && ! cmp -s "$LIVE" "$ROOT/config/efficientserver.json"; then
+      SUPERSEDED=1
+    fi
+    if [[ "$SUPERSEDED" == 1 ]]; then
+      # An operator edit made after that failure. The live tree is the newer
+      # state, so the preserved copy is only removed on success, and the
+      # operator is told which one the install is about to keep.
+      BACKUP=""
+      echo "NOTE: keeping the installed config; the Config/ an earlier failed" >&2
+      echo "NOTE: install preserved at $PRESERVED is older and is removed on success." >&2
+      echo "NOTE: move it aside first to install that copy instead." >&2
+    else
+      # Either there is no live config to speak of (the failed run's rm -rf
+      # landed and the copy-out never finished), or the live one is that same
+      # config, the shipped default, or already the preserved copy. In every
+      # one of those the preserved copy is the only record of the operator's
+      # tuning, so a rerun must not install the shipped default over it.
+      BACKUP="$PRESERVED"
+      echo "Adopting the Config/ preserved by an earlier failed install: $PRESERVED"
+    fi
+  fi
+fi
+if [[ -z "$BACKUP" && -d "$DEST/Config" ]]; then
   BACKUP="$(mktemp -d)"
   for f in "$DEST"/Config/*; do
     cp -a "$f" "$BACKUP/"

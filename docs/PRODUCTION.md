@@ -174,6 +174,7 @@ state that is NOT regenerable is what an operator edits on the server host:
 | Live config (tuning) | `<DS>/Mods/EfficientServer/Config/efficientserver.json`, or the file `$ES_CONFIG_PATH` names | No. The repo copy is the shipped default; the host copy holds the tuned values |
 | Server settings | `<DS>/serverconfig*.xml` (ports, password, whitelist, world and generation options), plus the `<name>.pre-optimized` copy `run_server.sh` keeps | No. The tracked `serverconfig.optimized.xml` is a shipped default; the live set has never existed anywhere else. Backed up by `scripts/backup_config.py` (7.1) |
 | Guard backup | `.../Config/efficientserver.json.swap-bak` | No. Only exists mid-bench-run; crash recovery for a killed swap |
+| Quarantined guard backups | `.../Config/efficientserver.json.swap-bak*.stale` | No. Evidence a leftover backup was stale rather than an interrupted restore. Bounded: the newest `STALE_KEEP` (5) are kept, older ones pruned, so a bench loop cannot grow them without limit |
 | Installed DLL | `<DS>/Mods/EfficientServer/` | Yes: `make build && make install` |
 | Server logs | `server/logs/server_<UTC>.log` (default) | No, but expendable: restart writes a new one |
 | APM telemetry | `Mods/7dtd-server-apm-bridge/telemetry/` | Yes, within 30 s of the bridge running |
@@ -182,10 +183,14 @@ state that is NOT regenerable is what an operator edits on the server host:
 ### RPO and RTO
 
 - **RPO for the live config: 0 across a reinstall or an uninstall.** `install.sh`
-  holds the installed `Config/efficientserver.json` in a temp file across the
-  `rm -rf` and restores it on success (kept, with its path printed, if the
-  install fails); `uninstall.sh` copies every file under the installed `Config/`
-  into a timestamped directory and prints the restore command.
+  copies the whole installed `Config/` directory across the `rm -rf` and restores
+  it on success; a failed install leaves that copy at
+  `<DS>/EfficientServer-install-backup` (or `SEVENDTD_INSTALL_BACKUP_DIR`), with
+  its path printed, and the next `make install` adopts it rather than installing
+  the shipped default over the operator's tuning, so a retry after a failure
+  converges on the same config a single run would. `uninstall.sh` copies every
+  file under the installed `Config/` into a timestamped directory and prints the
+  restore command.
 - **RPO against host loss, disk loss, or a deleted instance: whatever your
   snapshot cadence is, plus one interval, and only if you take one.** Every copy
   this repo makes lives inside the install tree, so the disaster that takes the
