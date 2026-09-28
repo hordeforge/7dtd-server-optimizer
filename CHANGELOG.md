@@ -51,6 +51,11 @@ So `EfficientServer-0.1.0.zip` logging `mod=1.17.0` is correct, not drift.
   (`ConfigPublication.Current` and the `_active` field), so the receive-thread
   surfaces that read them per call see a whole config generation, never a
   half-swapped one.
+- The bench config guard sweeps the atomic-write temp files a killed run
+  strands beside the live config (`<file>.tmp<pid>`) at the start of every
+  run. Those runs are routinely SIGKILLed by tool timeouts, and nothing ever
+  removed them, so a long-lived server install accumulated one per killed
+  run. Temps owned by a still-running pid are left alone.
 
 ## [1.19.0] - 2026-09-20
 

@@ -40,6 +40,9 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 
 STALE_SUFFIX = ".stale"
+# Marker write_atomic puts between a file name and its writer's pid, so a
+# temp stranded by a killed run is attributable to that run.
+TEMP_INFIX = ".tmp"
 
 USAGE = """\
 usage: es_cfg_guard.py [--selftest] [-h | --help]
@@ -63,7 +66,7 @@ def _canonical(doc: dict[str, object]) -> str:
 
 
 def _write_atomic(path: Path, data: bytes) -> None:
-    tmp = path.with_name(path.name + f".tmp{os.getpid()}")
+    tmp = path.with_name(path.name + f"{TEMP_INFIX}{os.getpid()}")
     try:
         tmp.write_bytes(data)
         os.replace(tmp, path)
@@ -143,6 +146,30 @@ class ConfigSwap:
 
     # -- protocol ----------------------------------------------------------
 
+    def _sweep_abandoned_temps(self) -> None:
+        """Delete the atomic-write temp files killed runs stranded beside the config.
+
+        ``write_atomic`` names its temp ``<file>.tmp<pid>`` and renames it into
+        place, so a run SIGKILLed (or power-cut) between the write and the
+        rename leaves one file per killed run in the LIVE install directory,
+        under a name nothing in the protocol ever matches again. These runs are
+        routinely killed by tool timeouts, so a bench host accumulates them
+        without bound. A temp whose owning pid is gone cannot be an in-flight
+        write, so it is garbage; one whose pid is still running (a concurrent
+        harness, or a recycled pid) is left alone.
+        """
+        for base in (self.cfg, self.bak):
+            for tmp in base.parent.glob(f"{base.name}{TEMP_INFIX}*"):
+                owner = tmp.name[len(base.name) + len(TEMP_INFIX) :]
+                if not owner.isdigit():
+                    continue
+                try:
+                    os.kill(int(owner), 0)
+                except ProcessLookupError:
+                    tmp.unlink(missing_ok=True)
+                except OSError:
+                    pass  # alive (or not ours to signal): not ours to remove
+
     def _quarantine(self, why: str) -> None:
         stale = self.bak.with_suffix(self.bak.suffix + STALE_SUFFIX)
         os.replace(self.bak, stale)
@@ -153,6 +180,7 @@ class ConfigSwap:
 
     def recover(self) -> None:
         """Resolve a backup left behind by an earlier killed run."""
+        self._sweep_abandoned_temps()
         if not self.bak.is_file():
             return
         try:
@@ -201,6 +229,7 @@ class ConfigSwap:
 
     def begin(self) -> None:
         """Snapshot the live file for later restore (idempotent once begun)."""
+        self._sweep_abandoned_temps()
         if self._begun and self.bak.is_file():
             return
         # Resolve any backup a killed earlier run left before snapshotting.
@@ -503,6 +532,31 @@ def _selftest() -> int:
             _canonical(_read_doc(cfg)) == snapshot,
         )
         check("backup consumed after non-object-live restore", not s9.bak.exists())
+
+        # 14. Atomic-write temps stranded by KILLED runs are swept: each one
+        # is a file the protocol would never match again, so without the sweep
+        # the live install directory grows one per killed run, forever. Temps
+        # owned by a RUNNING pid (a concurrent harness) must survive, and the
+        # live config and the guard's own backup are both covered.
+        s10 = mk()
+        dead_pid = 2 ** 22 - 1  # above the default pid_max: cannot be running
+        stray_cfg = root / f"{cfg.name}{TEMP_INFIX}{dead_pid}"
+        stray_bak = root / f"{s10.bak.name}{TEMP_INFIX}{dead_pid}"
+        # The parent's pid, not ours: a temp named with OUR pid is this very
+        # run's write_atomic temp, which the snapshot below consumes by rename.
+        live_tmp = root / f"{cfg.name}{TEMP_INFIX}{os.getppid()}"
+        not_a_temp = root / f"{cfg.name}{TEMP_INFIX}notes.txt"
+        for stray in (stray_cfg, stray_bak, live_tmp, not_a_temp):
+            stray.write_text("{}", encoding="utf-8")
+        cfg.write_text(json.dumps(original, indent=2) + "\n", encoding="utf-8")
+        s10.begin()
+        check("temp of a dead run beside the config is swept", not stray_cfg.exists())
+        check("temp of a dead run beside the backup is swept", not stray_bak.exists())
+        check("temp owned by a live pid is kept", live_tmp.is_file())
+        check("unrelated .tmp-named file is left alone", not_a_temp.is_file())
+        s10.restore()
+        live_tmp.unlink()
+        not_a_temp.unlink()
 
     if failures:
         print(f"FAIL: {len(failures)} es_cfg_guard selftest check(s)", file=sys.stderr)
