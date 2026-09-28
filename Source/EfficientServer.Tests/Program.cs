@@ -936,6 +936,10 @@ namespace EfficientServer.Tests
             Check(Drive(t, plain, Over, 4) == 0 && t.Level == 0,
                 "no escalation before WindowTicks of over-budget ticks");
             Check(t.Advance(plain, Over) && t.Level == 1, "escalates to tier 1 on the window");
+            // 0->1 and 2->1 both land on tier 1, so the caller cannot read the
+            // transition off Level alone: it needs the level it left, or the first
+            // escalation of a session is reported as a step down.
+            Check(t.PreviousLevel == 0, "an escalation reports the baseline it left");
             Check(Drive(t, plain, Over, 3) == 0, "cooldown holds the tier right after a transition");
             Check(Drive(t, plain, Over, 20) == 0 && t.Level == 1,
                 "tier 2 never entered without the AnimatorEmergency opt-in");
@@ -1026,9 +1030,10 @@ namespace EfficientServer.Tests
             // Recovery steps down one tier at a time and restores the levers.
             Drive(e, em, Healthy, 5);
             Check(e.Level == 1, "recovery steps 2 -> 1 first");
+            Check(e.PreviousLevel == 2, "a step down from the emergency reports the tier it left");
             Check(e.EffectiveEntityStride(1) == 2, "tier 1 keeps the throttles applied");
             Drive(e, em, Healthy, 5);
-            Check(e.Level == 0 && e.EffectiveEntityStride(1) == 1,
+            Check(e.Level == 0 && e.PreviousLevel == 1 && e.EffectiveEntityStride(1) == 1,
                 "recovery steps 1 -> 0 and the levers read as configured again");
 
             // Reload stand-down: a tier the new config no longer authorizes ends

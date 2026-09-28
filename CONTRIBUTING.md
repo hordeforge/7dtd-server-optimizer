@@ -96,7 +96,6 @@ acceptance (`docs/FEATURES.md` fidelity checks).
 | `scripts/es_cfg_guard.py --selftest` | `make check-scripts` | the config backup/restore guard broke its own protocol | fix the script; its selftest is the spec |
 | `scripts/bench_parse.py --selftest` | `make check-scripts` | the APM health-line reader or the `es animstate` parser broke, or the incremental reader stopped agreeing with a full-file rescan | fix the script; its selftest is the spec |
 | `scripts/backup_config.py --selftest` | `make check-scripts` | the snapshot / verify / restore protocol broke | fix the script; its selftest is the spec |
-| `scripts/apm_tail.py --selftest` | `make check-scripts` | the APM log tail cache or its window math broke, or it stopped invalidating on a log that was truncated, rewritten or rolled over at the same path | fix the script; its selftest is the spec |
 | `scripts/coverage_badge.py --selftest` | `make check-scripts` | the coverage-badge generator broke (Cobertura parsing or SVG rendering; CI uses it to publish the README badge) | fix the script; its selftest is the spec |
 
 ## PR expectations beyond the gates

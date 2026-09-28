@@ -35,6 +35,17 @@ namespace EfficientServer.Patches
         public int Level { get; private set; }
 
         /// <summary>
+        /// The level this machine held before the last <see cref="Advance"/>.
+        /// <see cref="Level"/> alone does not say WHICH transition happened: 0-&gt;1
+        /// and 2-&gt;1 both land on 1, and the caller reports the two with opposite
+        /// wording (an escalation trades fidelity, a step down gives it back).
+        /// Meaningful only straight after an <see cref="Advance"/> that returned
+        /// true; a reload or world re-base changes <see cref="Level"/> without
+        /// touching it.
+        /// </summary>
+        public int PreviousLevel { get; private set; }
+
+        /// <summary>
         /// True on the tick the machine asks for a tier-2 rig re-sweep (a periodic
         /// re-entry while the emergency holds, not a transition). False otherwise.
         /// </summary>
@@ -48,6 +59,7 @@ namespace EfficientServer.Patches
         public bool Advance(GovernorConfig cfg, double emaMs)
         {
             SweepDue = false;
+            PreviousLevel = Level;
             if (_cooldown > 0) _cooldown--;
 
             int previous = Level;

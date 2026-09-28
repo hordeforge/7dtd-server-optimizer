@@ -99,16 +99,25 @@ namespace EfficientServer.Patches
             double emaMs = TickEma.Advance();
             if (Tiers.Advance(cfg, emaMs))
             {
+                // Branch on the pair, not the destination: 0->1 and 2->1 both
+                // land on tier 1, and reading only the destination reported the
+                // first escalation of the session as a step DOWN, citing the
+                // healthy threshold for a decision the over-budget one made.
+                int from = Tiers.PreviousLevel;
                 if (Tiers.Level == 2)
                 {
                     LogEmergencyEnter(cfg, emaMs);
                 }
-                else if (Tiers.Level == 1)
+                else if (from >= 2)
                 {
                     // Tier 2 keeps the tier-1 throttles in force, so a step down
                     // from the emergency leaves them applied; only the rigs go.
                     LogStepDown(cfg, emaMs, "stepped down from emergency to THROTTLED");
                     AnimatorEmergency.Exit();
+                }
+                else if (Tiers.Level == 1)
+                {
+                    LogStepUp(cfg, emaMs);
                 }
                 else
                     LogStepDown(cfg, emaMs, "restored baseline "
@@ -127,6 +136,17 @@ namespace EfficientServer.Patches
         {
             EsLog.Emit(LogLevel.Info, $"Governor: tick EMA {Ms(emaMs)}ms < "
                 + $"{Ms(cfg.HealthyMs)}ms - {what}");
+        }
+
+        // The one escalation to tier 1, so the log carries BOTH directions as the
+        // class comment promises: the throttles are the first lever to move, and an
+        // operator who sees replication drop to 10 Hz has to be able to place it
+        // against a line in the log. Same invariant-float rendering as the rest.
+        static void LogStepUp(GovernorConfig cfg, double emaMs)
+        {
+            EsLog.Emit(LogLevel.Info, $"Governor: tick EMA {Ms(emaMs)}ms > "
+                + $"{Ms(cfg.OverBudgetMs)}ms for {cfg.WindowTicks} ticks - THROTTLED "
+                + $"(replication /{EffectiveEntityStride()}, graph updates /{EffectiveGraphEvery()})");
         }
 
         // WARNING, not info: tier 2 globally degrades combat fidelity and is
