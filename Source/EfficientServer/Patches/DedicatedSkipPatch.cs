@@ -79,7 +79,12 @@ namespace EfficientServer.Patches
                 }
                 MethodInfo prefix = typeof(DedicatedSkipPatch).GetMethod(prefixName, BindingFlags.Static | BindingFlags.NonPublic);
                 OptionalHarmony.Patch(m, new HarmonyMethod(prefix));
-                EsLog.Emit(LogLevel.Info, $"skip-patch {target}");
+                // The target resolved, so any drift report for it is retired: the
+                // key would otherwise list a working skip as degraded, and its
+                // count would keep climbing on every reload, for the rest of the
+                // process.
+                string recovered = Degrade.Clear(key) ? " (recovered: earlier drift report retired)" : "";
+                EsLog.Emit(LogLevel.Info, $"skip-patch {target}{recovered}");
             }
             catch (Exception ex)
             {

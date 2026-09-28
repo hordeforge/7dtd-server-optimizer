@@ -89,7 +89,9 @@ Apply config edits live: `es reload` (telnet/console). `es status` shows active 
   standing record: `none` is healthy, otherwise `key=count` pairs in occurrence
   order, where `count` is how many times that path hit its fail-open branch.
   Entries persist until restart (they are game-API drift, not config; `es reload`
-  cannot repair them). A non-`none` value means some lever is running degraded
+  cannot repair them), except a dedicated-skip target that a later `es reload`
+  resolves: that key is retired at the apply which finds the target and the line
+  says so. A non-`none` value means some lever is running degraded
   right now.
 - **Throttle engagement (`es status`, runtime line)**: `replicationSkipped`,
   `graphUpdatesSkipped` and `collisionOffTicks` are lifetime counts of work the

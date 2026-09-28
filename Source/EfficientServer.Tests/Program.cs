@@ -1122,6 +1122,28 @@ namespace EfficientServer.Tests
                 && EfficientServer.Degrade.Count("") == 0,
                 "degrade registry: an empty key is not recorded");
 
+            // A drift report for an absent target stops being true when the
+            // build has the target again, and the apply that resolves it retires
+            // the key. Without the clear the status line lists a working skip as
+            // degraded for the rest of the process, and its count keeps climbing
+            // on every reload. Clearing one key leaves the others, and their
+            // order, alone.
+            Check(EfficientServer.Degrade.Clear("skip:WaterSplashCubes.Update"),
+                "degrade registry: clearing a recorded key reports the recovery");
+            Check(!EfficientServer.Degrade.Clear("skip:WaterSplashCubes.Update"),
+                "degrade registry: clearing an already-cleared key reports nothing");
+            Check(!EfficientServer.Degrade.Clear(""),
+                "degrade registry: clearing an empty key is a no-op");
+            Check(EfficientServer.Degrade.Summary() == "aiAlertProbe=1000|clientListSnapshot=1",
+                "degrade registry: a cleared key leaves the summary, in order");
+            Check(EfficientServer.Degrade.Count("skip:WaterSplashCubes.Update") == 0
+                && EfficientServer.Degrade.FirstReport("skip:WaterSplashCubes.Update") == null,
+                "degrade registry: a cleared key keeps no count and no explanation");
+            // A key reported again after a clear announces afresh: the recovery
+            // is a new fact, not a continuation of the retired one.
+            Check(EfficientServer.Degrade.Report("skip:WaterSplashCubes.Update", "type not found again"),
+                "degrade registry: a re-reported key after a clear announces again");
+
             // Cross-thread use is the production shape: the client-list snapshot
             // reports from the LiteNetLib receive thread while the console drains
             // on the main thread. Hammer both and assert no count is lost and the

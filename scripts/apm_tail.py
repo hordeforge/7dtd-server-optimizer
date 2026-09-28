@@ -96,6 +96,21 @@ class _ApmTailState(TypedDict):
 # while staying far below the per-poll read this cache exists to avoid.
 HEAD_BYTES = 256
 
+# How much of one poll's appends is read at once. A poll normally reads a few kB;
+# the cap bounds the read on a log that grew by hundreds of MB while the harness
+# was suspended (a paused VM, a stopped server). The remainder is picked up on
+# the next call, so nothing is skipped, and no single call has to hold the whole
+# gap. The offset advances by what was actually read, never by the file size.
+MAX_APM_READ_BYTES = 1 << 20
+
+# How much of the unterminated tail is carried to the next poll. A health line is
+# under 200 bytes, so a longer carry is a wrap-failed dump or a log echo (a
+# multi-megabyte blob echoed into the log) rather than a line that will complete
+# into a match: the parser searches for a health line anywhere in a line, so
+# dropping the front of an oversized carry cannot lose a match a whole-file
+# rescan would find, and keeping it would park the bytes for the rest of the run.
+MAX_APM_LINE_BYTES = 4096
+
 _APM_TAIL: dict[Path, _ApmTailState] = {}
 
 # Log paths whose stat() has already failed, so the warning is emitted once per
@@ -155,15 +170,18 @@ def read_apm(logf: Path, log: Callable[..., None] = print) -> ApmCounters | None
     if info.st_size > st["off"]:
         with logf.open("rb") as f:
             f.seek(st["off"])
-            chunk = f.read(info.st_size - st["off"])
-        st["off"] = info.st_size
+            chunk = f.read(min(info.st_size - st["off"], MAX_APM_READ_BYTES))
+        # By what was READ, never by the file size: a read capped at
+        # MAX_APM_READ_BYTES leaves the rest of the gap for the next poll, and
+        # claiming the whole size here would skip those bytes forever.
+        st["off"] += len(chunk)
         data = st["tail"] + chunk
         # Decode only complete lines; keep the unterminated tail as raw bytes
         # so a read boundary cannot split a line or a multibyte character.
         nl = data.rfind(b"\n")
         if nl >= 0:
             text = data[:nl].decode("utf-8", errors="replace")
-            st["tail"] = data[nl + 1 :]
+            st["tail"] = data[nl + 1 :][-MAX_APM_LINE_BYTES:]
             for line in text.splitlines():
                 if "[7dtd-server-apm]" not in line:
                     continue
@@ -179,8 +197,9 @@ def read_apm(logf: Path, log: Callable[..., None] = print) -> ApmCounters | None
             # No newline in this append: park the merged buffer (old carry
             # plus new bytes) back as the tail, or the offset above would
             # skip these bytes forever and truncate the line once it does
-            # complete in a later append.
-            st["tail"] = data
+            # complete in a later append. Capped, because a line this long
+            # cannot complete into a match.
+            st["tail"] = data[-MAX_APM_LINE_BYTES:]
     return st["last"]
 
 
@@ -328,6 +347,42 @@ def _selftest() -> int:
         t.check("a missing log reads as None", read_apm(gone, log=warned.append) is None)
         read_apm(gone, log=warned.append)
         t.check("a missing log is announced exactly once", len(warned) == 1)
+
+        # 8. An append with no newline is parked in the carry, and the carry is
+        # bounded. A multi-megabyte blob echoed into the log (a wrap-failed dump)
+        # would otherwise sit in memory for the rest of the run: it is not a line
+        # that can complete into a health line, so keeping it changes no answer.
+        blob = root / "server_blob.txt"
+        blob.write_bytes(b"x" * (MAX_APM_LINE_BYTES * 8))
+        t.check("a newline-free append reads as no data", read_apm(blob) is None)
+        t.check(
+            "the carry buffer stays bounded",
+            len(_APM_TAIL[blob]["tail"]) <= MAX_APM_LINE_BYTES,
+        )
+
+        # 9. A gap larger than one poll's read cap is picked up over several
+        # polls. Advancing the offset by the file size instead of by what was
+        # read would skip the rest of the gap and the health line at its end, so
+        # the server would look silent from here on.
+        gap = root / "server_gap.txt"
+        with gap.open("wb") as gap_handle:
+            gap_handle.write(b"y" * (MAX_APM_READ_BYTES + 4096))
+            gap_handle.write(_line(42, 12.0, 11.0).encode("utf-8"))
+        polls = 0
+        after_gap = None
+        while polls < 8:
+            after_gap = read_apm(gap)
+            polls += 1
+            if after_gap is not None:
+                break
+        t.check(
+            "a gap past the read cap is drained until the trailing line parses",
+            after_gap is not None and after_gap["updates"] == 42,
+        )
+        t.check(
+            "the offset never claims more than the file holds",
+            _APM_TAIL[gap]["off"] == gap.stat().st_size,
+        )
 
     # 8. Window math: cumulative counters reconstruct the windowed rate, and a
     # window with no new updates is None rather than a zero-rate phase.

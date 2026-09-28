@@ -134,8 +134,12 @@ class ApmTailState(TypedDict):
 # Bytes of the file's head held to recognize a replacement that kept the size.
 # A rotation to a log of exactly the length the offset had reached is otherwise
 # invisible: the size test finds nothing new to read, so the caller gets the
-# previous value (or None) for a file it has not read a single byte of.
-_HEAD_SAMPLE_BYTES = 64
+# previous value (or None) for a file it has not read a single byte of. The
+# window covers the whole multi-line version/platform banner Unity writes before
+# the first APM line, so two files that share a first 64 bytes but differ in the
+# banner still register as different; a head prefix alone is identity-blind, so
+# the wider window is what keeps a rewrite from being served as the old log.
+_HEAD_SAMPLE_BYTES = 256
 
 
 _APM_TAIL: dict[Path, ApmTailState] = {}
@@ -243,8 +247,14 @@ def read_apm(logf: Path, warn: Callable[[str], None] | None = None) -> ApmCounte
     )
     if st is None or replaced:
         st = _new_state()
+        # Sampled HERE, at the state that starts the offset, not on the next
+        # poll: a head taken after the first read compares the new file against
+        # itself, so the one replacement a single poll cannot see (same inode,
+        # same size) would be served as the old log.
+        st["head"] = _head_sample(logf, size)
         _APM_TAIL[logf] = st
     elif not st["head"] and size:
+        # The log was still empty when this state was created.
         st["head"] = _head_sample(logf, size)
     elif st["head"] and _head_sample(logf, size) != st["head"]:
         st = _new_state()
@@ -853,6 +863,34 @@ def _selftest() -> int:
         "apm: a missing log reads as no data, and leaves no state",
         read_apm(Path(tempfile.gettempdir()) / "bench_parse-absent.log") is None,
     )
+    # A replacement that kept the size AND the first 64 bytes, the width a
+    # timestamp-only head prefix covers: only a window reaching past it sees that
+    # the bytes at the old offset belong to a different file. Without the reset
+    # the old counters are served for a log this cache has not read.
+    with tempfile.TemporaryDirectory() as td:
+        swap = Path(td) / "bench_parse-swap.log"
+        shared = "2026.09.28 12:00:00 INI ===============================\n"
+        banner = "platform: LinuxServer 3.1.0 (build 100)\n"
+        swap.write_text(shared + banner + _apm_line(11, 4.0, 5.0, 1) + "\n" + "pad" * 256, "utf-8")
+        reset_apm_tail(swap)
+        first_swap = read_apm(swap)
+        swap.write_text(
+            shared
+            + "platform: WindowsServer 3.2.0 (build 7)\n"
+            + _apm_line(22, 9.0, 8.0, 2)
+            + "\n"
+            + "pad" * 256,
+            "utf-8",
+        )
+        after_swap = read_apm(swap)
+        t.check(
+            "apm: a replacement past the head prefix is re-read from its start",
+            first_swap is not None
+            and first_swap["updates"] == 11
+            and after_swap is not None
+            and after_swap["updates"] == 22,
+        )
+        reset_apm_tail(swap)
 
     # Random rounds over both parsers. Fixed seeds: a failure has to replay
     # from its iteration number alone, with no fuzzing engine installed.

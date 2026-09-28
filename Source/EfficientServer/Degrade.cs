@@ -23,7 +23,11 @@ namespace EfficientServer
     /// Degradations are NOT cleared by <c>es reload</c>: every one of them is game
     /// API drift or a host-level limit, not a config value, and none is repaired by
     /// reading a new config file. They persist until restart, which is exactly how
-    /// the fail-open sites already behaved.
+    /// the fail-open sites already behaved. The one exception is a target that
+    /// RESOLVES: a drift report for an absent method stays true only until the
+    /// build has that method again, so <see cref="Clear"/> retires it at the
+    /// apply that finds the target, rather than listing a repaired subsystem as
+    /// degraded for the rest of the process.
     ///
     /// Thread-safe: the client-list snapshot path reports from the LiteNetLib
     /// receive thread while the console and lifecycle paths report on the main
@@ -114,6 +118,23 @@ namespace EfficientServer
                 // not compile there. The null-forgiving return above covers the
                 // nullable-enabled test build.
                 return FirstMessage.TryGetValue(key, out var m) ? m : null!;
+            }
+        }
+
+        /// <summary>
+        /// Retire one key: the degradation it recorded no longer holds. Returns
+        /// true when the key was on record, so the caller can log the recovery
+        /// instead of leaving the operator to notice the key is gone.
+        /// </summary>
+        public static bool Clear(string key)
+        {
+            if (string.IsNullOrEmpty(key)) return false;
+            lock (Gate)
+            {
+                if (!Counts.Remove(key)) return false;
+                FirstMessage.Remove(key);
+                Order.Remove(key);
+                return true;
             }
         }
 
