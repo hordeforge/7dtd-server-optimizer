@@ -221,6 +221,42 @@ def unique_path(path: Path) -> Path:
         n += 1
 
 
+# The collision counter unique_path puts in a suffixed name, as it appears
+# after the base name: ".7" of "efficientserver.json.swap-bak.7.stale". ASCII
+# digits only for the same reason as _OWNER_PID_RE: these names live in the
+# operator's install directory, so the parse rejects what it cannot read
+# rather than raising out of the sweep.
+_UNIQUE_SUFFIX_RE = re.compile(r"\A\.(?P<n>[0-9]{1,9})\Z")
+
+
+def _quarantine_key(bak_name: str, name: str) -> tuple[int, int, str]:
+    """Age key for one quarantine file of the config whose backup is ``bak_name``.
+
+    ``unique_path`` numbers a suffixed name, so the sequence is
+    ``<bak>.stale``, ``<bak>.1.stale``, ... ``<bak>.10.stale``. Sorting those by
+    NAME alone puts ``.10`` before ``.2`` and ``.1`` before ``.10``, so
+    ConfigSwap._prune_quarantines kept the OLDEST evidence and destroyed the
+    newest whenever the mtimes it compares could not separate the files: on a
+    coarse-mtime filesystem, a burst of quarantines inside one second all
+    timestamp identically, and the twelve-quarantine burst that reproduces it
+    retained copies 0, 3, 4, 5 and 11 and dropped 6 through 10. The counter is
+    a number, so it is compared as one; the name is the last tie-break, so two
+    files the counter cannot order still have a deterministic one.
+
+    A file whose name does not decompose into this backup's name plus
+    STALE_SUFFIX sorts after every real quarantine, and is never selected as
+    one of the newest to keep.
+    """
+    stem = name[: -len(STALE_SUFFIX)] if name.endswith(STALE_SUFFIX) else name
+    if not stem.startswith(bak_name):
+        return (1, 0, name)
+    tail = stem[len(bak_name) :]
+    m = _UNIQUE_SUFFIX_RE.fullmatch(tail)
+    if m is not None:
+        return (0, int(m.group("n")), name)
+    return ((0, 0, name) if not tail else (1, 0, name))
+
+
 def write_atomic(path: Path, data: str) -> None:
     """Replace ``path`` with ``data`` atomically (temp file + rename), UTF-8.
 
@@ -340,16 +376,20 @@ class ConfigSwap:
 
         Bounded by count, not age: a burst of kills inside one bench session is
         exactly when the operator wants the history, and it is the NEXT session
-        that has no use for it. Ordered by mtime with the name as the tie-break,
-        so the newest rename wins the tie on a coarse-mtime filesystem.
+        that has no use for it. Ordered by mtime, with the collision counter
+        unique_path assigned as the tie-break (see _quarantine_key), so the
+        newest rename wins a tie on a coarse-mtime filesystem.
         """
         parent = self.bak.parent
-        found: list[tuple[float, str, Path]] = []
+        found: list[tuple[int, tuple[int, int, str], Path]] = []
         for path in parent.glob(self.bak.name + "*" + STALE_SUFFIX):
             if not path.is_file():
                 continue
             try:
-                found.append((path.stat().st_mtime, path.name, path))
+                # st_mtime_ns, not st_mtime: the float seconds lose the
+                # sub-second ordering on a coarse-mtime filesystem, so a burst
+                # of kills inside one second ties and falls to the key below.
+                found.append((path.stat().st_mtime_ns, _quarantine_key(self.bak.name, path.name), path))
             except OSError:
                 continue  # swept out from under this scan
         if len(found) <= STALE_KEEP:
@@ -360,7 +400,7 @@ class ConfigSwap:
         # gone is not a failure of the sweep, and naming every one of them would
         # bury the count that matters.
         try:
-            for _mtime, _name, path in doomed:
+            for _mtime, _key, path in doomed:
                 path.unlink(missing_ok=True)
         except OSError as ex:
             self._log(
