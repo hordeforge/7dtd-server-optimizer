@@ -40,6 +40,12 @@ CLASS_BLOCK = re.compile(
     re.MULTILINE | re.DOTALL,
 )
 PROP_DECL = re.compile(r"public (\w+) (\w+) \{ get; set; \}(?: = ([^;]+);)?")
+# A knob whose default IS a named stock value (the vanilla sentinel) declares it
+# as a const and initializes from it, so the sentinel has one definition in
+# Config.cs. This picks those up: without it, such a default parses as a
+# non-literal initializer, the drift check SKIPS it, and the template-vs-default
+# gate quietly stops covering that knob.
+CONST_DECL = re.compile(r"public const (\w+) (\w+) = ([^;]+);")
 
 USAGE = """\
 usage: scripts/check_config_doc.py [--selftest] [-h | --help]
@@ -101,11 +107,22 @@ def parse_cs_schema(src: str) -> dict[str, ClassInfo]:
     """class name -> {'scalars': {name: default}, 'sections': {name: class type}}."""
     schema: dict[str, ClassInfo] = {}
     for cls, body in CLASS_BLOCK.findall(src):
-        scalars = {
-            p: parse_cs_default(init)
-            for t, p, init in PROP_DECL.findall(body)
+        consts = {
+            name: parse_cs_default(lit)
+            for t, name, lit in CONST_DECL.findall(body)
             if t in SCALAR_TYPES
         }
+        scalars: dict[str, object] = {}
+        for t, p, init in PROP_DECL.findall(body):
+            if t not in SCALAR_TYPES:
+                continue
+            value = parse_cs_default(init)
+            if value is None and init is not None:
+                # An initializer naming a const of the same class (the vanilla
+                # sentinel); anything else stays None and is skipped, which is
+                # the pre-existing contract for a non-literal initializer.
+                value = consts.get(init.strip())
+            scalars[p] = value
         sections = {p: t for t, p, _ in PROP_DECL.findall(body) if t not in SCALAR_TYPES}
         schema[cls] = {"scalars": scalars, "sections": sections}
     return schema
@@ -214,8 +231,9 @@ def _selftest() -> int:
         "{\n"
         "    public sealed class AiLodConfig\n"
         "    {\n"
+        "        public const float VanillaFullAiDistSq = 100f;\n"
         "        public bool Enabled { get; set; } = true;\n"
-        "        public float FullAiDistSq { get; set; } = 100f;\n"
+        "        public float FullAiDistSq { get; set; } = VanillaFullAiDistSq;\n"
         "        public int Stride { get; set; }\n"
         "        public SubConfig Sub { get; set; } = new SubConfig();\n"
         "        public void Reset() { Enabled = false; }\n"
@@ -242,6 +260,11 @@ def _selftest() -> int:
         "parse_cs_schema parses scalar defaults (bool/int/float-suffix/absent)",
         schema["AiLodConfig"]["scalars"]
         == {"Enabled": True, "FullAiDistSq": 100, "Stride": None},
+    )
+    t.check(
+        "parse_cs_schema resolves a default that names a same-class const",
+        schema["AiLodConfig"]["scalars"]["FullAiDistSq"] == 100
+        and "VanillaFullAiDistSq" not in schema["AiLodConfig"]["scalars"],
     )
     t.check(
         "parse_cs_schema classifies non-scalar properties as sections by type name",

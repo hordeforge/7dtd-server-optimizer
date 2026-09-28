@@ -103,7 +103,15 @@ namespace EfficientServer
         // from the observer. 100 = vanilla. Larger = fewer rebuilds (less CPU and
         // allocation) at the cost of a slightly staler walkability window on fast
         // motion. Multiplies with GraphUpdateEveryTicks (cadence x per-visit rate).
-        public float MoveRescanThresholdSq { get; set; } = 100f;
+        //
+        // The vanilla dead-zone is named once and read from all four sites that need
+        // to know it: this default, the Normalize floor, the patch's inactive
+        // fallback and the FeatureActive predicate. A literal 100f repeated across
+        // them is a sentinel that can drift into "the patch is in force but the
+        // status note says it is config-disabled", which is the one thing an
+        // operator cannot debug from the log alone.
+        public const float VanillaRescanThresholdSq = 100f;
+        public float MoveRescanThresholdSq { get; set; } = VanillaRescanThresholdSq;
 
         // UNSAFE (default off): reuse the LayerGridGraph node array across scans
         // instead of `newarr LevelGridNode[]` every grid move (the #1 large-alloc /
@@ -169,7 +177,13 @@ namespace EfficientServer
         // spread a mass join transfer across more ticks - smaller per-tick spike, so
         // players already on the server hitch less when others connect, at the cost of
         // slightly slower per-client transfer. 3 = vanilla (no change).
-        public int ChunkPackagesPerObserverPerTick { get; set; } = 3;
+        //
+        // The vanilla batch size is named once, for the same reason as
+        // PathfindingConfig.VanillaRescanThresholdSq: the default, the patch's
+        // inactive fallback and the FeatureActive predicate all have to agree on
+        // what "stock" means for this knob.
+        public const int VanillaBatchSize = 3;
+        public int ChunkPackagesPerObserverPerTick { get; set; } = VanillaBatchSize;
     }
 
     // Animator LOD: run calm, distant zombies' animation rigs at a reduced rate.
@@ -580,7 +594,7 @@ namespace EfficientServer
             // clamped and logged, not silently accepted. A legitimate low-pop tune
             // (e.g. 40) still passes.
             Pathfinding.GraphUpdateEveryTicks = IntRange("Pathfinding.GraphUpdateEveryTicks", Pathfinding.GraphUpdateEveryTicks, 1, GraphUpdateMax);
-            Pathfinding.MoveRescanThresholdSq = FiniteRange("Pathfinding.MoveRescanThresholdSq", Pathfinding.MoveRescanThresholdSq, 100f, 10000f, 100f);
+            Pathfinding.MoveRescanThresholdSq = FiniteRange("Pathfinding.MoveRescanThresholdSq", Pathfinding.MoveRescanThresholdSq, PathfindingConfig.VanillaRescanThresholdSq, 10000f, PathfindingConfig.VanillaRescanThresholdSq);
             // 0 = unlimited / off. Cap admits high enough for a full BM wave of
             // non-priority wander requests without clipping combat (combat bypasses).
             Pathfinding.MaxPathEnqueuesPerTick = IntRange("Pathfinding.MaxPathEnqueuesPerTick", Pathfinding.MaxPathEnqueuesPerTick, 0, 2000);
@@ -774,7 +788,13 @@ namespace EfficientServer
                 case KeyGraphThrottle:
                     return Pathfinding != null && Pathfinding.GraphUpdateEveryTicks > 1;
                 case KeyMoveThreshold:
-                    return Pathfinding != null && Pathfinding.MoveRescanThresholdSq > 100f;
+                    // "Differs from vanilla", not "above vanilla": the patch swaps the
+                    // dead-zone comparison for whatever the operator configured, so
+                    // any non-stock value leaves it in force. Normalize's floor is the
+                    // vanilla value, so today the two forms agree on a loaded config;
+                    // the sentinel test is the one that stays true if the floor moves.
+                    return Pathfinding != null
+                        && Pathfinding.MoveRescanThresholdSq != PathfindingConfig.VanillaRescanThresholdSq;
                 case KeyPathAdmission:
                     return Pathfinding != null
                         && (Pathfinding.MaxPathEnqueuesPerTick > 0 || Pathfinding.DropPathWhenFarDistSq > 0f);
@@ -785,7 +805,8 @@ namespace EfficientServer
                 case KeyInitScanPool:
                     return Pathfinding != null && Pathfinding.PoolInitScanNodes;
                 case KeyChunkSendThrottle:
-                    return WorldTransfer != null && WorldTransfer.ChunkPackagesPerObserverPerTick != 3;
+                    return WorldTransfer != null
+                        && WorldTransfer.ChunkPackagesPerObserverPerTick != WorldTransferConfig.VanillaBatchSize;
                 case KeyExplosionParticles:
                     return SkipOnDedicated != null && SkipOnDedicated.ExplosionParticles;
                 case KeyEntityDistributionStride:

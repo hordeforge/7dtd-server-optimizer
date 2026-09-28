@@ -35,8 +35,12 @@ namespace EfficientServer.Patches
             {
                 // The sole ldc.r4 in UpdateGraphPos is the 100 sqr-unit dead-zone
                 // compared against the grid-move SqrMagnitude before the enqueue.
+                // Matched against the config's named vanilla sentinel, so the IL
+                // literal this patch requires to find and the value it falls back
+                // to cannot drift apart.
                 if (swapped == 0 && ins.opcode == OpCodes.Ldc_R4
-                    && ins.operand is float f && f == 100f)
+                    && ins.operand is float f
+                    && f == PathfindingConfig.VanillaRescanThresholdSq)
                 {
                     swapped++;
                     // Route through the live getter (same pattern as
@@ -59,15 +63,19 @@ namespace EfficientServer.Patches
                     + "UpdateGraphPos; target drifted - patch inactive.");
         }
 
-        // Replaces the vanilla constant in the comparison; returns the vanilla 100
-        // whenever the mod is inactive or the config absent, so the default path is
-        // byte-equivalent to stock.
+        // Replaces the vanilla constant in the comparison; returns the vanilla
+        // dead-zone whenever the mod is inactive or the config absent, so the default
+        // path is byte-equivalent to stock. Same named-sentinel rule as
+        // ChunkSendThrottlePatch.BatchCap: the constant lives on the config section,
+        // and the ldc.r4 the transpiler above matches is that same stock value, so a
+        // drifted sentinel cannot make the patch match one literal and fall back to
+        // another.
         public static float Threshold()
         {
             ServerPerfConfig config = ModApi.Config;
             PathfindingConfig cfg = config != null ? config.Pathfinding : null;
             if (!ModApi.ShouldRun(config) || cfg == null)
-                return 100f;
+                return PathfindingConfig.VanillaRescanThresholdSq;
             return cfg.MoveRescanThresholdSq;
         }
     }

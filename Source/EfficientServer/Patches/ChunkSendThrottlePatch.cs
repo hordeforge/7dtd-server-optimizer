@@ -56,14 +56,16 @@ namespace EfficientServer.Patches
             op == OpCodes.Bge || op == OpCodes.Bge_S || op == OpCodes.Bge_Un || op == OpCodes.Bge_Un_S;
 
         // Called once per batched package in the send loop; a cheap config read. Returns
-        // the vanilla 3 whenever the mod is inactive or the config is absent, so the
-        // default path is byte-identical to stock.
+        // the vanilla batch size whenever the mod is inactive or the config is absent,
+        // so the default path is byte-identical to stock. The sentinel is the config's
+        // own named constant, not a literal here, so this fallback and the default
+        // cannot disagree about what stock is.
         public static int BatchCap()
         {
             ServerPerfConfig config = ModApi.Config;
             WorldTransferConfig cfg = config != null ? config.WorldTransfer : null;
             if (!ModApi.ShouldRun(config) || cfg == null)
-                return 3;
+                return WorldTransferConfig.VanillaBatchSize;
             return cfg.ChunkPackagesPerObserverPerTick;
         }
     }

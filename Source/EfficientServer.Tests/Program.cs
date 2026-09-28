@@ -2021,6 +2021,36 @@ namespace EfficientServer.Tests
             Check(dropOnly.FeatureActive("PathAdmission"),
                 "DropPathWhenFarDistSq 2500 with cap 0 -> PathAdmission active");
 
+            // The vanilla sentinel of a knob that REPLACES a stock constant is named
+            // once on its config section, and every site that has to know "stock"
+            // reads it there: the section default, the patch's inactive fallback, and
+            // the FeatureActive predicate. These checks pin that the defaults ARE the
+            // named sentinel, and that a knob set to it reads as inactive while any
+            // other accepted value reads as active in both directions (the
+            // rescan dead-zone accepts a value below stock before Normalize floors it,
+            // and the patch is in force for it).
+            var vanillaDefaults = new ServerPerfConfig();
+            Check(vanillaDefaults.Pathfinding.MoveRescanThresholdSq
+                    == PathfindingConfig.VanillaRescanThresholdSq,
+                "MoveRescanThresholdSq default is the named vanilla sentinel");
+            Check(vanillaDefaults.WorldTransfer.ChunkPackagesPerObserverPerTick
+                    == WorldTransferConfig.VanillaBatchSize,
+                "ChunkPackagesPerObserverPerTick default is the named vanilla sentinel");
+            var belowVanilla = new ServerPerfConfig();
+            belowVanilla.Pathfinding.MoveRescanThresholdSq = 25f;
+            Check(belowVanilla.FeatureActive("MoveThreshold"),
+                "a dead-zone below stock is still not stock, so the patch is in force");
+            var stockValues = LoadTemp(
+                "{\"Pathfinding\":{\"MoveRescanThresholdSq\":" +
+                PathfindingConfig.VanillaRescanThresholdSq.ToString(
+                    System.Globalization.CultureInfo.InvariantCulture) + "}," +
+                "\"WorldTransfer\":{\"ChunkPackagesPerObserverPerTick\":" +
+                WorldTransferConfig.VanillaBatchSize + "}}");
+            Check(!stockValues.FeatureActive("MoveThreshold"),
+                "MoveRescanThresholdSq at the vanilla sentinel -> inactive");
+            Check(!stockValues.FeatureActive("ChunkSendThrottle"),
+                "ChunkPackagesPerObserverPerTick at the vanilla sentinel -> inactive");
+
             // Every FeatureActive arm null-guards its section, because ModApi calls it
             // on a runtime config the loader can hand over with any section null
             // (an explicit {"AiLod":null} in the operator file, or a section added
