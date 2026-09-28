@@ -7,7 +7,7 @@ report those to their respective maintainers (The Fun Pimps for the game).
 ## Supported versions
 
 Security-relevant fixes are made for the current mod version stated in
-`Source/EfficientServer/ModInfo.xml` (1.19.0 at this writing; it is
+`Source/EfficientServer/ModInfo.xml` (1.20.0 at this writing; it is
 authoritative) and land on `main`. Older releases receive no backports, so an
 operator on an older mod version gets no fix, security or otherwise. The mod
 version is independent of the GitHub release tag, so

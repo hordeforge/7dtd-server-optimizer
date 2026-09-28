@@ -76,6 +76,7 @@ write-barrier tax.
 | 1.17.0 | Path admission (default off); crowd-collision LOD (null A/B, default off); animator emergency rewritten to `CullCompletely` (root-motion-safe exit) |
 | 1.18.0 | `ClientListSnapshot` (stock join-churn race, default on); apply-once knobs undo on reload; `es benchgod on` behind `Diagnostics.AllowBenchGod`; LICENSE.txt in the artifact |
 | 1.19.0 | Logging collapsed to one `EsLog.Emit`; stride gate folded into `TickClock`; runtime unknown-key scan dropped (typos caught pre-packaging instead); SBOM and `.buildinfo.txt` dropped from the release zip |
+| 1.20.0 | Admin/whitelist and `serverconfig*.xml` backup coverage; `ES_CONFIG_PATH` override; unknown config key named at load again; `es animoff`/`es rigoff` gated behind `Diagnostics.AllowFidelityProbes`; GC megapause diagnostic removed |
 
 ---
 

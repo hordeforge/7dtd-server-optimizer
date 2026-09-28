@@ -55,6 +55,10 @@ chosen up front:
 
 ## [Unreleased]
 
+## [1.20.0] - 2026-09-28
+
+Artifact: `EfficientServer-1.20.0.zip`, containing mod version 1.20.0.
+
 ### Breaking
 - The opt-in GC megapause diagnostic is gone: `Diagnostics.GcMegapauseTest`,
   `Diagnostics.WarmupSeconds` and `Diagnostics.GrowSeconds` no longer exist,
