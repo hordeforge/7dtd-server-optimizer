@@ -35,6 +35,8 @@ from __future__ import annotations
 
 import json
 import os
+import random
+import sys
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
@@ -290,12 +292,28 @@ class ConfigSwap:
         if not self.bak.is_file():
             return
         try:
-            bak_doc = _read_doc(self.bak)
+            bak_bytes = self.bak.read_bytes()
+            # Not _read_doc, same reason as the live document below: the
+            # snapshot's SHAPE is not an object either until it is checked.
+            bak: object = json.loads(bak_bytes.decode(CFG_ENCODING))
         except Exception as e:
             self._log(f"config guard: RESTORE FAILED, backup kept ({e})")
             return
+        if not isinstance(bak, dict):
+            # A snapshot that is not a JSON object has no managed key to read
+            # back: the key-scoped walk below would read every managed key as
+            # absent and STRIP it from the live config, which is the opposite
+            # of a restore. Same full-snapshot exit the damaged live cases take.
+            _write_atomic(self.cfg, bak_bytes)
+            self.bak.unlink()
+            self._log(
+                f"config guard: snapshot is valid JSON but not an object "
+                f"({type(bak).__name__}); restored full backup"
+            )
+            return
+        bak_doc = bak
         if not self.cfg.is_file():
-            _write_atomic(self.cfg, self.bak.read_bytes())
+            _write_atomic(self.cfg, bak_bytes)
             self.bak.unlink()
             self._log("config guard: live config was missing; restored full backup")
             return
@@ -307,7 +325,7 @@ class ConfigSwap:
             # Unreadable live JSON: rebuilding from {} would write back ONLY the
             # managed keys and destroy every other operator setting, so fall
             # back to the exact snapshot instead.
-            _write_atomic(self.cfg, self.bak.read_bytes())
+            _write_atomic(self.cfg, bak_bytes)
             self.bak.unlink()
             self._log(
                 f"config guard: live config unreadable ({e}); "
@@ -318,7 +336,7 @@ class ConfigSwap:
             # Valid JSON of the wrong shape (array, scalar, null): a key-scoped
             # rebuild would likewise destroy or misplace every operator setting,
             # so take the same full-snapshot exit as the unreadable case.
-            _write_atomic(self.cfg, self.bak.read_bytes())
+            _write_atomic(self.cfg, bak_bytes)
             self.bak.unlink()
             self._log(
                 f"config guard: live config is valid JSON but not an object "
@@ -334,6 +352,326 @@ class ConfigSwap:
         self.bak.unlink()
         self._begun = False
         self._log(f"config guard: restored managed keys from {self.bak.name}")
+
+
+# Fuzz target for the same untrusted input the selftest drives one damaged
+# state at a time: the installed efficientserver.json. It is operator-editable,
+# ships inside a mod package, and both the game's Config.Load and this guard
+# decode it on every run. The fixtures above pin one shape each; this drives
+# random combinations of a hostile live document, a hostile leftover backup and
+# a random protocol step order, on a fixed seed so a failure reproduces under
+# `make test` with no fuzzing host.
+#
+# Invariants asserted per case, each of them something a hostile document must
+# not be able to do to the LIVE install:
+#   1. No protocol step raises, whatever the live and backup bytes are. The one
+#      documented exception, begin() on a missing config, still raises.
+#   2. recover() consumes the backup and leaves the live file either exactly as
+#      it was or exactly as the snapshot was: a restore, never a third state.
+#      This is the pair assertion across the persistence boundary.
+#   3. restore() consumes the backup and, on the key-scoped path, changes
+#      nothing outside the managed paths: every other key of the pre-restore
+#      live document is still there with the same value. A rebuild from {} would
+#      pass the corrupt-live fixture and still eat operator tuning on a merely
+#      unusual live document.
+#   4. begin() snapshots the live file byte-exact.
+#   5. No step strands an atomic-write temp beside the config.
+_FUZZ_ITERATIONS = 400
+_FUZZ_KEYS: list[tuple[str, ...]] = [
+    ("Pathfinding", "MaxPathEnqueuesPerTick"),
+    ("Pathfinding", "DropPathWhenFarDistSq"),
+    ("Enabled",),
+]
+_FUZZ_SECTIONS = ("Pathfinding", "Network", "Gc", "Governor")
+# Key names a hand-edited file really carries: the real ones, a case-flipped
+# twin, a dotted path spelled flat, an empty and a whitespace name, non-ASCII,
+# and a leading space the C# reader would not see as the same knob.
+_FUZZ_KEY_NAMES = (
+    "Enabled",
+    "enabled",
+    "Enabled ",
+    "Pathfinding.MaxPathEnqueuesPerTick",
+    "",
+    " ",
+    "サーバ",
+)
+# Value shapes a lenient reader accepts where a number belongs, plus the
+# structural swaps that turn a managed key into a node no key walk can enter.
+_FUZZ_HOSTILE_VALUES: tuple[object, ...] = (
+    None,
+    True,
+    [],
+    [1, 2, 3],
+    {},
+    {"nested": {"deep": [1]}},
+    "1e999999",
+    "NaN",
+    "",
+    "サーバ café \U0001f600",
+    -1,
+    2**31 - 1,
+    -(2**31),
+)
+# Byte-level damage applied to an otherwise well-formed document: a BOM, a
+# truncated copy, a half-saved file, junk spliced mid-document, invalid UTF-8,
+# and nesting past any sane reader depth.
+_FUZZ_BYTE_RUNS = (
+    b"",
+    b"\xef\xbb\xbf",
+    b"\xff\xfe\x80\x81",
+    b"{\x00\x1f\x7f",
+    b'"\\ud800"',
+    b"1e999999",
+    b"}]}}" * 4,
+    b"[[" * 64 + b"]]" * 64,
+)
+
+
+def _fuzz_doc(rng: random.Random) -> dict[str, object]:
+    """A well-formed config document with random operator values and knobs.
+
+    Hostile shapes land on the managed paths and on near-miss key names, which
+    is where the key walk has to tell a real key from its typo'd twin.
+    """
+    doc: dict[str, object] = {}
+    for section in _FUZZ_SECTIONS:
+        node: dict[str, object] = {
+            "GraphUpdateEveryTicks": rng.randint(-(2**31), 2**31 - 1),
+            "MaxPathEnqueuesPerTick": rng.randint(0, 2000),
+            "Note": rng.choice(["", "サーバ café \U0001f600", "x" * rng.randint(0, 64)]),
+        }
+        if rng.random() < 0.2:
+            # A managed key holding a value the key walk can still address, but
+            # of a shape the game reader has to clamp.
+            node["DropPathWhenFarDistSq"] = rng.choice(_FUZZ_HOSTILE_VALUES)
+        doc[section] = node
+    doc["Enabled"] = rng.choice([True, False])
+    doc["Operator"] = {"Tier": rng.randint(0, 9), "Name": "ops"}
+    if rng.random() < 0.3:
+        doc[rng.choice(_FUZZ_KEY_NAMES)] = rng.choice(_FUZZ_HOSTILE_VALUES)
+    if rng.random() < 0.1:
+        # A section turned into something the key walk cannot descend into.
+        doc[_FUZZ_SECTIONS[0]] = rng.choice(_FUZZ_HOSTILE_VALUES)
+    return doc
+
+
+def _fuzz_bytes(rng: random.Random, doc: dict[str, object]) -> bytes:
+    """Serialize `doc`, then splice, cut and corrupt it at the byte layer."""
+    data = (json.dumps(doc, indent=2) + "\n").encode("utf-8")
+    for _ in range(rng.randint(0, 3)):
+        edit = rng.randint(0, 4)
+        if edit == 0:
+            data = rng.choice(_FUZZ_BYTE_RUNS) + data
+        elif edit == 1:
+            data += rng.choice(_FUZZ_BYTE_RUNS)
+        elif edit == 2:
+            at = rng.randint(0, len(data))
+            data = data[:at] + rng.choice(_FUZZ_BYTE_RUNS) + data[at:]
+        elif edit == 3 and data:
+            data = data[: rng.randint(0, len(data))]
+        else:
+            at = rng.randint(0, len(data))
+            data = data[:at] + bytes(rng.randrange(0x80, 0x100) for _ in range(4)) + data[at:]
+    return data
+
+
+def _fuzz_backup_bytes(rng: random.Random) -> bytes | None:
+    """Bytes for the leftover backup: absent, intact, or damaged every way."""
+    choice = rng.randint(0, 6)
+    if choice == 0:
+        return None
+    if choice == 1:
+        return _fuzz_bytes(rng, _fuzz_doc(rng))
+    if choice == 2:
+        return b""
+    if choice == 3:
+        return rng.choice([b"[1, 2]", b"null", b'"text"', b"42", b"true"])
+    if choice == 4:
+        return b"{ truncated"
+    if choice == 5:
+        return b"\xef\xbb\xbf" + (json.dumps(_fuzz_doc(rng))).encode("utf-8")
+    return _fuzz_bytes(rng, _fuzz_doc(rng))[: rng.randint(0, 40)]
+
+
+def _fuzz_owned(path: tuple[str, ...], keys: Sequence[tuple[str, ...]]) -> bool:
+    """True when `path` is a managed key, an ancestor of one, or inside one."""
+    return any(path[: len(kp)] == kp or kp[: len(path)] == path for kp in keys)
+
+
+def _fuzz_unmanaged(
+    node: object,
+    keys: Sequence[tuple[str, ...]],
+    path: tuple[str, ...] = (),
+) -> object:
+    """`node` with every managed path and everything under one removed.
+
+    The projection the harness owns; comparing it before and after a protocol
+    step is what proves an operator key outside the managed scope survived.
+    """
+    if not isinstance(node, dict):
+        return node
+    return {
+        k: _fuzz_unmanaged(v, keys, (*path, str(k)))
+        for k, v in node.items()
+        if not _fuzz_owned((*path, str(k)), keys)
+    }
+
+
+def _fuzz_json(data: bytes | None) -> tuple[bool, object]:
+    """`(decoded, document)` for `data`; `(False, None)` when it will not parse.
+
+    The flag is separate from the value because a JSON `null` document decodes
+    to Python None, which is a real shape the protocol has to handle and not the
+    same thing as bytes nobody can read.
+    """
+    if data is None:
+        return False, None
+    try:
+        return True, json.loads(data.decode(CFG_ENCODING))
+    except (UnicodeDecodeError, ValueError):
+        return False, None
+
+
+def _fuzz_temp_litter(root: Path) -> list[str]:
+    return sorted(p.name for p in root.iterdir() if TEMP_INFIX in p.name)
+
+
+def _fuzz_canonical(node: object) -> str:
+    """`_canonical` over any projected value, for a failure line."""
+    return json.dumps(node, sort_keys=True, separators=(",", ":"))
+
+
+def _fuzz_protocol(failures: list[str], iteration: int) -> None:
+    """One randomized protocol case. Appends to `failures`; never raises."""
+    import tempfile
+
+    # Fixed per iteration, not cryptographic: reproducibility is the point, a
+    # failing case has to replay from its iteration number alone.
+    rng = random.Random(0xC0FFEE + iteration)  # noqa: S311
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        cfg = root / "efficientserver.json"
+        swap = ConfigSwap(cfg, _FUZZ_KEYS, log=lambda _m: None)
+        live_bytes = _fuzz_bytes(rng, _fuzz_doc(rng))
+        cfg.write_bytes(live_bytes)
+        backup_bytes = _fuzz_backup_bytes(rng)
+        if backup_bytes is None:
+            swap.bak.unlink(missing_ok=True)
+        else:
+            swap.bak.write_bytes(backup_bytes)
+
+        steps = rng.choice(
+            [
+                ["recover"],
+                ["restore"],
+                ["begin", "restore"],
+                ["begin", "begin", "restore"],
+                ["recover", "begin", "restore"],
+                ["restore", "restore"],
+            ]
+        )
+        for step in steps:
+            pre_live = cfg.read_bytes() if cfg.is_file() else None
+            pre_backup = swap.bak.read_bytes() if swap.bak.is_file() else None
+            try:
+                if step == "begin":
+                    # A missing live config is the one documented raise; it
+                    # surfaces through the FileNotFoundError arm below.
+                    swap.begin()
+                    if pre_live is not None and (
+                        not swap.bak.is_file() or swap.bak.read_bytes() != pre_live
+                    ):
+                        failures.append(
+                            f"iter {iteration}: begin did not snapshot the live file"
+                        )
+                elif step == "recover":
+                    swap.recover()
+                    if pre_backup is not None and swap.bak.is_file():
+                        failures.append(f"iter {iteration}: recover left the backup behind")
+                    if pre_backup is not None and pre_live is not None:
+                        post = cfg.read_bytes() if cfg.is_file() else None
+                        if post not in (pre_live, pre_backup):
+                            failures.append(
+                                f"iter {iteration}: recover left a third live state"
+                            )
+                    elif pre_backup is not None and cfg.is_file():
+                        failures.append(
+                            f"iter {iteration}: recover resurrected a missing config"
+                        )
+                else:
+                    swap.restore()
+                    if pre_backup is None:
+                        if cfg.is_file() and cfg.read_bytes() != pre_live:
+                            failures.append(
+                                f"iter {iteration}: restore wrote with no backup"
+                            )
+                        continue
+                    # A snapshot that decodes to something other than a JSON
+                    # object has no managed key to read back: the guard takes
+                    # its full-snapshot exit, exactly as it does for a damaged
+                    # live document. A snapshot that does not decode at all is
+                    # kept untouched instead: it is the only copy of the
+                    # pre-run state, so nothing may overwrite with it.
+                    snapshot_decoded, snapshot = _fuzz_json(pre_backup)
+                    if not snapshot_decoded:
+                        if not swap.bak.is_file():
+                            failures.append(
+                                f"iter {iteration}: restore dropped an undecodable "
+                                "snapshot instead of keeping it"
+                            )
+                        if cfg.is_file() and cfg.read_bytes() != pre_live:
+                            failures.append(
+                                f"iter {iteration}: restore wrote over the live "
+                                "config with an undecodable snapshot"
+                            )
+                        continue
+                    if not isinstance(snapshot, dict):
+                        if swap.bak.is_file() or cfg.read_bytes() != pre_backup:
+                            failures.append(
+                                f"iter {iteration}: non-object snapshot not taken "
+                                "as the full restore"
+                            )
+                        continue
+                    if swap.bak.is_file():
+                        failures.append(f"iter {iteration}: restore left the backup behind")
+                    post = cfg.read_bytes() if cfg.is_file() else None
+                    live_decoded, live_doc = _fuzz_json(pre_live)
+                    if not live_decoded or not isinstance(live_doc, dict):
+                        # A live document the key-scoped walk cannot address:
+                        # the full snapshot must be written back verbatim.
+                        if post != pre_backup:
+                            failures.append(
+                                f"iter {iteration}: unusable live config not "
+                                "restored from the full snapshot"
+                            )
+                        continue
+                    after_decoded, after_doc = _fuzz_json(post)
+                    if not after_decoded or not isinstance(after_doc, dict):
+                        failures.append(
+                            f"iter {iteration}: restore left an unreadable config"
+                        )
+                    elif _fuzz_unmanaged(after_doc, _FUZZ_KEYS) != _fuzz_unmanaged(
+                        live_doc, _FUZZ_KEYS
+                    ):
+                        failures.append(
+                            f"iter {iteration}: restore changed keys outside the "
+                            "managed scope ("
+                            f"{_fuzz_canonical(_fuzz_unmanaged(after_doc, _FUZZ_KEYS))}"
+                            f" vs {_fuzz_canonical(_fuzz_unmanaged(live_doc, _FUZZ_KEYS))})"
+                        )
+            except FileNotFoundError:
+                if step != "begin" or pre_live is not None:
+                    failures.append(
+                        f"iter {iteration}: {step} raised FileNotFoundError on a "
+                        "present live config"
+                    )
+            except Exception as exc:  # a hostile file must fail soft, never raise
+                failures.append(
+                    f"iter {iteration}: {step} raised {type(exc).__name__}: {exc}"
+                )
+            litter = _fuzz_temp_litter(root)
+            if litter:
+                failures.append(f"iter {iteration}: {step} stranded temp files {litter}")
 
 
 def _selftest() -> int:
@@ -724,6 +1062,39 @@ def _selftest() -> int:
             "a completed protocol leaves no backup, stale or temp",
             sorted(p.name for p in root.iterdir()) == [cfg.name],
         )
+
+    # 17. A snapshot that is valid JSON but NOT an object has no managed key to
+    # read back. The key-scoped walk used to read every managed key as absent
+    # and write the live config without it, which is the opposite of a restore:
+    # it silently dropped Enabled and two Pathfinding knobs off the live file.
+    # The full-snapshot exit is the only safe answer, same as a damaged live
+    # document.
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        cfg = root / "efficientserver.json"
+        cfg.write_text(json.dumps(original, indent=2) + "\n", encoding="utf-8")
+        for shape in ("[1, 2]", "null", '"text"', "42"):
+            cfg.write_text(json.dumps(original, indent=2) + "\n", encoding="utf-8")
+            s = ConfigSwap(cfg, keys, log=logs.append)
+            s.bak.write_text(shape, encoding="utf-8")
+            s.restore()
+            t.check(
+                f"non-object snapshot ({shape}) restored verbatim, not key-scoped",
+                cfg.read_text(encoding="utf-8") == shape and not s.bak.exists(),
+            )
+
+    # 18. The same protocol under randomized hostile input: the fixtures above
+    # pin one damaged state each, this drives random combinations of them.
+    failures: list[str] = []
+    for iteration in range(_FUZZ_ITERATIONS):
+        _fuzz_protocol(failures, iteration)
+    for detail in failures[:10]:
+        print("FAIL: fuzz: " + detail, file=sys.stderr)
+    t.check(
+        f"fuzz: {_FUZZ_ITERATIONS} randomized protocol cases on hostile configs"
+        f" ({len(failures)} invariant violation(s))",
+        not failures,
+    )
 
     return checks.finish()
 
