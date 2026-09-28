@@ -101,6 +101,14 @@ fi
 # still exists - it must survive a reboot. mktemp honors TMPDIR.
 export TMPDIR="$ROOT/.scratch/tmp"
 mkdir -p "$TMPDIR"
+# The installed mod tree is destroyed and rewritten below, and build.sh inside
+# this call destroys dist/ and the intermediate obj/bin. A second install or
+# uninstall of the same tree running at the same time would interleave with
+# both. Held until this script exits; build.sh takes its own, separate lock
+# underneath this one.
+# shellcheck source=scripts/repo_lock.sh
+source "$ROOT/scripts/repo_lock.sh"
+repo_lock install
 "$ROOT/scripts/build.sh"
 
 DEST="$SRV/Mods/EfficientServer"

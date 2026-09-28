@@ -109,6 +109,15 @@ finish() {
   ls -la "$OUT"
 }
 
+# One build of this tree at a time. Everything below this line deletes or
+# overwrites a path another invocation of this same script also deletes
+# (dist/EfficientServer, Source/EfficientServer/obj and bin), so two of them
+# running at once can remove each other's output mid-compile. The lock is held
+# until this script exits.
+# shellcheck source=scripts/repo_lock.sh
+source "$ROOT/scripts/repo_lock.sh"
+repo_lock build
+
 # Output dir, not an incremental cache: wipe so files removed upstream (or a
 # leftover .pdb from an older build) cannot leak into the packaged mod.
 rm -rf "$OUT"

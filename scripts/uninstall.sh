@@ -9,6 +9,7 @@
 #
 set -euo pipefail
 export LC_ALL=C TZ=UTC
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 usage() {
   cat <<'EOF'
@@ -81,6 +82,15 @@ if [[ ! -d "$DEST" ]]; then
   echo "Nothing installed at $DEST"
   exit 0
 fi
+
+# Same lock install.sh takes, over the same installed tree: the copy below
+# reads $DEST/Config and the rm -rf deletes it, so a concurrent install or
+# uninstall of the same install dir would either snapshot a half-removed
+# Config or restore into a folder that is on its way out. Held until this
+# script exits.
+# shellcheck source=scripts/repo_lock.sh
+source "$ROOT/scripts/repo_lock.sh"
+repo_lock install
 
 BACKUP_DIR="${SEVENDTD_UNINSTALL_BACKUP_DIR:-$SRV/EfficientServer-uninstall-backup}"
 # Every Config file is kept, not just the JSON: the bench harnesses' guard
