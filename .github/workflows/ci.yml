@@ -36,7 +36,17 @@ jobs:
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           cache: true
-          cache-dependency-path: Source/EfficientServer.Tests/packages.lock.json
+          # Every lock file the gates below restore. The mod project's is
+          # listed because `make unit` restores it too; leaving it out
+          # keys the cache on a file that is no longer the whole graph,
+          # so a mod-package bump would reuse a cache built for the old
+          # one. The coverage job's `make coverage` also restores the
+          # dotnet-coverage tool manifest, so that is a restore input
+          # here as well.
+          cache-dependency-path: |
+            Source/EfficientServer/packages.lock.json
+            Source/EfficientServer.Tests/packages.lock.json
+            .config/dotnet-tools.json
       # Runners ship shellcheck + python3 but not ruff or mypy. The versions
       # come from the Makefile, which preflight-lint compares against, so a
       # local bump of RUFF_VERSION/MYPY_VERSION cannot leave CI installing a
@@ -78,7 +88,17 @@ jobs:
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           cache: true
-          cache-dependency-path: Source/EfficientServer.Tests/packages.lock.json
+          # Every lock file the gates below restore. The mod project's is
+          # listed because `make unit` restores it too; leaving it out
+          # keys the cache on a file that is no longer the whole graph,
+          # so a mod-package bump would reuse a cache built for the old
+          # one. The coverage job's `make coverage` also restores the
+          # dotnet-coverage tool manifest, so that is a restore input
+          # here as well.
+          cache-dependency-path: |
+            Source/EfficientServer/packages.lock.json
+            Source/EfficientServer.Tests/packages.lock.json
+            .config/dotnet-tools.json
       # `make unit` without the Makefile: it exports POSIX paths and its
       # preflights shell out to unix tools, and the dotnet commands it wraps
       # are the whole recipe.
@@ -105,7 +125,17 @@ jobs:
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           cache: true
-          cache-dependency-path: Source/EfficientServer.Tests/packages.lock.json
+          # Every lock file the gates below restore. The mod project's is
+          # listed because `make unit` restores it too; leaving it out
+          # keys the cache on a file that is no longer the whole graph,
+          # so a mod-package bump would reuse a cache built for the old
+          # one. The coverage job's `make coverage` also restores the
+          # dotnet-coverage tool manifest, so that is a restore input
+          # here as well.
+          cache-dependency-path: |
+            Source/EfficientServer/packages.lock.json
+            Source/EfficientServer.Tests/packages.lock.json
+            .config/dotnet-tools.json
       # No ruff/mypy installs here: make coverage and coverage_badge.py touch
       # neither, unlike the optimizer job above.
       - run: make coverage

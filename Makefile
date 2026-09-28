@@ -193,6 +193,14 @@ lint: preflight-lint scratch
 # run. `make test` and CI never set it, so the gate still runs everything.
 UNIT_ARGS := $(if $(FILTER),-- --filter "$(FILTER)",)
 unit: preflight-unit scratch
+# Both projects restore locked. The test project is the suite; the mod project
+# is here because nothing else in this gate touches it, and its committed
+# packages.lock.json would otherwise never be read: `make build` needs a game
+# install, which CI does not have, so a PackageReference bumped without the
+# lock file regenerated went unnoticed until a maintainer's own build failed.
+# Restore resolves packages only; the game assemblies are bound as build-time
+# references (HintPath), so no game install is needed to check the hash.
+	dotnet restore --locked-mode $(ROOT)/Source/EfficientServer
 	dotnet restore --locked-mode $(ROOT)/Source/EfficientServer.Tests
 	dotnet run --project $(ROOT)/Source/EfficientServer.Tests -c Release --no-restore $(UNIT_ARGS)
 

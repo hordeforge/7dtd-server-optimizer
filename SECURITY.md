@@ -83,11 +83,9 @@ What ships and how it is protected:
   reference metadata only (`PrivateAssets="all"`), so they cannot change the
   emitted IL. Their graph is hash-pinned too: a committed
   `Source/EfficientServer/packages.lock.json` records the content hash of both.
-  The hash is not enforced, because `make build` restores without
-  `--locked-mode` and CI never restores the mod project at all, so a lock file
-  that drifts is rewritten in place rather than failing a gate. A substituted
-  package at the same version is caught by a human reading the lock-file diff,
-  not by the build. Restore sources are pinned in-repo by
+  The hash is enforced: `make build` and `make test` both restore the mod
+  project with `--locked-mode`, so a lock file that drifts fails the gate
+  instead of being rewritten in place. Restore sources are pinned in-repo by
   `NuGet.config` (nuget.org only, with inherited machine- and user-level feeds
   cleared), so a feed added outside this repo cannot satisfy either package.
 - The `dotnet-coverage` local tool is a third fetch that is not hash-locked:

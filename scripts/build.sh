@@ -124,7 +124,23 @@ rm -rf "${SRC:?}/obj" "${SRC:?}/bin"
 BUILD_BACKEND="${SEVENDTD_BUILD_BACKEND:-auto}"
 if [[ "$BUILD_BACKEND" != "mcs" ]] && command -v dotnet >/dev/null 2>&1 && dotnet --list-sdks 2>/dev/null | grep -q .; then
   echo "Building with dotnet SDK against: $MANAGED"
-  dotnet build "$SRC/EfficientServer.csproj" -c Release \
+  # Locked restore, so the contentHash this project committed in
+  # packages.lock.json is checked instead of being rewritten in place. Same
+  # contract as the test project's restore in the Makefile: a PackageReference
+  # that changed without the lock file being regenerated fails here, rather
+  # than silently restoring whatever the feed serves today. The same
+  # properties the build below passes, so restore evaluates the project the
+  # way the build does.
+  if ! dotnet restore "$SRC/EfficientServer.csproj" --locked-mode \
+    -p:GameManagedDir="$MANAGED" -p:HarmonyPath="$HARMONY" \
+    -p:EfficientServerOutput="$OUT/"; then
+    echo "ERROR: locked restore of the mod project failed." >&2
+    echo "  If you changed a PackageReference, regenerate the lock file with" >&2
+    echo "  'dotnet restore $SRC/EfficientServer.csproj' (plain, not locked)" >&2
+    echo "  and commit the new packages.lock.json with the csproj change." >&2
+    exit 1
+  fi
+  dotnet build "$SRC/EfficientServer.csproj" -c Release --no-restore \
     -p:GameManagedDir="$MANAGED" -p:HarmonyPath="$HARMONY" \
     -p:EfficientServerOutput="$OUT/" \
     -p:ContinuousIntegrationBuild=true

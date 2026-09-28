@@ -127,14 +127,15 @@ supported retarget: rebuild with `make build` and reinstall.
 - Game refs (Assembly-CSharp, UnityEngine.*, 0Harmony, Newtonsoft.Json,
   LogLibrary, AstarPathfindingProject) resolve from the installed game; a
   missing managed DLL fails the build with a clear reference error
-- The test project's one NuGet dependency is hash-pinned in the committed
-  `packages.lock.json` and restored in locked mode by `make test`; the mod
+- Both package graphs are hash-pinned in committed `packages.lock.json` files
+  and restored in locked mode: `make test` restores the test project and the
+  mod project, and `make build` restores the mod project locked too. The mod
   project fetches only the net48 reference assemblies the SDK would otherwise
-  pull in itself, both declared there with an exact version range, so neither
-  floats. That pair is version-pinned and its hashes are recorded in a
-  committed `Source/EfficientServer/packages.lock.json`, but the hash is not
-  enforced: `make build` restores without locked mode and CI never restores the
-  mod project (see R7 in
+  pull in implicitly, both declared there with an exact version range, so
+  neither floats. That pair is version-pinned and its hashes are recorded in a
+  committed `Source/EfficientServer/packages.lock.json`, and the hashes are
+  enforced: both `make build` and `make test` restore the mod project in
+  locked mode, so a drifting lock file fails the gate (the residual is in R7 of
   [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md)). The restore source list is
   pinned in-repo by [`NuGet.config`](NuGet.config) (nuget.org only, inherited
   machine/user feeds cleared)

@@ -226,13 +226,18 @@ truncated, corrupted, key-drifted, or missing snapshot:
 python3 scripts/backup_config.py --dest /mnt/backup/es-config --verify
 ```
 
-Restore one without touching the live config, then put it in place yourself:
+Restore one without touching the live config, then put it in place yourself.
+Stage the recovered file somewhere private, never in `/tmp`: it is tmpfs on most
+Linux hosts, so the copy is RAM-backed and gone on reboot, and the directory is
+world-writable, so a config left there is readable by every local account.
 
 ```bash
+umask 077
 python3 scripts/backup_config.py --dest /mnt/backup/es-config \
-    --restore 20260928_101500 --to /tmp/recovered.json
-cp -a /tmp/recovered.json "$DS/Mods/EfficientServer/Config/efficientserver.json"
+    --restore 20260928_101500 --to "$HOME/es-recovered.json"
+cp -a "$HOME/es-recovered.json" "$DS/Mods/EfficientServer/Config/efficientserver.json"
 es reload
+rm -f "$HOME/es-recovered.json"
 ```
 
 ### Restore the live config

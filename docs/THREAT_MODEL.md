@@ -23,7 +23,7 @@ workflow, and every change to the console arm gates named under B2.
 | R4 | Console actor can degrade or disable live gameplay with one command | B2 console to mod | The bench-god and fidelity-probe arms are refused unless the operator opted in (`ConsoleCmdEfficientServer.cs:392,204`). Where the opt-in is on, any console-level actor gets global damage immunity for every player (`Patches/BenchGodPatch.cs:32`) or enemy animation and rig disable, unconfirmed and unscoped. Partly mitigated since the last review: revoking the opt-in in the config now stops the damage immunity on the next reload and per-damage-frame re-read (`Patches/BenchGodPatch.cs:32-33`), and a reload without the probe opt-in releases armed animator/rig probes (`ModApi.cs:160-168`). The arm itself is still one console command away, and neither is persisted across restart, so a restart re-applies nothing while a kill mid-bench leaves the arm hot until a reload |
 | R5 | Config-file self-denial-of-service paths | B1 filesystem to mod | Clamped maxima are still potent: `TickGuard` despawns living enemies once the tick EMA stays past `ShedAboveMs` for `WindowTicks` (`Patches/TickGuardPatch.cs:134`) and `Governor.AnimatorEmergency` engages itself past `EmergencyOverMs` (`Patches/GovernorPatch.cs:147`); both default off, both config-enableable. A stale measurement cannot survive a world change: both re-base their interval EMA and window counters on every world change (`Patches/TickGuardPatch.cs:43-47`, `Patches/GovernorPatch.cs:172-174`, driven by `Patches/GameStartPatch.cs:38-39`) and drop the average whenever their gate is closed, so an `es reload` that re-enables a lever cannot fire a shed on the new world's spawn load alone. The heap-growing GC megapause probe that used to sit here was removed after tag `v1.19.0` and is unreleased (`CHANGELOG.md:32`) |
 | R6 | Inherited telnet exposure | B7 network to console | The shipped serverconfig template enables telnet on port 8082 with an empty password (`serverconfig.optimized.xml:33-35`); safety depends entirely on the game's loopback fallback and failed-login limit, not on this repo |
-| R7 | The mod project's NuGet hashes are recorded but never enforced | B4 build to runtime | `Source/EfficientServer/packages.lock.json` is now committed and carries a `contentHash` for both reference-assembly packages, so the graph is reviewable. Both are declared in `Source/EfficientServer/EfficientServer.csproj` with an exact range: the parent `Microsoft.NETFramework.ReferenceAssemblies` had to be declared explicitly, because the SDK adds it as a bare `Version="1.0.3"`, which NuGet normalizes to the open range `[1.0.3, )`, and the SDK skips its implicit reference when a `PackageReference` with that identity already exists. Before that it was the one range in the fetched graph that could float. Nothing checks the recorded hash at build time: `make build` (`scripts/build.sh`, reached from `Makefile:121`) restores without `--locked-mode`, and no gate restores the mod project at all (`make test` restores only `Source/EfficientServer.Tests`, `Makefile:196`). A lock file that drifts is rewritten in place, so a substituted package at the same version fails nothing. Only the test graph is both hash-pinned and locked-mode restored. The packages supply reference assemblies only, so they cannot change the emitted IL. `README.md`, `SECURITY.md` and `NuGet.config` corrected on this pass |
+| R7 | The mod project's NuGet hashes are recorded and now enforced, with a first-lookup residual | B4 build to runtime | `Source/EfficientServer/packages.lock.json` is committed and carries a `contentHash` for both reference-assembly packages, so the graph is reviewable. Both are declared in `Source/EfficientServer/EfficientServer.csproj` with an exact range: the parent `Microsoft.NETFramework.ReferenceAssemblies` had to be declared explicitly, because the SDK adds it as a bare `Version="1.0.3"`, which NuGet normalizes to the open range `[1.0.3, )`, and the SDK skips its implicit reference when a `PackageReference` with that identity already exists. Before that it was the one range in the fetched graph that could float. The hash is now checked: `make build` (`scripts/build.sh`) restores the mod project with `--locked-mode`, and `make test` restores it too (`Makefile`, `unit`), so a lock file that drifts fails a gate instead of being rewritten in place. Restore needs no game install, because the game assemblies are bound as build-time references. The residual is what no graph can close: both restores still resolve a name from nuget.org first, so a feed that answered the very first lookup of a fresh cache could serve a package the lock file then rejects. The packages supply reference assemblies only, so they cannot change the emitted IL. `README.md`, `SECURITY.md` and `NuGet.config` updated with the behavior |
 | R8 | Repo tooling writes the live config and moves it off-host | B1 tooling to install | `scripts/es_cfg_guard.py` rewrites managed keys of the installed config in place and unlinks stranded temp files beside it; `scripts/backup_config.py` copies the live config to an operator-named destination outside the install tree and can restore over the live file. Both are the R3 write position held by a script, so both are in the blast radius of anything that can run them |
 
 Not risks here: the mod opens no sockets, spawns no processes, stores no
@@ -193,15 +193,11 @@ write APIs under `Source/EfficientServer/`; the only file read is
   restored `--locked-mode` (`Makefile:196`, `Source/EfficientServer.Tests/packages.lock.json`).
   The mod project adds one fetched package,
   `Microsoft.NETFramework.ReferenceAssemblies.net48` at exact range `[1.0.3]`
-  (`Source/EfficientServer/EfficientServer.csproj:35`), which `RestorePackagesWithLockFile`
-  would record in `Source/EfficientServer/packages.lock.json`; that file is not
-  in the tree, and `make build` restores without `--locked-mode`
-  (`Makefile:121`, `scripts/build.sh`). The package provides reference metadata
-  only (`PrivateAssets="all"`), so it cannot alter the emitted IL, but its
-  content is verified only by version number. `NuGet.config` and the previous
-  `SECURITY.md` both asserted a lock file for this graph; corrected on this
-  pass. Candidate fix: commit the mod project's lock file and restore it
-  locked-mode in `build.sh`.
+  (`Source/EfficientServer/EfficientServer.csproj`), recorded with a
+  `contentHash` in the committed `Source/EfficientServer/packages.lock.json`
+  and restored `--locked-mode` by both `make build` (`scripts/build.sh`) and
+  `make test`. The package provides reference metadata
+  only (`PrivateAssets="all"`), so it cannot alter the emitted IL.
 - Spoofing (supply chain): CI actions are commit-pinned with a stated reason
   (`.github/workflows/ci.yml:27,36`, `.github/workflows/release.yml`), the
   release job runs on a `v*` tag with a read-only token and a 5-minute timeout,
@@ -392,11 +388,10 @@ Checked the docs against the code; results:
   project's fetched package is version-pinned only. That stopped being true:
   the lock file is in the tree (`111ed95`) and carries a `contentHash` for both
   reference-assembly packages, which are now declared in the csproj. The docs
-  now say what the file contains, and the residual is the part the file cannot
-  do, namely that no gate restores the mod project: `make build` restores
-  without `--locked-mode` (`scripts/build.sh`, no `RestoreLockedMode`) and
-  `make test` restores only the test project (`Makefile:196`), so a drifting
-  lock file is rewritten in place rather than failing. R7 records that.
+  now say what the file contains, and a later pass added the enforcement half:
+  `make build` and `make test` now restore the mod project `--locked-mode`, so
+  the recorded hash is checked rather than a drifting lock file being rewritten
+  in place. R7 records what is left.
 - **Corrected on this pass.** The previous revision dated the model at `d72362a`
   and predated the last four commits, which moved the install wipe
   (`install.sh:120,122`), rewrote the atomic config write, and re-based the
@@ -435,11 +430,7 @@ Checked the docs against the code; results:
   (`scripts/run_server.sh`). Each is falsifiable by sec-review against the named
   code.
 - Gaps (ranked): R2 install path verifies nothing (candidate fix: compare a
-  recorded artifact hash in `install.sh` before copying); R7 the mod project's
-  lock file is committed but never enforced (candidate fix: restore it
-  locked-mode in `build.sh` and add a `dotnet restore --locked-mode
-  Source/EfficientServer` step to `make test`, which needs game assembly paths
-  only for the build, not the restore); R3 the config file is unsigned and pre-authorizes
+  recorded artifact hash in `install.sh` before copying); R3 the config file is unsigned and pre-authorizes
   the R4 arms; R4 no scope or confirmation at arming time; no signing or release
   provenance process documented anywhere; the backup manifest is unsigned, so a
   self-consistent tampered snapshot verifies (abuse case 6).

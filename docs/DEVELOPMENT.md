@@ -174,10 +174,12 @@ mod version older than the installed config still starts: an unrecognized key
 is reported once at load (`config unknown key '...' ignored ...`) and the rest
 of the file still applies.
 
-NuGet dependencies are hash-pinned by the committed
-`Source/EfficientServer.Tests/packages.lock.json`; `make test` restores in
+NuGet dependencies are hash-pinned by the committed `packages.lock.json` of
+both package graphs, `Source/EfficientServer.Tests/` and
+`Source/EfficientServer/`; `make test` and `make build` restore in
 locked mode, so bumping a `PackageReference` requires regenerating that file
-with `dotnet restore Source/EfficientServer.Tests` (plain, not locked) and
+with `dotnet restore Source/EfficientServer.Tests` or
+`dotnet restore Source/EfficientServer` (plain, not locked) and
 committing it together with the version change. Restore sources are pinned in
 `NuGet.config` (nuget.org only, inherited machine and user feeds cleared);
 add a source there, in the same change that needs it.
