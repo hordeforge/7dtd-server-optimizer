@@ -33,6 +33,7 @@ import os
 import re
 import shutil
 import sys
+import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import TypedDict
@@ -129,6 +130,64 @@ def live_config(server_root: Path) -> Path:
     return server_root / CONFIG_REL
 
 
+# A snapshot is built under this name and renamed into place, so a run killed
+# between the two file writes cannot publish a half snapshot (see snapshot). The
+# creating pid is part of the name, so a dead run's staging dir is attributable
+# and the next run can reap it; the same pid-attributable temp rule the config
+# guard applies beside the installed config (es_cfg_guard._write_atomic).
+STAGING_PREFIX = ".staging-"
+
+
+def _staging_owner(name: str) -> int:
+    """The pid that created staging dir ``name``, or 0 when it is not one."""
+    head = name[len(STAGING_PREFIX) :].partition(".")[0]
+    return int(head) if head.isdigit() else 0
+
+
+def _sweep_abandoned_staging(dest: Path) -> None:
+    """Drop staging dirs left behind by runs that died before publishing.
+
+    A staging dir holds no finished snapshot, and its name matches nothing in
+    `snapshot_dirs`, so nothing else in this tool would ever remove it: a host
+    whose snapshots are taken by a cron killed by a timeout would accumulate one
+    per run forever. A dir whose owning pid is still running belongs to a
+    concurrent run and is left alone, exactly like the guard's temp sweep.
+    """
+    for entry in dest.glob(f"{STAGING_PREFIX}*"):
+        owner = _staging_owner(entry.name)
+        if not owner:
+            continue
+        try:
+            os.kill(owner, 0)
+        except ProcessLookupError:
+            shutil.rmtree(entry, ignore_errors=True)
+        except OSError:
+            pass  # alive (or not ours to signal): not ours to remove
+
+
+def _new_staging(dest: Path) -> Path:
+    _sweep_abandoned_staging(dest)
+    return Path(
+        tempfile.mkdtemp(prefix=f"{STAGING_PREFIX}{os.getpid()}.", dir=str(dest))
+    )
+
+
+def _publish(staging: Path, target: Path) -> None:
+    """Move a finished staging dir onto its final stamp name.
+
+    One rename, so both files appear together or not at all, and a kill before
+    it leaves the destination exactly as it was. rename() is also the loud
+    option against the stamp collision the existence check above races with: a
+    directory that already holds files cannot be replaced, so a concurrent run
+    that won the name is reported instead of merged into.
+    """
+    try:
+        os.rename(staging, target)
+    except OSError as exc:
+        msg = f"could not publish snapshot {target.name}: {exc}"
+        raise BackupError(msg) from exc
+
+
 def _resolve_outside_install(dest: Path, server_root: Path) -> Path:
     """Fail when the snapshot destination sits inside the install tree.
 
@@ -160,6 +219,15 @@ def snapshot(
     The snapshot is written and then read back, so a successful return means the
     copy loads, not merely that `cp` exited 0. A live config that is missing or
     unloadable is an error: an empty snapshot dir would look like a healthy backup.
+
+    Rerun safety: a snapshot this call could not finish leaves NOTHING behind.
+    It is built in a staging dir and renamed into place, so a kill between the
+    two file writes cannot publish a half snapshot (a dir holding one of the two
+    files is invisible to `snapshot_dirs`, so it would be neither verified nor
+    pruned, and its stamp would stay taken for the retention window), and a
+    snapshot that fails its own read-back is removed again before the error is
+    raised. Without that, one failed run left a snapshot that made every LATER
+    `--verify` and every later `snapshot()` fail, with no rerun able to clear it.
     """
     if keep < 1:
         msg = f"--keep must be at least 1, got {keep}"
@@ -192,19 +260,38 @@ def snapshot(
         # one, which is the exact loss a rerun must not cause.
         target = dest / f"{stamp}_{n:0{STAMP_SUFFIX_DIGITS}d}"
         n += 1
-    target.mkdir(parents=True)
     manifest: Manifest = {
         "stamp": target.name,
         "source": str(live),
         "sha256": sha256_of(live),
     }
-    (target / CONFIG_NAME).write_bytes(live.read_bytes())
-    (target / MANIFEST_NAME).write_text(
-        json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
-    )
+    # Build under a name no reader matches, then publish with one rename. The
+    # stamp in the manifest is the FINAL name, so the manifest is built here,
+    # not inside the staging dir, where target.name would read as the staging
+    # name. A staging dir left by a killed run is matched by no reader, which is
+    # why _new_staging sweeps the ones whose owning pid is gone instead of
+    # letting them accumulate under the backup destination.
+    dest.mkdir(parents=True, exist_ok=True)
+    staging = _new_staging(dest)
+    try:
+        (staging / CONFIG_NAME).write_bytes(live.read_bytes())
+        (staging / MANIFEST_NAME).write_text(
+            json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
+        _publish(staging, target)
+    except BaseException:
+        # A write or rename that never published leaves the staging dir as the
+        # run's only residue; drop it so a retry starts from the state this
+        # attempt found.
+        shutil.rmtree(staging, ignore_errors=True)
+        raise
 
     problems = verify(dest)
     if problems:
+        # The destination is left exactly as this call found it: a snapshot
+        # nobody can restore is worse than no snapshot, and leaving it would
+        # make every later verify and every later snapshot fail on it.
+        shutil.rmtree(target, ignore_errors=True)
         raise BackupError(
             f"snapshot {target.name} does not verify: " + "; ".join(problems)
         )
@@ -228,13 +315,22 @@ def _snapshot_order(name: str) -> tuple[str, int]:
 
 
 def snapshot_dirs(dest: Path) -> list[Path]:
-    """Snapshot dirs, oldest first (see `_snapshot_order`)."""
+    """Snapshot dirs, oldest first (see `_snapshot_order`).
+
+    A staging dir (see `snapshot`) is never a snapshot even when it already holds
+    both files: it belongs to a run that has not published yet, so counting it
+    would let `prune` delete it out from under that run. Only the pid sweep
+    removes one.
+    """
     if not dest.is_dir():
         return []
     found = [
         p
         for p in dest.iterdir()
-        if p.is_dir() and (p / CONFIG_NAME).is_file() and (p / MANIFEST_NAME).is_file()
+        if p.is_dir()
+        and not p.name.startswith(STAGING_PREFIX)
+        and (p / CONFIG_NAME).is_file()
+        and (p / MANIFEST_NAME).is_file()
     ]
     return sorted(found, key=lambda p: _snapshot_order(p.name))
 
@@ -442,8 +538,6 @@ def _dispatch(args: argparse.Namespace) -> int:
 
 
 def _selftest() -> int:
-    import tempfile
-
     t = Checks("backup_config")
     # Fixed clock base: every snapshot in this self-test names itself from an
     # explicit instant, so no assertion below can hinge on a wall-clock second
@@ -593,6 +687,66 @@ def _selftest() -> int:
         t.check("the file outside the snapshot root is untouched",
                 (outside / CONFIG_NAME).read_bytes() == planted_bytes)
         t.check("a refused traversal writes nothing", not (out / "stolen.json").exists())
+
+    # The property the snapshot protocol actually promises: a run that did not
+    # finish leaves the destination as it found it, so the NEXT run is not
+    # poisoned by it. A failed run that published its own half-written snapshot
+    # made every later verify and every later snapshot fail forever, with no
+    # rerun able to clear it.
+    with tempfile.TemporaryDirectory(prefix="es-backup-rerun.") as raw:
+        td = Path(raw)
+        srv, live = make_tree(td)
+        dest = td / "offhost"
+
+        # A pre-existing broken snapshot is one the operator has to look at, and
+        # it makes the read-back of the NEW snapshot fail with it.
+        broken = dest / "20260101_000000"
+        broken.mkdir(parents=True)
+        (broken / CONFIG_NAME).write_text("{ truncated", encoding="utf-8")
+        (broken / MANIFEST_NAME).write_text(
+            json.dumps({"stamp": broken.name, "source": "x", "sha256": "0" * 64}) + "\n",
+            encoding="utf-8",
+        )
+        before = {p.name for p in dest.iterdir()}
+        try:
+            snapshot(srv, dest, now=t0)
+            t.check("a snapshot whose read-back fails raises", False)
+        except BackupError:
+            t.check("a snapshot whose read-back fails raises", True)
+        t.check(
+            "a failed snapshot is retracted, not published",
+            {p.name for p in dest.iterdir()} == before,
+        )
+        t.check(
+            "the failed run left no staging dir behind",
+            not [p for p in dest.iterdir() if p.name.startswith(STAGING_PREFIX)],
+        )
+        # Clear what the operator would clear, and the rerun must succeed.
+        shutil.rmtree(broken)
+        after, _ = snapshot(srv, dest, now=t0)
+        t.check("a rerun after a failure takes a clean snapshot", verify(dest) == [])
+        t.check("the rerun's snapshot carries the live bytes",
+                (after / CONFIG_NAME).read_bytes() == live.read_bytes())
+
+        # Staging dirs of killed runs are reaped by the next one (dead pid), a
+        # live run's is left alone, and neither is ever a snapshot.
+        dead_pid = 2**22 - 1  # above the default pid_max: cannot be running
+        dead = dest / f"{STAGING_PREFIX}{dead_pid}.abcd"
+        dead.mkdir()
+        (dead / CONFIG_NAME).write_bytes(live.read_bytes())
+        (dead / MANIFEST_NAME).write_text("{}", encoding="utf-8")
+        alive = dest / f"{STAGING_PREFIX}{os.getppid()}.efgh"
+        alive.mkdir()
+        (alive / CONFIG_NAME).write_bytes(live.read_bytes())
+        (alive / MANIFEST_NAME).write_text("{}", encoding="utf-8")
+        snapshot(srv, dest, now=t1)
+        t.check("a staging dir of a dead run is swept", not dead.exists())
+        t.check("a staging dir of a live run is kept", alive.is_dir())
+        t.check(
+            "a staging dir is never counted as a snapshot",
+            all(not p.name.startswith(STAGING_PREFIX) for p in snapshot_dirs(dest)),
+        )
+        t.check("the sweep leaves the snapshots verifying", verify(dest) == [])
 
     t.check(
         "a typo'd key is reported as unknown",

@@ -211,7 +211,12 @@ re-reads the copy back before reporting success: a snapshot that would not load
 is a failed run, not a backup. A retry inside the same second adds a
 suffix-numbered snapshot rather than replacing the earlier one, and retention
 counts by creation order, so a rerun never deletes the snapshot it just took.
-The destination must be off this install tree
+A run that does not finish leaves the destination as it found it: the copy is
+built in a staging directory and renamed into place, so a run killed mid-write
+publishes no half snapshot, and a snapshot that fails its own read-back is
+removed before the error is raised, so the failure cannot make every later
+`--verify` and every later snapshot fail. The destination must be off this
+install tree
 (the tool refuses it), so a lost disk cannot take the copy with the config.
 
 Verify on a schedule; this is the sample-restore drill, and it exits 1 on a

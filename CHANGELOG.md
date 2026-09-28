@@ -164,6 +164,19 @@ chosen up front:
   (`1e999999999`) exited `coverage_badge.py` with a traceback; only
   `InvalidOperation` was handled. Both now report the named FAIL line and exit
   1, leaving any existing badge untouched.
+- A `scripts/backup_config.py` run that failed its own read-back left the
+  snapshot it had just written under the backup destination, where it made
+  every later `--verify` and every later snapshot fail, with no rerun able to
+  clear it. The copy is now built in a staging directory and renamed into
+  place, so a run killed mid-write publishes no half snapshot, a snapshot
+  that fails its read-back is removed before the error is raised, and the next
+  run sweeps a staging directory whose owning pid is gone.
+- `scripts/verify_reproducible.sh` cleared `dist/` to make its "exactly one
+  zip" check work, so running it destroyed a release zip the operator was
+  about to publish, and a killed run destroyed it with nothing put back. The
+  zips already there are parked before the first leg and restored on every exit
+  path; one whose name the run rebuilds is kept aside at a printed path rather
+  than deleted.
 - The config structure fuzz treated the static `ServerPerfConfig.LastLoadFailed`
   load outcome as a knob, so it mutated a leaf the serializer never writes and
   the suite failed on `leaf 'LastLoadFailed' present in serialized defaults`.

@@ -76,6 +76,43 @@ package_zip() {
   printf '%s\n' "$1"
 }
 
+# The count check above needs dist/ to hold exactly the zip this run just built,
+# which is why package_zip clears the directory. A pre-existing zip is the
+# operator's artifact (a release they are about to publish), not this check's
+# scratch: rm -f over it destroyed a good build on the first run, and a killed
+# run destroyed it with nothing put back. Park them, and put them back on every
+# exit path instead.
+PREBUILT="$(stage_new es-repro-prebuilt)"
+shopt -s nullglob
+for _zip in "$ROOT"/dist/EfficientServer-*.zip; do
+  mv -f "$_zip" "$PREBUILT/"
+done
+shopt -u nullglob
+unset _zip
+restore_prebuilt() {
+  local zip name
+  shopt -s nullglob
+  for zip in "$PREBUILT"/*.zip; do
+    name="$(basename "$zip")"
+    if [[ -e "$ROOT/dist/$name" ]]; then
+      # This run built the same name (an unchanged tree, VERSION pinned): the
+      # fresh archive wins, and the parked one stays where it is rather than
+      # being deleted, so the operator can still get to it.
+      echo "NOTE: $PREBUILT/$name kept aside; this run built dist/$name too" >&2
+    else
+      mv -f "$zip" "$ROOT/dist/"
+    fi
+  done
+  shopt -u nullglob
+  # Only once nothing is left inside: a kept-aside zip must survive the run.
+  rmdir "$PREBUILT" 2>/dev/null || true
+}
+cleanup() {
+  [[ -n "${STAGE:-}" ]] && rm -rf "$STAGE"
+  restore_prebuilt
+}
+trap cleanup EXIT
+
 fail() { echo "FAIL: $*" >&2; exit 1; }
 
 echo "== leg 1: baseline package"
@@ -92,7 +129,6 @@ echo "  identical"
 
 echo "== leg 3: full recompile from a copied tree at another path"
 STAGE="$(stage_new es-repro)"
-trap 'rm -rf "$STAGE"' EXIT
 # Copy including .git so version resolution sees the same history; exclude
 # build outputs, local launch state and .scratch (which holds $STAGE itself)
 # so nothing but sources carries over.

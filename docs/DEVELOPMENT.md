@@ -159,7 +159,10 @@ gh release create v0.1.0 dist/EfficientServer-0.1.0.zip --title "EfficientServer
 
 Attach the zip's `sha256sum` to the release body. The zip is reproducible
 (`make verify-reproducible`), so a consumer can rebuild it and compare; without
-a published digest there is nothing to compare against.
+a published digest there is nothing to compare against. That check needs `dist/`
+to hold exactly the zip it just built, so it parks any zip already there and
+puts it back on every exit path: a release zip waiting to be published survives
+the check, including a run of it that is killed.
 
 A published version is immutable: never re-upload a zip over an existing tag
 or move that tag. Ship the fix forward instead, as a new mod version with its
@@ -208,7 +211,7 @@ Offline gates run by `make test` and CI. Live-server harnesses need a running de
 | `validate_anim_path_admission.py` | Live A/B: animator-emergency + path-admission against real bots/zombies (telnet + loadgen); see RESULTS |
 | `validate_bloodmoon_path.py` | Live blood-moon path-admission A/B: real director-spawned horde, baseline vs path knobs on; writes a JSON report |
 | `measure_es_onoff.py` | Live whole-mod ES on/off APM compare; `ES_ARM=on|off` = matched-arm mode (fresh server per arm) |
-| `verify_reproducible.sh` (`make verify-reproducible`) | Rebuild-and-compare proof of the packaging reproducibility claim: same-tree repackage, full recompile, out-of-tree path variation; needs a game install |
+| `verify_reproducible.sh` (`make verify-reproducible`) | Rebuild-and-compare proof of the packaging reproducibility claim: same-tree repackage, full recompile, out-of-tree path variation; parks and restores the zips already in `dist/`; needs a game install |
 | `build.sh` / `install.sh` / `uninstall.sh` / `package.sh` / `run_server.sh` | `make build` / `install` / `uninstall` / `package` / `run`; the only scripts that need a game install (`verify_reproducible.sh` is listed on its own row above) |
 
 Known infra note: >12 loadgen bots can trigger a stock LiteNetLib join flake
