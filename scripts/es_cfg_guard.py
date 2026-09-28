@@ -74,14 +74,29 @@ TEMP_ATTEMPTS = 8
 # test: it accepts superscript and non-ASCII digits, so "²" passes it and then
 # raises ValueError in int(), and an unbounded digit run parses fine and then
 # raises OverflowError in os.kill. The name being parsed is whatever sits in the
-# LIVE install directory, not a name this process minted, so the parse has to
-# reject those instead of raising out of the sweep.
-_TEMP_OWNER_RE = re.compile(r"\A[0-9]{1,9}\Z")
+# LIVE install directory or the operator's backup destination, not a name this
+# process minted, so the parse has to reject those instead of raising out of
+# the sweep.
+_OWNER_PID_RE = re.compile(r"\A[0-9]{1,9}\Z")
 # The sweep only uses the value for a signal-0 liveness probe, so a pid the
 # kernel could never have assigned is unparseable for the same reason a
 # non-numeric one is. This is the Linux pid_max ceiling (2^22); it is a bound
 # on the PARSE, not a policy about the host.
-_MAX_TEMP_OWNER_PID = 4_194_304
+_MAX_OWNER_PID = 4_194_304
+
+
+def owner_pid(text: str) -> int | None:
+    """``text`` as a pid this host could have assigned, or None.
+
+    The one pid parse behind every pid-in-a-filename sweep, shared with
+    backup_config's staging sweep so both directories are read by the same
+    rule. Non-ASCII digits and digit runs past the C int are rejected here
+    rather than raising out of the caller's sweep.
+    """
+    if _OWNER_PID_RE.match(text) is None:
+        return None
+    pid = int(text)
+    return pid if pid <= _MAX_OWNER_PID else None
 
 
 def _temp_owner(name: str, base_name: str) -> int | None:
@@ -89,11 +104,7 @@ def _temp_owner(name: str, base_name: str) -> int | None:
     if not name.startswith(base_name + TEMP_INFIX):
         return None
     tail = name[len(base_name) + len(TEMP_INFIX) :]
-    owner = tail.split("_", 1)[0]
-    if _TEMP_OWNER_RE.match(owner) is None:
-        return None
-    pid = int(owner)
-    return pid if pid <= _MAX_TEMP_OWNER_PID else None
+    return owner_pid(tail.split("_", 1)[0])
 
 
 USAGE = """\
@@ -1131,7 +1142,7 @@ def _selftest() -> int:
         hostile = [
             root / f"{cfg.name}{TEMP_INFIX}\N{SUPERSCRIPT TWO}_0",
             root / f"{cfg.name}{TEMP_INFIX}{'9' * 20}_0",
-            root / f"{cfg.name}{TEMP_INFIX}{_MAX_TEMP_OWNER_PID + 1}_0",
+            root / f"{cfg.name}{TEMP_INFIX}{_MAX_OWNER_PID + 1}_0",
             root / f"{cfg.name}{TEMP_INFIX}-1_0",
         ]
         for stray in hostile:

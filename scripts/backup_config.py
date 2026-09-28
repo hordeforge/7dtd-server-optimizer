@@ -39,7 +39,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import TypedDict
 
-from es_cfg_guard import CFG_ENCODING
+from es_cfg_guard import CFG_ENCODING, owner_pid
 from repo_root import repo_root
 from selftest_support import Checks
 
@@ -140,9 +140,16 @@ STAGING_PREFIX = ".staging-"
 
 
 def _staging_owner(name: str) -> int:
-    """The pid that created staging dir ``name``, or 0 when it is not one."""
-    head = name[len(STAGING_PREFIX) :].partition(".")[0]
-    return int(head) if head.isdigit() else 0
+    """The pid that created staging dir ``name``, or 0 when it is not one.
+
+    The parse is the guard's (es_cfg_guard.owner_pid), not `str.isdigit()`:
+    `isdigit` accepts superscript and non-ASCII digits, so a destination
+    holding `.staging-².x` raised ValueError out of the sweep, and an
+    unbounded digit run parsed fine and then raised OverflowError from
+    os.kill. The destination is the operator's own directory (a synced
+    folder, a shared volume), so these names are not ones this tool minted.
+    """
+    return owner_pid(name[len(STAGING_PREFIX) :].partition(".")[0]) or 0
 
 
 def _sweep_abandoned_staging(dest: Path) -> None:
@@ -749,6 +756,24 @@ def _selftest() -> int:
             all(not p.name.startswith(STAGING_PREFIX) for p in snapshot_dirs(dest)),
         )
         t.check("the sweep leaves the snapshots verifying", verify(dest) == [])
+
+        # A staging dir whose pid half is not a pid this host could have
+        # assigned is not a temp of this protocol, and the sweep must LEAVE it
+        # rather than raise: the destination is the operator's own directory, so
+        # the names there are not ones this tool minted. `.staging-².x` raised
+        # ValueError from int() and a 20-digit run raised OverflowError from
+        # os.kill, both out of snapshot().
+        hostile = [dest / f"{STAGING_PREFIX}\N{SUPERSCRIPT TWO}.ijkl",
+                   dest / f"{STAGING_PREFIX}{'9' * 20}.mnop"]
+        for stray in hostile:
+            stray.mkdir()
+        snapshot(srv, dest, now=t1 + timedelta(seconds=1))
+        t.check(
+            "a staging dir with a non-ASCII pid is left in place, not raised on",
+            all(s.is_dir() for s in hostile),
+        )
+        for stray in hostile:
+            shutil.rmtree(stray)
 
     t.check(
         "a typo'd key is reported as unknown",

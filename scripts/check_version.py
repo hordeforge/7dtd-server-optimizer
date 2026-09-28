@@ -61,8 +61,27 @@ one. Wired into `make test`.
 """
 
 
+def read_text(path: Path) -> str | None:
+    """UTF-8 text of ``path``, or None when it cannot be read at all.
+
+    Every input here is a file in the working tree that a contributor edits,
+    and the byte content is not pinned by anything: a stray latin-1 byte
+    saved by a Windows editor is enough. The gate's contract is to report
+    such a file as a FAIL line naming it, so an undecodable byte returns
+    None here instead of raising UnicodeDecodeError out of the caller and
+    replacing the whole report with a traceback.
+    """
+    try:
+        return path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return None
+
+
 def modinfo_version(path: Path) -> str | None:
-    m = re.search(r'Version\s+value="([0-9.]+)"', path.read_text(encoding="utf-8"))
+    text = read_text(path)
+    if text is None:
+        return None
+    m = re.search(r'Version\s+value="([0-9.]+)"', text)
     return m.group(1) if m else None
 
 
@@ -284,6 +303,20 @@ def _selftest() -> int:
             "modinfo_version returns None when Version is missing",
             modinfo_version(no_version) is None,
         )
+        # A file saved by a Windows editor as latin-1 is a real input here, and
+        # it used to raise UnicodeDecodeError out of the gate, so one bad byte
+        # replaced the whole version report with a traceback.
+        latin1 = Path(td) / "Latin1.xml"
+        latin1.write_bytes(
+            b'<?xml version="1.0" encoding="UTF-8" ?>\n<xml>\n'
+            b'\t<Name value="Caf\xe9" />\n'
+            b'\t<Version value="1.17.0" />\n'
+            b"</xml>\n"
+        )
+        t.check(
+            "modinfo_version returns None on an undecodable byte, not a raise",
+            read_text(latin1) is None and modinfo_version(latin1) is None,
+        )
 
     t.check("norm splits numeric parts", norm("1.17.0") == (1, 17, 0, 0))
     # The shipped pair: ModInfo "1.17.0" vs AssemblyVersion "1.17.0.0". The
@@ -472,10 +505,15 @@ def main() -> int:
     fails = []
 
     # A gate must report a missing input as a FAIL line, not die on a traceback
-    # hiding which of its checks could not run.
+    # hiding which of its checks could not run. An undecodable byte is that
+    # same class of input, so it is reported here rather than raised out of
+    # read_text: the file is named and the rest of the checks still run.
     def read_or(path: Path) -> str | None:
         try:
             return path.read_text(encoding="utf-8")
+        except UnicodeDecodeError as ex:
+            fails.append(f"{path.name}: not valid UTF-8 ({ex})")
+            return None
         except OSError as ex:
             fails.append(f"{path.name}: unreadable ({ex})")
             return None
