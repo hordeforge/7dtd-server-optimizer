@@ -1,4 +1,4 @@
-# 🔥 Crucible (7DTD EfficientServer)
+# 🔥 Crucible (EfficientServer)
 
 > **Part of [HordeForge](https://github.com/hordeforge)**: High-Performance Systems Engineering for 7 Days to Die.
 
@@ -20,7 +20,7 @@ It intentionally contains no profiler and no load generator. Install the
 standalone bridge from sibling `7dtd-server-apm` for managed instrumentation, and use
 sibling `7dtd-loadgen` for repeatable clients.
 
-## 📚 Modding Best Practices
+## Modding best practices
 
 See the canonical **[HordeForge 7DTD Modding Best Practices Guide](https://github.com/hordeforge/.github/blob/main/MODDING_BEST_PRACTICES.md)** for engine load order rules, EAC-off requirements, `ModInfo.xml` specifications, and V3.1.0 compatibility notes.
 
@@ -75,7 +75,7 @@ CI runs `make test` on every PR and on pushes to main.
   128 vs 299 ms/frame and
   self-restoring. **Raises sustained blood-moon capacity from ~147 to ~232 endgame
   zombies at 64 players (+58%).**
-- **TickGuard** (opt-in): last-resort shedding of the farthest zombies - a 522-zombie
+- **TickGuard** (opt-in): last-resort shedding of the farthest zombies: a 522-zombie
   overload (3.5x the ceiling) recovered from 167 to 56 ms/frame autonomously.
 - **Governor tier 2 (opt-in):** during extreme overload, zombie animators culled
   (`cullingMode = CullCompletely`) =
@@ -154,13 +154,13 @@ supported retarget: rebuild with `make build` and reinstall.
 
 **Troubleshooting (from the mod's own log lines):**
 - `MISSING TARGET: <Patch> matched no game method (version drift?) - this
-  optimization is INACTIVE` - the patch could not IL-match its target. Almost
+  optimization is INACTIVE`: the patch could not IL-match its target. Almost
   always a game update moved/renamed the method: rebuild against the current
   `Assembly-CSharp.dll`, and if it persists, open an issue with the patch name.
-- `InitMod failed:` / `patch <name> failed: <ex>` - an exception during mod init
+- `InitMod failed:` / `patch <name> failed: <ex>`: an exception during mod init
   or Harmony patching. Check the full stack in the server log; common causes are
   a missing Harmony install or a partial game update.
-- Config edits not taking effect - `es reload` (console/telnet) re-reads
+- Config edits not taking effect: `es reload` (console/telnet) re-reads
   `Config/efficientserver.json` and applies it live, no restart needed. A
   restart applies the same file if console access is unavailable. Reinstall
   preserves a user-edited `efficientserver.json` across upgrades (differs from
