@@ -291,14 +291,14 @@ def _quarantine_key(bak_name: str, name: str) -> tuple[int, int, str]:
     STALE_SUFFIX sorts after every real quarantine, and is never selected as
     one of the newest to keep.
     """
-    stem = name[: -len(STALE_SUFFIX)] if name.endswith(STALE_SUFFIX) else name
+    stem = name.removesuffix(STALE_SUFFIX)
     if not stem.startswith(bak_name):
         return (1, 0, name)
     tail = stem[len(bak_name) :]
     m = _UNIQUE_SUFFIX_RE.fullmatch(tail)
     if m is not None:
         return (0, int(m.group("n")), name)
-    return ((0, 0, name) if not tail else (1, 0, name))
+    return (0, 0, name) if not tail else (1, 0, name)
 
 
 def _quarantined_backup_name(name: str) -> str:
@@ -309,7 +309,7 @@ def _quarantined_backup_name(name: str) -> str:
     A pid follows BAK_INFIX with no dot, so the counter cannot be confused
     with it.
     """
-    stem = name[: -len(STALE_SUFFIX)] if name.endswith(STALE_SUFFIX) else name
+    stem = name.removesuffix(STALE_SUFFIX)
     head, dot, tail = stem.rpartition(".")
     return head if dot and _UNIQUE_SUFFIX_RE.fullmatch(dot + tail) else stem
 
@@ -506,7 +506,13 @@ class ConfigSwap:
                 # st_mtime_ns, not st_mtime: the float seconds lose the
                 # sub-second ordering on a coarse-mtime filesystem, so a burst
                 # of kills inside one second ties and falls to the key below.
-                found.append((path.stat().st_mtime_ns, _quarantine_key(_quarantined_backup_name(path.name), path.name), path))
+                found.append(
+                    (
+                        path.stat().st_mtime_ns,
+                        _quarantine_key(_quarantined_backup_name(path.name), path.name),
+                        path,
+                    )
+                )
             except OSError:
                 continue  # swept out from under this scan
         if len(found) <= STALE_KEEP:
