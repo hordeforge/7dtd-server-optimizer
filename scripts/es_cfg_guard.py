@@ -1402,13 +1402,13 @@ def _selftest() -> int:
         a_live = json.loads(cfg.read_text(encoding=CFG_ENCODING))
         section(a_live, "Pathfinding")["MaxPathEnqueuesPerTick"] = 64
         cfg.write_text(json.dumps(a_live, indent=2) + "\n", encoding="utf-8")
-        third = mk()
+        run_c = mk()
         # Two ConfigSwap instances in ONE process derive the same backup name,
         # so point this one at its own (absent) live-pid name: it then has no
         # backup of its own to resolve and can only reach the directory scan,
         # which is the behavior under test.
-        third.bak = cfg.with_name(f"{cfg.name}{BAK_INFIX}{other_pid + 1}")
-        third.recover()
+        run_c.bak = cfg.with_name(f"{cfg.name}{BAK_INFIX}{other_pid + 1}")
+        run_c.recover()
         t.check(
             "a live run's backup survives another run's recovery",
             run_b_bak.is_file(),
@@ -1419,7 +1419,7 @@ def _selftest() -> int:
         )
         t.check(
             "another run's recovery leaves this run's backup alone",
-            run_a.bak.is_file() and third.bak != run_b_bak,
+            run_a.bak.is_file() and run_c.bak != run_b_bak,
         )
         run_a.restore()
         t.check(
