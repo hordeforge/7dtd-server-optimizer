@@ -22,7 +22,7 @@ sibling `7dtd-loadgen` for repeatable clients.
 
 ## Modding best practices
 
-See the canonical **[HordeForge 7DTD Modding Best Practices Guide](https://github.com/hordeforge/.github/blob/main/MODDING_BEST_PRACTICES.md)** for engine load order rules, EAC-off requirements, `ModInfo.xml` specifications, and V3.1.0 compatibility notes.
+See the canonical **[HordeForge 7DTD Modding Best Practices Guide](https://github.com/hordeforge/.github/blob/main/MODDING_BEST_PRACTICES.md)** for engine load order rules, EAC-off requirements, `ModInfo.xml` specifications, and V3.3.0 compatibility notes.
 
 ```bash
 make help        # every target, grouped: contributor loop vs game-backed
@@ -103,10 +103,17 @@ Sibling-repo research (private workspace, not on the public GitHub page):
 
 ## Supported versions and troubleshooting
 
-**Game pin:** 7 Days to Die **V3.1.0 (b14)** dedicated. Built against the live
+**Game pin:** 7 Days to Die **V3.3.0 (b18)** dedicated. Built against the live
 `Assembly-CSharp.dll` at build time (dedicated `7DaysToDieServer_Data/Managed`
 first, client fallback), so a Steam update that changes the assembly is a
-supported retarget: rebuild with `make build` and reinstall.
+supported retarget: rebuild with `make build` and reinstall. The b18 retarget
+re-checked every patch target against the b18 IL dump: all declarations are
+unchanged, 17 of the 20 compared method bodies are byte-identical in the
+b10-to-b18 diff, and three changed (`gmUpdate`, `SaveAndCleanupWorld`,
+`Chunk.write`). The mod builds clean against the b18 assembly. Live in-game
+acceptance on b18 is still pending, so treat b14-era RESULTS and
+V310_APM_BASELINE numbers as historical (see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+-> V3.3.0 b18 target re-verification).
 
 **Toolchain:**
 - .NET SDK pinned by [`global.json`](global.json) (8.0.4xx band,

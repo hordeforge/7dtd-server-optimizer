@@ -14,7 +14,7 @@ A release carries one version number, named twice:
   Downloadable zips are named after it minus the leading `v`
   (`EfficientServer-<version>.zip`; `scripts/package.sh` strips the prefix,
   and a modified tree keeps an explicit `-dirty` suffix instead).
-- The **mod version** (`ModInfo.xml` / assembly version, currently `1.19.0`)
+- The **mod version** (`ModInfo.xml` / assembly version, currently `1.20.0`)
   tracks the feature history of the mod itself and is what the server log
   reports at startup (`versions: mod=...`). `scripts/check_version.py` (run by
   `make test`/CI) keeps it identical across source, dist copy, and
@@ -54,6 +54,15 @@ chosen up front:
   scanning for one kind of change finds one list.
 
 ## [Unreleased]
+
+### Changed
+- Retarget to 7 Days to Die V3.3.0 b18. All Harmony targets were re-checked
+  against the b18 IL dump and the mod builds clean against the b18 assembly.
+  17 of the 20 compared target bodies are unchanged; `gmUpdate` (631 -> 638 IL),
+  `SaveAndCleanupWorld` (499 -> 502), and `Chunk.write` (601 -> 605) differ.
+  Details in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) -> V3.3.0 b18 target
+  re-verification. Live in-game acceptance on b18 has not been run, so the
+  b14-era results and APM baseline remain historical.
 
 ### Fixed
 - The bench config guard names its backup after the owning run's pid

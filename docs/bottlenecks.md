@@ -1,4 +1,7 @@
-# Dedicated server bottleneck catalog (V3.0.1)
+# Dedicated server bottleneck catalog
+
+**Evidence era:** the 42-finding audit and its scaling exponents are V3.0.1-era (2026-07-19).
+Rows whose target was re-checked against V3.3.0 b18 say so. **Current pin:** V3.3.0 b18.
 
 **Owns:** the consolidated, ranked catalog of tick bottlenecks - super-linear
 scaling, inefficient data structures, and serial single-thread stages.
@@ -36,9 +39,9 @@ high finding: **a missing spatial index, or a serial main-thread stage.**
    (connection-state safety).
 3. **Chunk send pipeline** - `ChunkManager.SendChunksToClients` (IL=216, **O(N^1.64)**)
    + `DetermineChunksToLoad` (IL=448, **O(N^1.77)**), both CONFIRMED. **~56-60% of
-   instrumented tick in every loaded scenario.** The heavy `Chunk.write` encode (IL=601)
-   runs **synchronously on the sim thread** inside `NetPackageChunk.Setup`; only the
-   byte-copy is off-thread.
+   instrumented tick in every loaded scenario.** The heavy `Chunk.write` encode (IL=605
+   in V3.3.0 b18, was 601 in b9/b10) runs **synchronously on the sim thread** inside
+   `NetPackageChunk.Setup`; only the byte-copy is off-thread.
 4. **`AstarManager.UpdateGraphs`** (IL=185) - CONFIRMED, total **O(N^1.43) by
    players** (the only compute section super-linear in *total*). Top managed CPU
    section: **66.6 ms/tick** at 64p+340z, over the 50 ms budget on its own. P1
@@ -124,7 +127,7 @@ Ranked within each by severity, then scaling badness (super-linear worst).
 
 | Symbol (IL / exponent) | Kind · sev | Scales with | Mechanism | Lever | Verdict |
 |---|---|---|---|---|---|
-| `SendChunksToClients`->`NetPackageChunk.Setup`->`Chunk.write` (216/31/601; O(N^1.64)) | serial · high | players x per-observer chunk churn | full 601-IL `Chunk.write` (64-layer, 5x channel, heightmap/biome/TE) runs synchronously on sim thread | move encode off-sim into NCS writer; cache/reuse serialized blobs | CONFIRMED |
+| `SendChunksToClients`->`NetPackageChunk.Setup`->`Chunk.write` (216/31/605 in b18; O(N^1.64)) | serial · high | players x per-observer chunk churn | full 605-IL `Chunk.write` (64-layer, 5x channel, heightmap/biome/TE) runs synchronously on sim thread | move encode off-sim into NCS writer; cache/reuse serialized blobs | CONFIRMED |
 | `DetermineChunksToLoad` (448; O(N^1.77)) | lock-contention · medium | players x view-dist^2 | clears+rebuilds chunk sets from scratch under `lockObject` while chunk workers contend | incremental diff; shard/shrink the lock | CONFIRMED |
 | `TerrainSubMesh.Add` (61; #2 large/#3 churn) | allocation · medium | chunks meshed x texture-ids | linear `others` scan + dynamic-array growth alloc; terrain/collision mesh still built on dedicated | preallocate `ArrayDynamicFast`; confirm server needs submesh vs only collision | CONFIRMED |
 | `WorldState.SaveLoad` (884) | serial · low | live-heap size (periodic) | 59 `ReadWrite` + 5 blobs under one `Monitor`; blocks tick per save (~8 ms p95) | snapshot fields under lock, release before stream I/O | CONFIRMED |
@@ -357,7 +360,7 @@ Ranked by perf-win / code-size. "Shipped" = already in EfficientServer.
    cleanly but no benchable steady-state win. See
    [`ALLOCATION_UPSTREAM.md`](ALLOCATION_UPSTREAM.md) Lever A and RESULTS §3c-3d.
 9. **Off-sim `Chunk.write` encode / cached chunk blobs** - the chunk pipeline is
-   **56-60% of tick**; moving the 601-IL encode off the sim thread (or caching
+   **56-60% of tick**; moving the 605-IL encode (b18) off the sim thread (or caching
    serialized blobs per chunk-version across observers) is the single biggest CPU
    reclaim, but threading it safely is real work.
 

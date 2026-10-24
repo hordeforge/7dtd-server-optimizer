@@ -4,6 +4,9 @@
 **Owns:** shipped EfficientServer feature groups and validation notes.  
 **Not:** host topology ([HOST_TUNING](HOST_TUNING.md)), APM evidence ([../../7dtd-server-apm/docs/APM.md](../../7dtd-server-apm/docs/APM.md)), candidate backlog ([OPTIMIZATION_CANDIDATES](OPTIMIZATION_CANDIDATES.md)).  
 **Dev process:** [DEVELOPMENT](DEVELOPMENT.md).
+**Target build:** V3.3.0 (b18). Dated validation notes below were recorded on V3.1.0 b14
+unless they say otherwise; b18 target re-verification is in
+[`ARCHITECTURE.md`](ARCHITECTURE.md) -> V3.3.0 b18 target re-verification.
 
 ## AI level of detail
 

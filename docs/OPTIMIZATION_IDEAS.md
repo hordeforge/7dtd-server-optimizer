@@ -5,7 +5,7 @@
 **Not:** candidates with evidence ([OPTIMIZATION_CANDIDATES](OPTIMIZATION_CANDIDATES.md)).
 
 
-**Status:** brainstorming grounded in [`ARCHITECTURE.md`](ARCHITECTURE.md); RE notes originally from V3.0.1, re-pinned to V3.1.0 where the target was re-verified (the current pin is authoritative in [`OPTIMIZATION_CANDIDATES.md`](OPTIMIZATION_CANDIDATES.md)).
+**Status:** brainstorming grounded in [`ARCHITECTURE.md`](ARCHITECTURE.md); RE notes originally from V3.0.1, re-pinned to V3.1.0 and now targeted at V3.3.0 b18 where the target was re-verified (the current pin is authoritative in [`OPTIMIZATION_CANDIDATES.md`](OPTIMIZATION_CANDIDATES.md)).
 
 **Not** a commitment to implement. Ideas must pass: evidence from APM + loadgen, sim fidelity, and the project boundary (reviewed Harmony/config only; no second server).
 

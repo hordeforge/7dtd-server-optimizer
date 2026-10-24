@@ -55,7 +55,8 @@ namespace EfficientServer.Patches
             // never resolves (Harmony's TypeByName does not convert '.' to '+'),
             // which surfaced as MISSING TARGET on every build including stock
             // 3.1.0. Verified nested structure from engine-research IL dumps
-            // (3.1.0 and 3.2.0 identical): NetworkServerLiteNetLib+LiteNetLibAuthWrapperServer.
+            // (3.1.0, 3.2.0, and 3.3.0 identical):
+            // NetworkServerLiteNetLib+LiteNetLibAuthWrapperServer.
             Type wrapper = AccessTools.TypeByName(
                 "NetworkServerLiteNetLib+LiteNetLibAuthWrapperServer");
             return wrapper != null ? AccessTools.Method(wrapper, "ConnectionRequestCheck") : null;
@@ -85,7 +86,8 @@ namespace EfficientServer.Patches
             foreach (CodeInstruction ins in instructions)
             {
                 // The sole Clients.List enumerator acquisition in the method (IL_007d
-                // in V3.1.0): stack [.., ReadOnlyCollection<ClientInfo>] ->
+                // in 3.1.0 through 3.3.0; the b18 body is identical): stack
+                // [.., ReadOnlyCollection<ClientInfo>] ->
                 // IEnumerator<ClientInfo>. The replacement consumes and produces the
                 // same types, so no other instruction moves.
                 if (swapped == 0 && IsClientsListEnumerator(ins))

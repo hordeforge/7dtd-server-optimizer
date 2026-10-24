@@ -1,4 +1,4 @@
-# Runtime tuning surfaces (V3.1.0 dedicated)
+# Runtime tuning surfaces (V3.3.0 dedicated)
 
 **Owns:** process-level knobs (Boehm GC symbols/env, `GC.Collect` gate, `settargetfps`, ModEvents lifecycle).  
 **Scaling context:** [`measured-scaling.md`](measured-scaling.md). **Hub:** [`INDEX.md`](INDEX.md).
@@ -119,7 +119,7 @@ vanilla knob, not a mod concern.
 
 Sanctioned hooks that avoid a Harmony patch just for timing: `ModEvents.GameAwake`,
 `GameStartDone`, `GameShutdown`, `PlayerSpawnedInWorld`, etc. Register via
-`ModEvents.<Event>.RegisterHandler(handler)`. In V3.1.0 the handler is a **typed
+`ModEvents.<Event>.RegisterHandler(handler)`. In V3.3.0 the handler is a **typed
 `ref` delegate**: `ModEventHandlerDelegate<TData>(ref TData)` - e.g.
 `GameStartDone` takes `ref ModEvents.SGameStartDoneData` (the older parameterless
 `void()` form is pre-V1.0). Prefer these + public setters + P/Invoke over Harmony;

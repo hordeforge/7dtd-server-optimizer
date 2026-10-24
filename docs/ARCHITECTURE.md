@@ -4,7 +4,7 @@
 **Owns:** EfficientServer-oriented map of the dedicated hot path (optim context).  
 **Not:** full generic RE narratives ([research loop](../../7dtd-engine-research/docs/loop/loop.md)), feature behavior ([FEATURES](FEATURES.md)), host topology ([HOST_TUNING](HOST_TUNING.md)).
 
-**Target:** Steam dedicated server **V 3.1.0 (b14)**  
+**Target:** Steam dedicated server **V 3.3.0 (b18)**  
 **Engine:** Unity **2022.3.62f2** (Mono, not IL2CPP)  
 **Main game assembly:** `7DaysToDieServer_Data/Managed/Assembly-CSharp.dll` (~11 MB, ~4400 types)  
 **Networking stack:** LiteNetLib (+ optional SteamNetworking, disabled by default on dedicated)  
@@ -17,6 +17,47 @@ This document maps the **real hot path** of the official dedicated process. It i
 **Stock ceilings (sim, net, AI, GC):**
 [`../../7dtd-engine-research/docs/meta/engine-limitations.md`](../../7dtd-engine-research/docs/meta/engine-limitations.md)  
 **Dump index:** [`../../7dtd-engine-research/docs/INDEX.md`](../../7dtd-engine-research/docs/INDEX.md)
+
+## V3.3.0 b18 target re-verification (2026-10-24)
+
+The game pin moved to V3.3.0 b18; this repo was still on V3.1.0 b14 and jumps the
+whole delta. Every Harmony target was re-checked against the b18 IL dump
+(`../../7dtd-engine-research/il/full-v3.3.0/`, plus a Cecil dump of
+`AstarPathfindingProject.dll`), and the mod builds clean against the b18
+`Assembly-CSharp.dll`. Status words below: **verified target** means the
+declaration and the body the patch depends on were checked in the b18 dump;
+every patch is still **unverified** for in-game acceptance, because no b18
+server run has applied it.
+
+| Patch | Target | b18 status |
+|---|---|---|
+| GcGuardPatch | `GameManager.gmUpdate` | verified target; body 631 -> 638 (adds `AssetLoaderManager.Update` and `SignDataManager.Update`), and the single parameterless `GC.Collect` call the transpiler rewires is still present |
+| FastSendPatch | `ConnectionManager.SendPackage(NetPackage, ...)` | verified target; body IL=100 unchanged |
+| AstarMoveThresholdPatch | `AstarManager.UpdateGraphPos` | verified target; body IL=60 unchanged |
+| AstarGraphThrottlePatch | `AstarManager.UpdateGraphs` | verified target; body IL=185 unchanged |
+| PathAdmissionPatch | `EntityAlive.FindPath` | verified target; body IL=49 unchanged |
+| ChunkSendThrottlePatch | `ChunkManager.SendChunksToClients` | verified target; body IL=216 unchanged; the `Chunk.write` encode it feeds moved 601 -> 605 |
+| InitScanPoolPatch | `LayerGridGraph.ScanInternal` iterator | verified target; iterator `MoveNext` IL=274 byte-identical in `AstarPathfindingProject.dll` |
+| ClientListSnapshotPatch | nested `LiteNetLibAuthWrapperServer.ConnectionRequestCheck` | verified target; body IL=86 unchanged |
+| AiLodPatch | `World.EntityActivityUpdate` | verified target; body IL=229 unchanged |
+| UpdateTasksLodPatch | `EntityAlive.updateTasks` | verified target; body IL=125 unchanged |
+| AnimatorLodPatch | `AvatarZombieController.Update` / `LateUpdate` | verified target; bodies IL=197 / 157 unchanged |
+| CrowdCollisionLodPatch | `Entity.ccEntityCollision` | verified target; body IL=12 unchanged |
+| EntityDistributionStridePatch | `NetEntityDistribution.OnUpdateEntities` | verified target; body IL=322 unchanged |
+| ExplosionParticlesPatch | `GameManager.ExplosionClient` | verified target; declaration and body IL=51 unchanged |
+| DynamicMeshBudgetPatch | `DynamicMeshServer.Update` / `DynamicMeshManager.Update` | verified target; bodies IL=452 / 404 unchanged |
+| GovernorPatch, TickClockPatch, TickGuardPatch, TargetFpsPatch | `GameManager.UpdateTick` | verified target; body IL=150 unchanged |
+| BenchGodPatch | `EntityPlayer.DamageEntity` | verified target; body IL=15 unchanged |
+| DedicatedSkipPatch, GameStartPatch | ModEvents plus optional string targets | no IL patching on the startup path; `DynamicMusic.Conductor.Update`, `WaterSplashCubes.Update`, `WorldEnvironment.AmbientSpectrumFrameUpdate` and `EnvironmentAudioManager.FixedUpdate` resolve in b18. `EnvironmentAudioManager.Update` / `LateUpdate` do not exist in b10 or b18, so those two optional skips stay fail-soft disabled as before |
+
+Two changed bodies matter to docs, not to a patch: `SaveAndCleanupWorld`
+499 -> 502 (adds `AssetLoaderManager.Cleanup`; `SignDataManager.Cleanup`
+already existed there) and `Chunk.write` 601 -> 605 (entity and tile-entity
+records switch to `StreamModeWrite`). The save path flushes pending async
+sign-store writes, so a b18 world save can stall behind the 60 s per-library
+debounce. Registration ids and the inventory/equipment serializer rework do not
+touch these patches: none parses a NetPackage body, and none reads an inventory
+grid.
 
 ## Why a full reimplementation is the wrong first move
 
@@ -31,7 +72,7 @@ That is years of work for a team. Client lag on a dedicated host is almost alway
 
 **Practical path:** keep the official binary, reverse its frame loop, and cut work that does not matter on headless multiplayer.
 
-## Concurrency model (audit-pinned V3.1.0)
+## Concurrency model (audit-pinned V3.3.0)
 
 Every EfficientServer patch surface runs on the Unity main thread except the
 one receive-thread surface named below. The confinement rules are the
@@ -119,7 +160,7 @@ invariant new patches must preserve:
  └─ UnityPlayer.so (player loop, physics, threads)
  └─ Mono
  └─ Assembly-CSharp
- GameManager.Update → gmUpdate() # orchestration (631 IL)
+ GameManager.Update → gmUpdate() # orchestration (638 IL)
  └─ UpdateTick() # sim core (150 IL)
  ConnectionManager.Update # LiteNetLib I/O (215 IL) - peer MonoBehaviour
  DynamicMeshManager.Update # mesh pipeline (404 IL) - peer MonoBehaviour
@@ -135,7 +176,7 @@ Launch flags used by stock `startserver.sh`:
 
 `get_IsDedicatedServer()` gates some client-only work, but **not everything**. Several systems still run on dedicated.
 
-**Critical RE fact (V3.1.0; same as 3.0.1):** `ConnectionManager.Update` and `DynamicMeshManager.Update` are **not** called from `gmUpdate`. They are separate `MonoBehaviour` updates on the same Unity frame. Hijacking only `gmUpdate` does not own net or mesh.
+**Critical RE fact (V3.3.0; same as earlier builds):** `ConnectionManager.Update` and `DynamicMeshManager.Update` are **not** called from `gmUpdate`. They are separate `MonoBehaviour` updates on the same Unity frame. Hijacking only `gmUpdate` does not own net or mesh.
 
 Deep dump + phase map: [`../../7dtd-engine-research/docs/loop/loop-gmupdate.md`](../../7dtd-engine-research/docs/loop/loop-gmupdate.md) (regenerate with `../7dtd-engine-research/tools/` (legacy/DumpGmUpdate or src/DumpMethod)).
 
@@ -148,7 +189,7 @@ Deep dump + phase map: [`../../7dtd-engine-research/docs/loop/loop-gmupdate.md`]
 | Method | IL | Role |
 |---|---:|---|
 | `GameManager.Update` | 3 | Only calls `gmUpdate()` |
-| `GameManager.gmUpdate` | **631** | Managers, timer, calls `UpdateTick`, save/GC side paths |
+| `GameManager.gmUpdate` | **638** | Managers, timer, calls `UpdateTick`, save/GC side paths |
 | `GameManager.UpdateTick` | **150** | World tick, entities, fall, server entity/chunk distribute |
 | `GameManager.FixedUpdate` | 5 | `fixedUpdateCount++` only |
 | `GameManager.LateUpdate` | 18 | `ThreadManager.LateUpdate`, platform, AIDirector debug, `MeshDataManager.LateUpdate` |
@@ -164,13 +205,13 @@ Unity frame
  └─ GameManager.LateUpdate
 ```
 
-### `gmUpdate` phases (V3.1.0 ordered; gmUpdate IL still 631)
+### `gmUpdate` phases (V3.3.0 ordered; gmUpdate IL 638)
 
 `IsDedicatedServer` checked **6** times. Exception handler around a destroy-`GameObject` queue (`Monitor.Enter/Exit`).
 
 | Phase | Work | Dedicated notes |
 |---|---|---|
-| **A Prologue** | `frameCount`/`time`, pause, resolution, **`ModEvents.SUnityUpdate`**, global actions, `Physics.SyncTransforms` if paused, `LoadManager`, `PlatformManager`, invite/lock, FPS, liquid time | Resolution/UI noise mostly harmless if short |
+| **A Prologue** | `frameCount`/`time`, pause, resolution, **`ModEvents.SUnityUpdate`**, global actions, `Physics.SyncTransforms` if paused, `LoadManager`, **`AssetLoaderManager.Update`**, `SignDataManager.Update`, `PlatformManager`, invite/lock, FPS, liquid time | Resolution/UI noise mostly harmless if short; the asset handle update is O(0) until a mesh handle is acquired, the sign update only drives the 60 s library write debounce |
 | **B Manager chain** | Quest, Trigger, **Twitch vote/manager**, GameEvent, **PowerManager**, Party, **Vehicle/Drone**, Dismemberment, **TurretTracker**, RaycastPath, Token, Trajectory, Faction, NavObject, BlockedPlayerList, PrefabEdit, TriggerEffect, SpeedTree, **`ThreadManager.UpdateMainThreadTasks`** | Null-instance skips; Twitch/edit/speedtree often waste if present |
 | **C Client UI/EAC/cursor** | AntiCheat messages, cursor, FPS cap | **Skipped** when dedicated (`brtrue` over block) |
 | **D Destroy queue** | Locked list destroy | Always if queued |
@@ -178,7 +219,7 @@ Unity frame
 | **F Pre-sim** | **`EntityAsyncManager.Update`** (async spawn completes), `GameTimer.updateTimer`, block particles, TOD, audio, water, signs, evaporation; chunk determine/load; optional idle `ClearCaches` | Zero-player idle branches; timer uses player count on dedicated |
 | **G Sim** | **`UpdateTick()`** | See below |
 | **H Post** | Ground align; **`CopyChunksToUnity`** budget loop | **CopyChunks skipped** on dedicated |
-| **I Save/GC/net extras** | Provider update, save world/name maps, optional **persistent player positions package**, dedicated **`GC.Collect`** under dt gate, client unload assets | GC.Collect is an explicit hitch risk |
+| **I Save/GC/net extras** | Provider update, save world/name maps, optional **persistent player positions package**, dedicated **`GC.Collect`** under dt gate, client unload assets | GC.Collect is an explicit hitch risk; `SaveAndCleanupWorld` (IL 499 -> 502) now also flushes pending async sign-store writes, so a save can stall behind the 60 s per-library debounce |
 | **J Epilogue** | StabilityViewer?, **`ModEvents.SGameUpdate`**, `GameObjectPool.FrameUpdate` | Late mod hook after sim |
 
 ### `UpdateTick` (sim core)
@@ -273,7 +314,7 @@ Also toggles cloth/jiggle at larger radii (IL uses constants including **625** /
 
 **EfficientServer** tightens bands / far skip further (config).
 
-### Pathfinding (V3.1.0 production)
+### Pathfinding (V3.3.0 production)
 
 `AstarManager.Init` installs **`ASPPathFinderThread`** as `PathFinderThread.Instance` and `StartWorkerThreads()` → **`StartCoroutine(FindPaths)`** (not the OS-thread `AStarPathFinderThread`, which still exists in the binary).
 
@@ -376,12 +417,12 @@ Prefer growing admission at **TickEntities / Slice / TickEntity** over replacing
 Stock-game RE tooling lives in the sibling [`../../7dtd-engine-research/tools/`](../../7dtd-engine-research/tools/)
 (general dumpers in `src/`, legacy per-family dumpers in `legacy/`), not in this repo.
 
-V3.1.0 dumps (regenerated after the 3.1.0 game update; historical V3.0.1 names noted inline):
+V3.3.0 dumps (the current pin; the earlier `*-v3.1.0/` sets stay for history):
 
-- Frame narrative: [`../../7dtd-engine-research/docs/loop/loop-gmupdate.md`](../../7dtd-engine-research/docs/loop/loop-gmupdate.md); dumps: [`../../7dtd-engine-research/il/loop-complete-v3.1.0/`](../../7dtd-engine-research/il/loop-complete-v3.1.0/) (historical `gmUpdate-v3.0.1` name)
-- Entity/AI/path/net/fall: [`../../7dtd-engine-research/docs/entities/entity-ai.md`](../../7dtd-engine-research/docs/entities/entity-ai.md); dumps: [`../../7dtd-engine-research/il/deep-v3.1.0/`](../../7dtd-engine-research/il/deep-v3.1.0/)
-- Optim scan dumps: [`../../7dtd-engine-research/il/opt-scan-v3.1.0/`](../../7dtd-engine-research/il/opt-scan-v3.1.0/) (raw only)
-- Deeper multi-subsystem dumps: [`../../7dtd-engine-research/il/deeper-v3.1.0/`](../../7dtd-engine-research/il/deeper-v3.1.0/)
+- Frame narrative: [`../../7dtd-engine-research/docs/loop/loop-gmupdate.md`](../../7dtd-engine-research/docs/loop/loop-gmupdate.md); dumps: [`../../7dtd-engine-research/il/loop-complete-v3.3.0/`](../../7dtd-engine-research/il/loop-complete-v3.3.0/)
+- Entity/AI/path/net/fall: [`../../7dtd-engine-research/docs/entities/entity-ai.md`](../../7dtd-engine-research/docs/entities/entity-ai.md); dumps: [`../../7dtd-engine-research/il/deep-v3.3.0/`](../../7dtd-engine-research/il/deep-v3.3.0/)
+- Optim scan dumps: [`../../7dtd-engine-research/il/opt-scan-v3.3.0/`](../../7dtd-engine-research/il/opt-scan-v3.3.0/) (raw only)
+- Deeper multi-subsystem dumps: [`../../7dtd-engine-research/il/deeper-v3.3.0/`](../../7dtd-engine-research/il/deeper-v3.3.0/)
 
 Do not commit game IL or `Assembly-CSharp.dll`. Regenerate after every game update ([`DEVELOPMENT.md`](DEVELOPMENT.md)).
 
@@ -403,6 +444,7 @@ See [`../../7dtd-engine-research/docs/loop/loop.md`](../../7dtd-engine-research/
 
 ## Changelog
 
+- **2026-10-24:** Retargeted to V3.3.0 (b18): target re-verification table added, `gmUpdate` IL 631 -> 638, `SaveAndCleanupWorld` 499 -> 502, `Chunk.write` 601 -> 605, dump links repointed to the `*-v3.3.0/` trees.
 - **2026-09-28:** Host-type resolution documented and moved into `DedicatedHostGate`: one volatile int for the three states, published under a lock so the main thread and the receive thread cannot each resolve their own answer and leave the loser standing.
 - **2026-08-24:** Concurrency-rule example updated: the cadence levers now read slot ownership from the shared `TickClock` counter (advanced once per UpdateTick invocation), replacing the patch-local stride gate.
 - **2026-08-23:** Concurrency model section added (main-thread confinement audit: patch surfaces, console drain, the one background thread, reload re-basing rule).

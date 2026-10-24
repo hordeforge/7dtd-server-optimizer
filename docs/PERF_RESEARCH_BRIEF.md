@@ -6,6 +6,8 @@ do next, what is already closed, and which "big wins" are dead ends.
 **Not:** full bottleneck tables ([bottlenecks.md](bottlenecks.md)), A/B ledger
 ([RESULTS.md](RESULTS.md)), or stock-only RE narratives
 ([`../../7dtd-engine-research/docs/`](../../7dtd-engine-research/docs/)).
+**Current pin:** V3.3.0 (b18); the IL sizes and measurements in this brief are
+V3.1.0-era and have not been re-measured on b18.
 **Evidence date:** 2026-07-28 brief; APM campaign through 2026-07-21; IL re-check
 of open hot methods same day (dumps under local `/tmp/perf-re/`, regenerable via
 `7dtd-engine-research/tools`). **2026-08-06 research follow-up:** Clone call-site triage

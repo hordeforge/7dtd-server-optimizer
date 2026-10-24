@@ -1,7 +1,8 @@
 # EfficientServer docs index
 
 Hub for this repository's docs. The [README](../README.md) covers install,
-toolchain, and the measured-impact summary.
+toolchain, and the measured-impact summary. **Current game pin:** V3.3.0 (b18),
+with the target re-verification table in [ARCHITECTURE](ARCHITECTURE.md).
 
 ## Docs
 

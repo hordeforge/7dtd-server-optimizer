@@ -25,6 +25,8 @@ one Phase 2 budget item stay open (see the checkboxes and the residual table).
 - [ ] Validate AI LOD behavior for alert, combat, sleeper, quest, and distant entities. (2026-08-09 static audit vs stock RE: `UpdateTasksLodPatch` never strides/skips attacking (GetAttackTarget), investigating (HasInvestigatePosition), alerted (GetAlertTicks>0), or active-sleeper entities - the combat/alert/sleeper set is structurally covered; `AiLodPatch`'s `aiActiveScale` only gates EAI cadence (locomotion always runs per RE) and the missing stock top-N quota is documented as accepted in FEATURES.md with a bounded residual. Live 2026-08-09, three harness runs on V3.1.0, all overall=PASS: 8p/144z, 32p/250z, and 64p/300-450z. The 64p run delivered the first measured frame-win for the animator emergency at tick-bound load (baseline 117.61 -> animoff 99.53 ms, -15.4%, reversible with root motion intact - see RESULTS 'Live animator-emergency + path-admission validation'). Path admission showed no win at any load (consistent with 3t). Blood-moon profile (2026-08-09): genuine trigger built and verified (`settime + setgamestat BloodMoonDay` -> `BloodMoon starting for day 1`, director path); first run's path A/B completed but horde tiny (party GS was 1 - no setgamestage command exists; fixed via givexp + bot clustering, committed). Re-observation COMPLETED 2026-08-10 (12p/GS250, ramp): join PASS, genuine director blood moon, path A/B no_win - see RESULTS 'Blood-moon path-admission profile'. Horde still small (5-7 alive): needs longer hold / higher party GS for a siege-scale cohort. Remaining: siege-scale horde hold + human-eye combat soak.)
 - [ ] Validate dynamic-mesh budgets during saves, region streaming, and separated players. (2026-08-09 static audit vs V3.1.0 IL + dynamic-mesh.md: all four patch fields verified as real stock statics (no API drift); MaxActiveSyncs 2-vs-10 and OnlyPlayerAreas semantics documented in FEATURES.md. Live: patch applied exact budgets in-game (`mesh budgets: OnlyPlayerAreas=True buf=2 loadMs=2 syncs=2`, no apply error). The loadgen harness now enables DynamicMesh via RE_DYNAMIC_MESH=1 (normalized to True/False 2026-08-11 after the raw '1' aborted stock ParseBool; see RESULTS 'DynamicMesh-enabled stock server observation'). The streaming A/B itself needs a stable bot cohort for mesh regeneration (exploders in the spawn mix) + a distant-player observation point - blocked by the same stock LiteNetLib join flake as the blood-moon profile (root cause CLOSED 2026-08-10 in 7dtd-engine-research docs/network.md §4.0; see FEATURES.md + RESULTS; attempted 2026-08-11, churn hit even a 6-bot ramp cohort).)
 
+- [ ] Re-run the live validation matrix on V3.3.0 b18 (AI LOD, dynamic mesh, animator emergency, blood moon) and record b18 results; the V3.1.0 runs above are historical evidence for the old build.
+
 ## Phase 2: reproducible evidence
 
 - [x] Define small, medium, and high scenarios executed by `7dtd-loadgen`. (Seed-locked tier ladder + heavy canonical standard: `7dtd-server-apm/plans/profile.{canonical,tiers}.json`; docs LOAD_PROFILE.md, 2026-07-18.)
@@ -37,7 +39,8 @@ one Phase 2 budget item stay open (see the checkboxes and the residual table).
 - [x] Verify clean build, install, upgrade, rollback, and uninstall. (2026-08-09: clean build via scripts/build.sh, install to the live dedicated server (DLL hash-match verified, ModInfo 1.17.0, Config shipped), uninstall, reinstall, and a live in-game upgrade smoke test all pass: booted the V3.1.0 b14 dedicated server with EfficientServer installed - all 18 patch groups IL-matched real game methods, 0 MISSING TARGET, default-off features correctly config-disabled; loadgen self-test-join PASSED (joined entity=102, logins=1, challengesOk=1).)
 - [x] Preserve unrelated mods and user configuration during package operations. (install.sh only touches `Mods/EfficientServer`; now backs up an existing `efficientserver.json` and keeps it on reinstall when it differs from the shipped default. Verified: fresh install uses default, user edit survives reinstall, restored-default uses shipped.)
 - [x] Reconcile README, architecture, features, and runtime behavior. (2026-08-09: FEATURES.md Path-admission + Animator-emergency sections were appended after the Changelog and claimed v1.18 (a release that does not exist). Moved before the changelog and corrected to v1.17.0; same fix in PERF_RESEARCH_BRIEF ("Built v1.18") and CONFIG ("v1.18+ emergency"). No remaining future-version claims.)
-- [x] Publish supported 7DTD/toolchain versions and troubleshooting. (README: game pin V3.1.0 b14 + rebuild-on-update retarget note, toolchain (net48, dotnet SDK w/ mcs fallback, 0_TFP_Harmony, game-managed refs), troubleshooting from mod log lines (MISSING TARGET version-drift, InitMod/patch failures, config restart, EAC).)
+- [x] Publish supported 7DTD/toolchain versions and troubleshooting. (README: game pin V3.1.0 b14 + rebuild-on-update retarget note, toolchain (net48, dotnet SDK w/ mcs fallback, 0_TFP_Harmony, game-managed refs), troubleshooting from mod log lines (MISSING TARGET version-drift, InitMod/patch failures, config restart, EAC). The pin now reads V3.3.0 b18; see the retarget section below.)
+- [ ] Rebuild, install, and smoke the package on a V3.3.0 b18 install. The b18 DLL build is clean offline; live patch application is unverified.
 
 ## Research evidence consumed (2026-08-06)
 
@@ -123,6 +126,21 @@ displacement even with animators on), so the measurement was void.
 Every retained optimization is version-checked, independently configurable,
 tested for correctness, measured with sibling loadgen/APM projects, documented,
 and safe to disable or roll back.
+
+## V3.3.0 b18 retarget (2026-10-24)
+
+The pin moves from V3.1.0 b14 to V3.3.0 b18. Offline verification is done; live
+acceptance is the open work.
+
+| Item | Status |
+|---|---|
+| Patch target declarations | verified against the b18 IL dump: all 19 Harmony targets resolve, no signature moved |
+| Patch target bodies | verified: 17 of the 20 compared bodies are byte-identical in the b10-to-b18 diff; `gmUpdate` 631 -> 638, `SaveAndCleanupWorld` 499 -> 502, `Chunk.write` 601 -> 605 changed |
+| Body-sensitive patches | verified: the `GC.Collect` site in `gmUpdate` is still the single parameterless call GcGuardPatch rewires, and the `LayerGridGraph.ScanInternal` iterator that InitScanPoolPatch transpiles is IL=274 byte-identical |
+| Build against b18 | verified: `make build DS=<b18 install>` clean, 0 warnings, 0 errors |
+| Patch application and in-game behavior | **unverified**: no b18 server run has applied the mod; b14-era RESULTS and V310_APM_BASELINE stay historical |
+| Save-time sign flush | not decoded as a cost lever: `SaveAndCleanupWorld` waits on pending async sign-store writes (60 s per-library debounce), so a b18 save can stall behind that window |
+| Inventory/equipment rework | no impact found: no patch parses an inventory grid or NetPackage body, and all referenced members compile against b18 |
 
 ## Residual (post V3.1.0 campaign, 2026-08-03)
 

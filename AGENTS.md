@@ -1,6 +1,6 @@
 # AGENTS.md - 7dtd-server-optimizer (EfficientServer)
 
-Harmony optimization mod for **7 Days to Die** dedicated servers (target **V3.1.0**).
+Harmony optimization mod for **7 Days to Die** dedicated servers (target **V3.3.0**).
 Owns only reviewed runtime optim patches. Sibling projects own measurement and load.
 
 Workspace root guide: [`hordeforge/.github` MODDING_BEST_PRACTICES.md](https://github.com/hordeforge/.github/blob/main/MODDING_BEST_PRACTICES.md)

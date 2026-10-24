@@ -27,7 +27,10 @@
 | [`../../7dtd-engine-research/docs/loop/loop.md`](../../7dtd-engine-research/docs/loop/loop.md) | Full dedicated loop map |
 | [`../../7dtd-engine-research/docs/INDEX.md`](../../7dtd-engine-research/docs/INDEX.md) | IL dump index |
 
-Game version pin: **V3.1.0** dedicated `Assembly-CSharp`. Do not redistribute game IL.
+Game version pin: **V3.3.0 (b18)** dedicated `Assembly-CSharp` (the inventory below was
+graded on V3.1.0 b14 evidence; targets re-checked against b18 are marked in
+[`ARCHITECTURE.md`](ARCHITECTURE.md) -> V3.3.0 b18 target re-verification). Do not
+redistribute game IL.
 
 ---
 
@@ -588,13 +591,13 @@ Every Grade A/B row anchors a method on the dedicated loop map ([`../../7dtd-eng
 
 | Evidence | Path |
 |---|---|
-| Frame / gmUpdate | `7dtd-engine-research/il/loop-complete-v3.1.0/` |
-| Entity→AI→path | `7dtd-engine-research/il/deep-v3.1.0/` |
-| EAI/MoveHelper constants | `7dtd-engine-research/il/deeper-v3.1.0/` |
-| Large-method scan | `7dtd-engine-research/docs/inventories/opt-scan.md` + `7dtd-engine-research/il/opt-scan-v3.1.0/*_il.txt` |
-| Timer/AIDirector/net bands | `7dtd-engine-research/il/gaps-v3.1.0/` |
-| MB inventory | `7dtd-engine-research/il/frame-entries-v3.1.0/` |
-| Loop notes | `7dtd-engine-research/docs/inventories/loop-complete.md` + `7dtd-engine-research/il/loop-complete-v3.1.0/` |
+| Frame / gmUpdate | `7dtd-engine-research/il/loop-complete-v3.3.0/` |
+| Entity→AI→path | `7dtd-engine-research/il/deep-v3.3.0/` |
+| EAI/MoveHelper constants | `7dtd-engine-research/il/deeper-v3.3.0/` |
+| Large-method scan | `7dtd-engine-research/docs/inventories/opt-scan.md` + `7dtd-engine-research/il/opt-scan-v3.3.0/*_il.txt` |
+| Timer/AIDirector/net bands | `7dtd-engine-research/il/gaps-v3.3.0/` |
+| MB inventory | `7dtd-engine-research/il/frame-entries-v3.3.0/` |
+| Loop notes | `7dtd-engine-research/docs/inventories/loop-complete.md` + `7dtd-engine-research/il/loop-complete-v3.3.0/` |
 
 Regenerate dumps with the RE tooling in `../../7dtd-engine-research/tools/` (see [`../../7dtd-engine-research/tools/README.md`](../../7dtd-engine-research/tools/README.md)). Optim **narrative** lives only under `7dtd-server-optimizer/docs/`.
 

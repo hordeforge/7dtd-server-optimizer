@@ -38,8 +38,8 @@ Stock already does pieces of (2)-(4): `aiActiveScale`, `TickEntitiesSlice`, `Pat
 ## 2. What stock sim looks like (constraint)
 
 ```text
-Unity frame (V3.1.0 RE - see ARCHITECTURE + 7dtd-engine-research/docs/loop/loop-gmupdate.md):
- GameManager.Update → gmUpdate (631 IL)
+Unity frame (V3.3.0 RE - see ARCHITECTURE + 7dtd-engine-research/docs/loop/loop-gmupdate.md):
+ GameManager.Update → gmUpdate (638 IL)
  managers / timer / EntityAsyncManager
  → UpdateTick (150 IL)
  OnUpdateTick → TickEntities prep → slices → LetBlocksFall
@@ -510,7 +510,7 @@ Grounded in [`ARCHITECTURE.md`](ARCHITECTURE.md) lag list and EfficientServer pa
 | `EntityActivityUpdate` | Bands → scale 1.0 / 0.3 / 0.1 | Tighter bands, lower far scale | No | **Shipping** `AiLodPatch` |
 | `EntityAlive.updateTasks` | Delay then EAI + path follow | Skip far non-alert | No | **Shipping** `UpdateTasksLodPatch` |
 | Path **requests** | Enqueue via `EntityAlive.FindPath` → `PathFinderThread.FindPath` (per-entityId dict coalesce) | Cap / priority / drop far | Protect queue | **Shipping** `PathAdmissionPatch` (both knobs default 0 = vanilla) |
-| Path **compute** | V3.1.0: **ASPPathFinderThread** + **coroutine**; MoveNext drains **≤8** paths then yields; AStar OS thread exists but not installed by Init | Hierarchy / shared goals (Mid/Far); enqueue admission vs fixed drain | Off entity tick | Research / Ops |
+| Path **compute** | V3.3.0: **ASPPathFinderThread** + **coroutine**; MoveNext drains **≤8** paths then yields; AStar OS thread exists but not installed by Init | Hierarchy / shared goals (Mid/Far); enqueue admission vs fixed drain | Off entity tick | Research / Ops |
 | Path **apply** | Every `updateTasks`: GetPath + nav + move/look even when EAI delayed | Far skip whole updateTasks (stronger); or leave stock | Main | ES far skip |
 | **MoveHelper** | `EntityMoveHelper.UpdateMoveHelper` **1236 IL** every updateTasks | Far skip; measure under BM | Main | **Shipping** (inside the `UpdateTasksLodPatch` far skip); standalone measurement open |
 | **SpawnUpdate** | `SpawnManagerBiomes.SpawnUpdate` **441 IL** / 20 ticks / area-master | Player-near scope | Main | Candidate |

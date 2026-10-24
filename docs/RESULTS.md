@@ -1,7 +1,7 @@
 # EfficientServer results ledger (minute detail)
 
 **Hub:** [`README.md`](../README.md).  
-**Game pin:** V3.1.0 (b14); campaign measurements below were taken on V3.0.1 unless noted.
+**Current pin:** V3.3.0 (b18). Every measurement below was taken on an earlier build (V3.0.1 unless noted) and has not been re-measured on b18.
 V3.1.0 APM: [V310_APM_BASELINE.md](V310_APM_BASELINE.md) moderate 16p + heavy 48p + canonical 64p (004634/005248 mixed) + animator stress 20260803.
 
 Authoritative record of every lever: RE target, mechanism, config knob, IL target,
@@ -946,7 +946,8 @@ left - the cost is combat-fidelity-bound.
    player-axis walls (450-500p death-spiral) toward linear. New subsystem; rewires
    `NetEntityDistribution` all-pairs interest + `GetClosestPlayer`; desync risk.
 2. **Off-sim `Chunk.write` encode** - the chunk pipeline is 56-60% of tick, but moving
-   the 601-IL encode off the sim thread races world state.
+   the 605-IL encode (b18; 601 in the build this section was measured on) off the sim
+   thread races world state.
 
 **P4 `InitScan` array reuse left this list on 2026-07-20:** it shipped that day as
 `InitScanPoolPatch` (v1.8.0, `Pathfinding.PoolInitScanNodes`, unsafe, default off)
