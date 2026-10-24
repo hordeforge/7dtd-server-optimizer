@@ -77,6 +77,7 @@ write-barrier tax.
 | 1.18.0 | `ClientListSnapshot` (stock join-churn race, default on); apply-once knobs undo on reload; `es benchgod on` behind `Diagnostics.AllowBenchGod`; LICENSE.txt in the artifact |
 | 1.19.0 | Logging collapsed to one `EsLog.Emit`; stride gate folded into `TickClock`; runtime unknown-key scan dropped (typos caught pre-packaging instead); SBOM and `.buildinfo.txt` dropped from the release zip |
 | 1.20.0 | Admin/whitelist and `serverconfig*.xml` backup coverage; `ES_CONFIG_PATH` override; unknown config key named at load again; `es animoff`/`es rigoff` gated behind `Diagnostics.AllowFidelityProbes`; GC megapause diagnostic removed |
+| 1.21.0 | Retarget to 7 Days to Die V3.3.0 b18 with all Harmony targets re-checked; bench config-guard backup named after the owning run pid |
 
 ---
 

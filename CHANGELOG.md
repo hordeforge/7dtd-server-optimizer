@@ -14,7 +14,7 @@ A release carries one version number, named twice:
   Downloadable zips are named after it minus the leading `v`
   (`EfficientServer-<version>.zip`; `scripts/package.sh` strips the prefix,
   and a modified tree keeps an explicit `-dirty` suffix instead).
-- The **mod version** (`ModInfo.xml` / assembly version, currently `1.20.0`)
+- The **mod version** (`ModInfo.xml` / assembly version, currently `1.21.0`)
   tracks the feature history of the mod itself and is what the server log
   reports at startup (`versions: mod=...`). `scripts/check_version.py` (run by
   `make test`/CI) keeps it identical across source, dist copy, and
@@ -54,6 +54,10 @@ chosen up front:
   scanning for one kind of change finds one list.
 
 ## [Unreleased]
+
+## [1.21.0] - 2026-10-25
+
+Artifact: `EfficientServer-1.21.0.zip`, containing mod version 1.21.0.
 
 ### Changed
 - Retarget to 7 Days to Die V3.3.0 b18. All Harmony targets were re-checked
