@@ -14,6 +14,31 @@ A/B session IDs + numbers, and verdict. Companion: graded backlog
 All A/B captures: `7dtd-server-apm capture --only all,alloc`, 150 s window, matched load,
 same world/seed, back-to-back restarts. Sessions under `~/.local/share/7dtd-server-apm/`.
 
+## b18 idle pair (2026-11-05)
+
+First live b18 measurement. Stock V3.3.0 b18 dedicated, fresh Navezgane world in
+both arms, same server config, 120 s each, no client connected, APM bridge
+present in both arms as measurement only, ES 1.21.0 Release on the candidate.
+Entity simulation is observer-gated with zero players, so this pair exercises
+the server loop and the GC guard, not entity AI.
+
+| Metric | stock | EfficientServer |
+|---|---:|---:|
+| full collections in window | 1 | 0 |
+| worst STW pause ms | 174.1 | 0.0 |
+| late ticks | 10 | 4 |
+| tick stall total ms | 306.4 | 60.0 |
+| gmUpdate avg ms | 0.405 | 0.335 |
+| gross alloc MB/s | 0.0559 | 0.0544 |
+
+`es status` showed the graph throttle live (`graphUpdatesSkipped=1006`) and the
+entity levers inert (`tasksSkippedFar=0`). This is a single idle pair, not a
+re-measurement of the loaded campaigns above; the entity-tick and replication
+wins still need a b18 run with clients. Evidence: `.scratch/live-b18/evidence/`
+(`compare.md` sha256 `c99356b57f793a7ea6fa352dd454fa6cef043dcdadc70a16619c9200b9b7f146`,
+`session-es/summary.json` sha256
+`8c504af14c71facb44e46dbd0851f8e3318941300cef87eac83d189dc723492c`).
+
 **Standing caveat:** absolute `ms_per_tick` drifts run-to-run (world state on
 restart), so only **within-campaign** (off vs on, same session pair) deltas are
 comparable. The mod's benefit is **load-dependent** - largest when the server is

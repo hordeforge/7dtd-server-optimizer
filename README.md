@@ -110,10 +110,15 @@ supported retarget: rebuild with `make build` and reinstall. The b18 retarget
 re-checked every patch target against the b18 IL dump: all declarations are
 unchanged, 17 of the 20 compared method bodies are byte-identical in the
 b10-to-b18 diff, and three changed (`gmUpdate`, `SaveAndCleanupWorld`,
-`Chunk.write`). The mod builds clean against the b18 assembly. Live in-game
-acceptance on b18 is still pending, so treat b14-era RESULTS and
-V310_APM_BASELINE numbers as historical (see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
--> V3.3.0 b18 target re-verification).
+`Chunk.write`). The mod builds clean against the b18 assembly and was loaded live on a
+stock b18 dedicated server on 2026-11-05: `init OK. matched methods=20`, no
+MISSING TARGET, and `es status` reported the live counters. A 120 s idle matched
+pair against the same stock build took the forced full collection from 1 to 0
+and the worst stop-the-world pause from 174.1 ms to 0.0 ms. The entity-tick
+levers were inert because no player was connected, so b14-era RESULTS and
+V310_APM_BASELINE numbers for loaded servers stay historical (see
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) -> V3.3.0 b18 target
+re-verification and [`docs/RESULTS.md`](docs/RESULTS.md) -> b18 idle pair).
 
 **Toolchain:**
 - .NET SDK pinned by [`global.json`](global.json) (8.0.4xx band,

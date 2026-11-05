@@ -40,7 +40,7 @@ one Phase 2 budget item stay open (see the checkboxes and the residual table).
 - [x] Preserve unrelated mods and user configuration during package operations. (install.sh only touches `Mods/EfficientServer`; now backs up an existing `efficientserver.json` and keeps it on reinstall when it differs from the shipped default. Verified: fresh install uses default, user edit survives reinstall, restored-default uses shipped.)
 - [x] Reconcile README, architecture, features, and runtime behavior. (2026-08-09: FEATURES.md Path-admission + Animator-emergency sections were appended after the Changelog and claimed v1.18 (a release that does not exist). Moved before the changelog and corrected to v1.17.0; same fix in PERF_RESEARCH_BRIEF ("Built v1.18") and CONFIG ("v1.18+ emergency"). No remaining future-version claims.)
 - [x] Publish supported 7DTD/toolchain versions and troubleshooting. (README: game pin V3.1.0 b14 + rebuild-on-update retarget note, toolchain (net48, dotnet SDK w/ mcs fallback, 0_TFP_Harmony, game-managed refs), troubleshooting from mod log lines (MISSING TARGET version-drift, InitMod/patch failures, config restart, EAC). The pin now reads V3.3.0 b18; see the retarget section below.)
-- [ ] Rebuild, install, and smoke the package on a V3.3.0 b18 install. The b18 DLL build is clean offline; live patch application is unverified.
+- [x] Rebuild, install, and smoke the package on a V3.3.0 b18 install. (2026-11-05: built Release against the b18 dedicated Managed, installed to a b18 copy, booted: `init OK. matched methods=20`, 0 MISSING TARGET, mesh budgets applied, `es status` counters live; 120 s matched idle pair against the same stock build: full collections 1 -> 0, worst STW 174.1 -> 0.0 ms. No player was connected, so entity-tick levers stayed inert (`tasksSkippedFar=0`). Evidence in `docs/ARCHITECTURE.md` -> b18 live application.)
 
 ## Research evidence consumed (2026-08-06)
 
@@ -129,8 +129,10 @@ and safe to disable or roll back.
 
 ## V3.3.0 b18 retarget (2026-10-24)
 
-The pin moves from V3.1.0 b14 to V3.3.0 b18. Offline verification is done; live
-acceptance is the open work.
+The pin moves from V3.1.0 b14 to V3.3.0 b18. Offline verification is done and
+patch application is verified live on a stock b18 server (2026-11-05); in-game
+acceptance with players is the open work, because the live run had no client
+and the entity path is observer-gated.
 
 | Item | Status |
 |---|---|
@@ -138,7 +140,7 @@ acceptance is the open work.
 | Patch target bodies | verified: 17 of the 20 compared bodies are byte-identical in the b10-to-b18 diff; `gmUpdate` 631 -> 638, `SaveAndCleanupWorld` 499 -> 502, `Chunk.write` 601 -> 605 changed |
 | Body-sensitive patches | verified: the `GC.Collect` site in `gmUpdate` is still the single parameterless call GcGuardPatch rewires, and the `LayerGridGraph.ScanInternal` iterator that InitScanPoolPatch transpiles is IL=274 byte-identical |
 | Build against b18 | verified: `make build DS=<b18 install>` clean, 0 warnings, 0 errors |
-| Patch application and in-game behavior | **unverified**: no b18 server run has applied the mod; b14-era RESULTS and V310_APM_BASELINE stay historical |
+| Patch application and in-game behavior | **verified live**: a stock b18 server applied all 20 matched methods with no MISSING TARGET, applied the mesh budgets, and reported live counters; 120 s idle matched pair took full collections 1 -> 0 and worst STW 174.1 -> 0.0 ms. Entity levers inert with no client (`tasksSkippedFar=0`), so loaded-play behavior stays unverified; b14-era RESULTS and V310_APM_BASELINE stay historical for loaded servers |
 | Save-time sign flush | not decoded as a cost lever: `SaveAndCleanupWorld` waits on pending async sign-store writes (60 s per-library debounce), so a b18 save can stall behind that window |
 | Inventory/equipment rework | no impact found: no patch parses an inventory grid or NetPackage body, and all referenced members compile against b18 |
 

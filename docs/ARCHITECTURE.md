@@ -26,8 +26,9 @@ whole delta. Every Harmony target was re-checked against the b18 IL dump
 `AstarPathfindingProject.dll`), and the mod builds clean against the b18
 `Assembly-CSharp.dll`. Status words below: **verified target** means the
 declaration and the body the patch depends on were checked in the b18 dump;
-every patch is still **unverified** for in-game acceptance, because no b18
-server run has applied it.
+**applied live** means a stock b18 server loaded the patch (2026-11-05).
+In-game acceptance with players is still **unverified**: the live run had no
+client, and the entity path is observer-gated (see the section after the table).
 
 | Patch | Target | b18 status |
 |---|---|---|
@@ -58,6 +59,46 @@ sign-store writes, so a b18 world save can stall behind the 60 s per-library
 debounce. Registration ids and the inventory/equipment serializer rework do not
 touch these patches: none parses a NetPackage body, and none reads an inventory
 grid.
+
+## b18 live application (2026-11-05)
+
+Stock V3.3.0 b18 dedicated server with EfficientServer 1.21.0 installed by
+`SEVENDTD_DS_DIR=... ./scripts/install.sh`, built by `scripts/build.sh` in
+Release (`net48`, no debug output). The server log records
+`versions: mod=1.21.0.0 Assembly-CSharp=0.0.0.0 game=V 3.3.0 (b18)`,
+`init OK. matched methods=20 dedicatedOnly=True`, no MISSING TARGET, and
+`mesh budgets: OnlyPlayerAreas=True buf=2 loadMs=2 syncs=2`. The two optional
+audio skips (`EnvironmentAudioManager.Update` / `.LateUpdate`) logged
+"method not found (skip disabled)", the known b10/b18 absence, not a retarget
+failure. `es status` after 182 s reported `tickEmaMs=50.0`,
+`graphUpdatesSkipped=1006`, `tasksSkippedFar=0`, and the same two skip
+degradations.
+
+A matched pair used the same Navezgane world, the same server config, 120 s per
+arm, no player, and the same APM bridge in both arms as measurement only:
+
+| Metric | stock | EfficientServer |
+|---|---:|---:|
+| full collections in window | 1 | 0 |
+| worst STW pause ms | 174.1 | 0.0 |
+| late ticks | 10 | 4 |
+| tick stall total ms | 306.4 | 60.0 |
+| gmUpdate avg ms | 0.405 | 0.335 |
+
+The graph-throttle counter proves that lever ran; the GC guard removed the one
+forced collection the window would have taken. The entity levers (AI LOD, task
+skip, replication stride) could not fire: entity simulation is observer-gated,
+and with no client the counters stayed at `tasksSkippedFar=0`. Their b18
+in-game acceptance remains unverified. Evidence (git-ignored):
+`.scratch/live-b18/evidence/server-es.log` sha256
+`3c8f225812152596c23f74e9bbfe1635d065de4959cdcc74e99ee2c80003ded7`,
+`compare.md` sha256 `c99356b57f793a7ea6fa352dd454fa6cef043dcdadc70a16619c9200b9b7f146`,
+`es-status.txt` sha256 `e29444bad6ddbf45782a2dfe55c87748d00c07112434ce2af38121d58421833b`,
+`session-stock/summary.json` sha256
+`ccbdb4b7cfbe54a44a25f15a65ded3e0cd345ce408aeade767d5e06488a37d25`,
+`session-es/summary.json` sha256
+`8c504af14c71facb44e46dbd0851f8e3318941300cef87eac83d189dc723492c`.
+Command: `uv run 7dtd-server-apm capture --seconds 120 --pid <pid> --telnet-port 8086 --only all --reset-bridge`.
 
 ## Why a full reimplementation is the wrong first move
 

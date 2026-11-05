@@ -5,8 +5,10 @@
 **Not:** host topology ([HOST_TUNING](HOST_TUNING.md)), APM evidence ([../../7dtd-server-apm/docs/APM.md](../../7dtd-server-apm/docs/APM.md)), candidate backlog ([OPTIMIZATION_CANDIDATES](OPTIMIZATION_CANDIDATES.md)).  
 **Dev process:** [DEVELOPMENT](DEVELOPMENT.md).
 **Target build:** V3.3.0 (b18). Dated validation notes below were recorded on V3.1.0 b14
-unless they say otherwise; b18 target re-verification is in
-[`ARCHITECTURE.md`](ARCHITECTURE.md) -> V3.3.0 b18 target re-verification.
+unless they say otherwise; b18 target re-verification and the 2026-11-05 live
+application are in [`ARCHITECTURE.md`](ARCHITECTURE.md) -> V3.3.0 b18 target
+re-verification and b18 live application. Loaded-play numbers below remain b14
+until a b18 run with clients exists.
 
 ## AI level of detail
 
@@ -113,6 +115,12 @@ in-game (no drift, no `mesh budget apply failed`), with `GamePref
 DynamicMeshEnabled=True` active. So the budgets are live; only the
 multi-player streaming A/B (does syncs=2 delay distant players) remains
 unmeasured.
+
+**b18 live application (2026-11-05):** the same budgets applied on a stock
+b18 server, with the identical log line and `DynamicMeshEnabled=true` in the
+server config. No client connected, so the multi-player streaming A/B is still
+unmeasured. Evidence: [`ARCHITECTURE.md`](ARCHITECTURE.md) -> b18 live
+application.
 
 **Why the streaming A/B is not yet measured (2026-08-09):** the loadgen
 prefab server config previously set `DynamicMeshEnabled=false`, so
