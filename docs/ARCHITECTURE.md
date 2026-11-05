@@ -4,7 +4,7 @@
 **Owns:** EfficientServer-oriented map of the dedicated hot path (optim context).  
 **Not:** full generic RE narratives ([research loop](../../7dtd-engine-research/docs/loop/loop.md)), feature behavior ([FEATURES](FEATURES.md)), host topology ([HOST_TUNING](HOST_TUNING.md)).
 
-**Target:** Steam dedicated server **V 3.3.0 (b18)**  
+**Target:** Steam dedicated server **V 3.4.0 (b10)**  
 **Engine:** Unity **2022.3.62f2** (Mono, not IL2CPP)  
 **Main game assembly:** `7DaysToDieServer_Data/Managed/Assembly-CSharp.dll` (~11 MB, ~4400 types)  
 **Networking stack:** LiteNetLib (+ optional SteamNetworking, disabled by default on dedicated)  
@@ -17,6 +17,41 @@ This document maps the **real hot path** of the official dedicated process. It i
 **Stock ceilings (sim, net, AI, GC):**
 [`../../7dtd-engine-research/docs/meta/engine-limitations.md`](../../7dtd-engine-research/docs/meta/engine-limitations.md)  
 **Dump index:** [`../../7dtd-engine-research/docs/INDEX.md`](../../7dtd-engine-research/docs/INDEX.md)
+
+## V3.4.0 b10 target re-verification (2026-11-05)
+
+The game pin moved to V3.4.0 b10. Every Harmony target was re-checked against the
+V3.4.0 IL tables (`../../7dtd-engine-research/il/*-v3.4.0/`, plus a Cecil dump of
+`AstarPathfindingProject.dll`), and each target body was hash-compared with its
+b18 body. Declaration and body are unchanged for the 19 optimization targets and
+the tick clock: `gmUpdate` IL 638 (the single parameterless `GC.Collect` call the
+transpiler rewires is still present), `SendPackage` IL 100, `UpdateGraphs` IL 185,
+`UpdateGraphPos` IL 60, `FindPath` IL 49, `SendChunksToClients` IL 216,
+`EntityActivityUpdate` IL 229, `updateTasks` IL 125,
+`AvatarZombieController.Update`/`LateUpdate` IL 197/157, `ccEntityCollision` IL 12,
+`OnUpdateEntities` IL 322, `ExplosionClient` IL 51, `DamageEntity` IL 15,
+`ConnectionRequestCheck` IL 86, `UpdateTick` IL 150, and the external
+`LayerGridGraph.ScanInternal` iterator `MoveNext` IL 274 with its
+`newarr LevelGridNode` site intact. The four resolution-only optional skips keep
+their bodies; `EnvironmentAudioManager.Update` and `.LateUpdate` are still absent,
+the same fail-soft pair as b18.
+
+Two other documented bodies: `Chunk.write` stays IL 605, and
+`SaveAndCleanupWorld` moves 502 -> 501. The latter is not a patch target, but it
+loses the stock `DynamicMeshManager.OnWorldUnload()` call, which is the save-path
+half of the V3.4.0 dynamic-mesh removal.
+
+**Dynamic mesh is now inert on a stock server.** The `DynamicMeshManager.Update`
+and `DynamicMeshServer.Update` methods still exist with unchanged bodies (IL 404
+and 452), but V3.4.0 deleted every server-side call site and starts the subsystem
+only from the console. `DynamicMeshBudgetPatch` writes stock statics, so it would
+have kept logging "mesh budgets" while changing nothing. 1.22.0 adds
+`DynamicMeshProbePatch`, two postfix counters on those updates, and reports the
+result: `es status` prints `updates=N` and `inert=no-server-call-site` when the
+count is still zero after the budgets apply, and the liveness check logs
+`mesh budgets are inert` after 1200 UpdateTick frames. The lever stays applied
+because a console-started subsystem would still read the budgets; it is just no
+longer silent.
 
 ## V3.3.0 b18 target re-verification (2026-10-24)
 
@@ -113,7 +148,7 @@ That is years of work for a team. Client lag on a dedicated host is almost alway
 
 **Practical path:** keep the official binary, reverse its frame loop, and cut work that does not matter on headless multiplayer.
 
-## Concurrency model (audit-pinned V3.3.0)
+## Concurrency model (audit-pinned V3.3.0, target bodies unchanged at V3.4.0)
 
 Every EfficientServer patch surface runs on the Unity main thread except the
 one receive-thread surface named below. The confinement rules are the
@@ -217,7 +252,7 @@ Launch flags used by stock `startserver.sh`:
 
 `get_IsDedicatedServer()` gates some client-only work, but **not everything**. Several systems still run on dedicated.
 
-**Critical RE fact (V3.3.0; same as earlier builds):** `ConnectionManager.Update` and `DynamicMeshManager.Update` are **not** called from `gmUpdate`. They are separate `MonoBehaviour` updates on the same Unity frame. Hijacking only `gmUpdate` does not own net or mesh.
+**Critical RE fact (V3.3.0, unchanged at V3.4.0; same as earlier builds):** `ConnectionManager.Update` and `DynamicMeshManager.Update` are **not** called from `gmUpdate`. They are separate `MonoBehaviour` updates on the same Unity frame. Hijacking only `gmUpdate` does not own net or mesh.
 
 Deep dump + phase map: [`../../7dtd-engine-research/docs/loop/loop-gmupdate.md`](../../7dtd-engine-research/docs/loop/loop-gmupdate.md) (regenerate with `../7dtd-engine-research/tools/` (legacy/DumpGmUpdate or src/DumpMethod)).
 
@@ -246,7 +281,7 @@ Unity frame
  └─ GameManager.LateUpdate
 ```
 
-### `gmUpdate` phases (V3.3.0 ordered; gmUpdate IL 638)
+### `gmUpdate` phases (V3.3.0 ordered, body identical at V3.4.0; gmUpdate IL 638)
 
 `IsDedicatedServer` checked **6** times. Exception handler around a destroy-`GameObject` queue (`Monitor.Enter/Exit`).
 
@@ -355,7 +390,7 @@ Also toggles cloth/jiggle at larger radii (IL uses constants including **625** /
 
 **EfficientServer** tightens bands / far skip further (config).
 
-### Pathfinding (V3.3.0 production)
+### Pathfinding (V3.4.0 production; targets identical at V3.3.0)
 
 `AstarManager.Init` installs **`ASPPathFinderThread`** as `PathFinderThread.Instance` and `StartWorkerThreads()` → **`StartCoroutine(FindPaths)`** (not the OS-thread `AStarPathFinderThread`, which still exists in the binary).
 
@@ -458,12 +493,12 @@ Prefer growing admission at **TickEntities / Slice / TickEntity** over replacing
 Stock-game RE tooling lives in the sibling [`../../7dtd-engine-research/tools/`](../../7dtd-engine-research/tools/)
 (general dumpers in `src/`, legacy per-family dumpers in `legacy/`), not in this repo.
 
-V3.3.0 dumps (the current pin; the earlier `*-v3.1.0/` sets stay for history):
+V3.4.0 dumps (the current pin; the earlier `*-v3.3.0/` and `*-v3.1.0/` sets stay for history):
 
-- Frame narrative: [`../../7dtd-engine-research/docs/loop/loop-gmupdate.md`](../../7dtd-engine-research/docs/loop/loop-gmupdate.md); dumps: [`../../7dtd-engine-research/il/loop-complete-v3.3.0/`](../../7dtd-engine-research/il/loop-complete-v3.3.0/)
-- Entity/AI/path/net/fall: [`../../7dtd-engine-research/docs/entities/entity-ai.md`](../../7dtd-engine-research/docs/entities/entity-ai.md); dumps: [`../../7dtd-engine-research/il/deep-v3.3.0/`](../../7dtd-engine-research/il/deep-v3.3.0/)
-- Optim scan dumps: [`../../7dtd-engine-research/il/opt-scan-v3.3.0/`](../../7dtd-engine-research/il/opt-scan-v3.3.0/) (raw only)
-- Deeper multi-subsystem dumps: [`../../7dtd-engine-research/il/deeper-v3.3.0/`](../../7dtd-engine-research/il/deeper-v3.3.0/)
+- Frame narrative: [`../../7dtd-engine-research/docs/loop/loop-gmupdate.md`](../../7dtd-engine-research/docs/loop/loop-gmupdate.md); dumps: [`../../7dtd-engine-research/il/loop-complete-v3.4.0/`](../../7dtd-engine-research/il/loop-complete-v3.4.0/)
+- Entity/AI/path/net/fall: [`../../7dtd-engine-research/docs/entities/entity-ai.md`](../../7dtd-engine-research/docs/entities/entity-ai.md); dumps: [`../../7dtd-engine-research/il/deep-v3.4.0/`](../../7dtd-engine-research/il/deep-v3.4.0/)
+- Optim scan dumps: [`../../7dtd-engine-research/il/opt-scan-v3.4.0/`](../../7dtd-engine-research/il/opt-scan-v3.4.0/) (raw only)
+- Deeper multi-subsystem dumps: [`../../7dtd-engine-research/il/deeper-v3.4.0/`](../../7dtd-engine-research/il/deeper-v3.4.0/)
 
 Do not commit game IL or `Assembly-CSharp.dll`. Regenerate after every game update ([`DEVELOPMENT.md`](DEVELOPMENT.md)).
 

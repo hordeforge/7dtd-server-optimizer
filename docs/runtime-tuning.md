@@ -1,4 +1,4 @@
-# Runtime tuning surfaces (V3.3.0 dedicated)
+# Runtime tuning surfaces (audited on V3.3.0; the targets this repo uses are unchanged at V3.4.0)
 
 **Owns:** process-level knobs (Boehm GC symbols/env, `GC.Collect` gate, `settargetfps`, ModEvents lifecycle).  
 **Scaling context:** [`measured-scaling.md`](measured-scaling.md). **Hub:** [`INDEX.md`](INDEX.md).

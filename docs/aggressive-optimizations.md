@@ -124,7 +124,7 @@ detail in [`../../7dtd-server-optimizer/docs/RESULTS.md`](RESULTS.md)
 
 ## 4. Chunk pipeline (5% of the final attributed tick)
 
-`SendChunksToClients -> NetPackageChunk.Setup -> Chunk.write` (605 IL in V3.3.0 b18,
+`SendChunksToClients -> NetPackageChunk.Setup -> Chunk.write` (605 IL in V3.4.0 b10, unchanged from b18,
 was 601 in b9/b10) runs **synchronously on the sim thread**.
 
 - **Off-sim `Chunk.write` encode.** Move the encode to the NCS writer thread.

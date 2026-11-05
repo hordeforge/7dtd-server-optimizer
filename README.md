@@ -22,7 +22,7 @@ sibling `7dtd-loadgen` for repeatable clients.
 
 ## Modding best practices
 
-See the canonical **[HordeForge 7DTD Modding Best Practices Guide](https://github.com/hordeforge/.github/blob/main/MODDING_BEST_PRACTICES.md)** for engine load order rules, EAC-off requirements, `ModInfo.xml` specifications, and V3.3.0 compatibility notes.
+See the canonical **[HordeForge 7DTD Modding Best Practices Guide](https://github.com/hordeforge/.github/blob/main/MODDING_BEST_PRACTICES.md)** for engine load order rules, EAC-off requirements, `ModInfo.xml` specifications, and V3.4.0 compatibility notes.
 
 ```bash
 make help        # every target, grouped: contributor loop vs game-backed
@@ -103,22 +103,26 @@ Sibling-repo research (private workspace, not on the public GitHub page):
 
 ## Supported versions and troubleshooting
 
-**Game pin:** 7 Days to Die **V3.3.0 (b18)** dedicated. Built against the live
+**Game pin:** 7 Days to Die **V3.4.0 (b10)** dedicated. Built against the live
 `Assembly-CSharp.dll` at build time (dedicated `7DaysToDieServer_Data/Managed`
 first, client fallback), so a Steam update that changes the assembly is a
-supported retarget: rebuild with `make build` and reinstall. The b18 retarget
-re-checked every patch target against the b18 IL dump: all declarations are
-unchanged, 17 of the 20 compared method bodies are byte-identical in the
-b10-to-b18 diff, and three changed (`gmUpdate`, `SaveAndCleanupWorld`,
-`Chunk.write`). The mod builds clean against the b18 assembly and was loaded live on a
-stock b18 dedicated server on 2026-11-05: `init OK. matched methods=20`, no
-MISSING TARGET, and `es status` reported the live counters. A 120 s idle matched
-pair against the same stock build took the forced full collection from 1 to 0
-and the worst stop-the-world pause from 174.1 ms to 0.0 ms. The entity-tick
-levers were inert because no player was connected, so b14-era RESULTS and
-V310_APM_BASELINE numbers for loaded servers stay historical (see
-[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) -> V3.3.0 b18 target
-re-verification and [`docs/RESULTS.md`](docs/RESULTS.md) -> b18 idle pair).
+supported retarget: rebuild with `make build` and reinstall. The V3.4.0 retarget
+re-checked every patch target against the V3.4.0 IL tables: all 19 declarations
+are unchanged and every patch target body is byte-identical to b18, including
+`gmUpdate` (IL 638) and `Chunk.write` (IL 605). The only tracked body that moved
+is `SaveAndCleanupWorld` (502 -> 501, not a patch target), which loses the stock
+`DynamicMeshManager.OnWorldUnload()` call. The mod builds clean against the
+V3.4.0 assembly and was loaded live on a stock V3.4.0 server on 2026-11-05:
+`init OK. matched methods=22`, no MISSING TARGET, and `es status` reported the
+live counters. The dynamic-mesh budget group has no effect on this build: the
+subsystem has no server-side call site, so the new probe reports `updates=0`
+and the mod logs `mesh budgets are inert` after 1200 frames instead of claiming
+the lever applied. The 120 s idle APM pair and the loaded-play campaigns were
+not re-run on V3.4.0, so the b18 idle pair and the b14-era RESULTS and
+V310_APM_BASELINE numbers stay historical (see
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) -> V3.4.0 b10 target
+re-verification and [`docs/RESULTS.md`](docs/RESULTS.md) -> V3.4.0 application
+check).
 
 **Toolchain:**
 - .NET SDK pinned by [`global.json`](global.json) (8.0.4xx band,

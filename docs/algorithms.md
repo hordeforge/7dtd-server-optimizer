@@ -1,4 +1,4 @@
-# Dedicated server algorithms & data structures (V3.3.0)
+# Dedicated server algorithms & data structures (V3.4.0)
 
 **Owns:** the algorithm + data-structure used by each hot subsystem - what runs, in
 what complexity, on what structure. **Hub:** [`INDEX.md`](INDEX.md). Deep dives:
@@ -112,7 +112,7 @@ Two distinct systems, often conflated:
   clears + rebuilds `m_AllChunkPositions` / `m_ViewingChunkPositions` from scratch
   (no incremental diff) while chunk worker threads contend the lock.
 - **Chunk send - `SendChunksToClients` -> `NetPackageChunk.Setup` -> `Chunk.write`**
-  (605 IL in V3.3.0 b18, was 601; O(N^1.64)/call). The full encode (64-layer blocks,
+  (605 IL in V3.4.0 b10 and b18, was 601; O(N^1.64)/call). The full encode (64-layer blocks,
   5x channel, heightmap/biome, per-entity/TileEntity) runs **synchronously on the sim
   thread**; only the byte-copy is off-thread. **~56-60% of instrumented tick** in every
   loaded scenario.

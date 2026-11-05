@@ -4,11 +4,11 @@
 **Owns:** shipped EfficientServer feature groups and validation notes.  
 **Not:** host topology ([HOST_TUNING](HOST_TUNING.md)), APM evidence ([../../7dtd-server-apm/docs/APM.md](../../7dtd-server-apm/docs/APM.md)), candidate backlog ([OPTIMIZATION_CANDIDATES](OPTIMIZATION_CANDIDATES.md)).  
 **Dev process:** [DEVELOPMENT](DEVELOPMENT.md).
-**Target build:** V3.3.0 (b18). Dated validation notes below were recorded on V3.1.0 b14
-unless they say otherwise; b18 target re-verification and the 2026-11-05 live
-application are in [`ARCHITECTURE.md`](ARCHITECTURE.md) -> V3.3.0 b18 target
-re-verification and b18 live application. Loaded-play numbers below remain b14
-until a b18 run with clients exists.
+**Target build:** V3.4.0 (b10). Dated validation notes below were recorded on V3.1.0 b14
+unless they say otherwise; V3.4.0 target re-verification and the 2026-11-05 live
+application are in [`ARCHITECTURE.md`](ARCHITECTURE.md) -> V3.4.0 b10 target
+re-verification. Loaded-play numbers below remain b14 until a b18 or V3.4.0 run
+with clients exists.
 
 ## AI level of detail
 
@@ -121,6 +121,16 @@ b18 server, with the identical log line and `DynamicMeshEnabled=true` in the
 server config. No client connected, so the multi-player streaming A/B is still
 unmeasured. Evidence: [`ARCHITECTURE.md`](ARCHITECTURE.md) -> b18 live
 application.
+
+**V3.4.0 (b10): the group is inert on a stock server.** The engine removed every
+server-side dynamic-mesh call site, so the budget statics are written but nothing
+reads them. 1.22.0 stops that from looking applied: `DynamicMeshProbePatch`
+counts the two frame updates, `es status` prints `updates=0
+inert=no-server-call-site`, and a one-shot `mesh budgets are inert` warning lands
+after 1200 UpdateTick frames. The budgets stay applied because a console-started
+subsystem still reads them, and a later start logs that the group is in force.
+Evidence: [`ARCHITECTURE.md`](ARCHITECTURE.md) -> V3.4.0 b10 target
+re-verification.
 
 **Why the streaming A/B is not yet measured (2026-08-09):** the loadgen
 prefab server config previously set `DynamicMeshEnabled=false`, so

@@ -18,6 +18,56 @@ namespace EfficientServer.Patches
         static int _loadMs;
         static int _syncs;
 
+        // Frames to wait before calling an applied budget lever inert. UpdateTick
+        // runs every frame, so 1200 frames is 20 s at 60 fps and 60 s at the
+        // vanilla 20 fps: long enough that a running subsystem has counted many
+        // updates, short enough to surface inside one operator session.
+        internal const int InertCheckFrames = 1200;
+
+        static bool _inertReported;
+        static bool _runningReported;
+
+        /// <summary>Dynamic-mesh frame updates observed since mod load.</summary>
+        public static long Updates { get { return DynamicMeshProbePatch.Updates; } }
+
+        /// <summary>
+        /// True once budgets applied and the probed updates never ran. Read by
+        /// `es status` and the startup chain, so an inert lever has a reported
+        /// state instead of only a log line an operator may have missed.
+        /// </summary>
+        public static bool Inert
+        {
+            get { return _applied && !DynamicMeshProbePatch.HasRun; }
+        }
+
+        /// <summary>
+        /// One-shot liveness report for the budget lever, called once per
+        /// UpdateTick frame from <see cref="TickClockPatch"/>. The dynamic-mesh
+        /// methods resolve on V3.4.0 but nothing on the server calls them, so the
+        /// lever would otherwise look applied while changing nothing. A later
+        /// start (console) is reported too, so the pair of lines tells the whole
+        /// story: inert after the window, or started and effective.
+        /// </summary>
+        public static void CheckLiveness()
+        {
+            if (!_applied) return;
+            if (DynamicMeshProbePatch.HasRun)
+            {
+                if (!_runningReported)
+                {
+                    _runningReported = true;
+                    EsLog.Emit(LogLevel.Info, "mesh budgets now in force: dynamic mesh has started ("
+                        + DynamicMeshProbePatch.Updates + " updates)");
+                }
+                return;
+            }
+            if (_inertReported || TickClock.Ticks < InertCheckFrames) return;
+            _inertReported = true;
+            EsLog.Emit(LogLevel.Warn, "mesh budgets are inert: dynamic mesh has not run in "
+                + InertCheckFrames + " UpdateTick frames (no server-side call site on this build; "
+                + "the subsystem starts only from the console), so the DynamicMesh group changes nothing");
+        }
+
         public static void ApplyBudgets()
         {
             ServerPerfConfig config = ModApi.Config;

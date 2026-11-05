@@ -55,6 +55,27 @@ chosen up front:
 
 ## [Unreleased]
 
+## [1.22.0] - 2026-11-05
+
+Artifact: `EfficientServer-1.22.0.zip`, containing mod version 1.22.0.
+
+### Added
+- Dynamic-mesh liveness detection: two postfix counters on
+  `DynamicMeshManager.Update` and `DynamicMeshServer.Update`, `updates=N` and
+  `inert=no-server-call-site` in `es status`, and a one-shot `mesh budgets are
+  inert` warning after 1200 UpdateTick frames. V3.4.0 removed every server-side
+  dynamic-mesh call site, so the budget lever would otherwise look applied while
+  changing nothing.
+
+### Changed
+- Retarget to 7 Days to Die V3.4.0 b10. All 19 Harmony targets resolve with
+  unchanged declarations and body hashes against the V3.4.0 IL tables; the only
+  tracked body that moved is `SaveAndCleanupWorld` (502 -> 501, not a patch
+  target), which loses the stock `DynamicMeshManager.OnWorldUnload()` call.
+  Loaded live on a stock b10 server: `init OK. matched methods=22`, no MISSING
+  TARGET. The 120 s idle APM pair and loaded-play campaigns were not re-run, so
+  the b18 pair and V3.1.0 campaigns stay historical.
+
 ## [1.21.0] - 2026-10-25
 
 Artifact: `EfficientServer-1.21.0.zip`, containing mod version 1.21.0.

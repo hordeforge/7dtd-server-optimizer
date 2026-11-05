@@ -147,7 +147,9 @@ namespace EfficientServer
                 $"{EsLog.LogPrefix}fastSend={c.Network.FastSingleTargetSend} clientListSnapshot={c.Network.ClientListSnapshot} "
                 + $"stride={c.Network.EntityDistributionEveryTicks} "
                 + $"chunkBatch={c.WorldTransfer.ChunkPackagesPerObserverPerTick} "
-                + $"dynamicMesh={c.DynamicMesh.Enabled}(buffer={c.DynamicMesh.PlayerAreaChunkBuffer} regionMs={c.DynamicMesh.MaxRegionLoadMsPerFrame}) | "
+                + $"dynamicMesh={c.DynamicMesh.Enabled}(buffer={c.DynamicMesh.PlayerAreaChunkBuffer} regionMs={c.DynamicMesh.MaxRegionLoadMsPerFrame} "
+                + $"updates={Patches.DynamicMeshBudgetPatch.Updates}"
+                + (Patches.DynamicMeshBudgetPatch.Inert ? " inert=no-server-call-site" : "") + ") | "
                 + $"targetFps={c.Server.TargetFps} jobWorkers={c.Server.JobWorkerCount}");
             SdtdConsole.Instance.Output(
                 $"{EsLog.LogPrefix}governor={c.Governor.Enabled}(overMs={c.Governor.OverBudgetMs.ToString(CultureInfo.InvariantCulture)} healthyMs={c.Governor.HealthyMs.ToString(CultureInfo.InvariantCulture)} animEmergency={c.Governor.AnimatorEmergency}) "

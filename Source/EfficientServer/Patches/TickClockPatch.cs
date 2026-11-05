@@ -23,6 +23,9 @@ namespace EfficientServer.Patches
         static void Prefix()
         {
             TickClock.Advance();
+            // Frames are the clock the mesh-budget liveness window reads; the
+            // check is a few early-return branches per frame once it has fired.
+            DynamicMeshBudgetPatch.CheckLiveness();
         }
     }
 }

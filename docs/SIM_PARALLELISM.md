@@ -38,7 +38,7 @@ Stock already does pieces of (2)-(4): `aiActiveScale`, `TickEntitiesSlice`, `Pat
 ## 2. What stock sim looks like (constraint)
 
 ```text
-Unity frame (V3.3.0 RE - see ARCHITECTURE + 7dtd-engine-research/docs/loop/loop-gmupdate.md):
+Unity frame (V3.3.0 RE; the patch targets this repo uses are unchanged at V3.4.0 - see ARCHITECTURE + 7dtd-engine-research/docs/loop/loop-gmupdate.md):
  GameManager.Update → gmUpdate (638 IL)
  managers / timer / EntityAsyncManager
  → UpdateTick (150 IL)

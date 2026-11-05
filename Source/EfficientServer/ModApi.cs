@@ -281,6 +281,8 @@ namespace EfficientServer
             new(typeof(Patches.CrowdCollisionLodPatch), ServerPerfConfig.KeyCrowdCollisionLod),
             new(typeof(Patches.TargetFpsPatch), ServerPerfConfig.KeyTargetFps),
             new(typeof(Patches.TickClockPatch), null),
+            new(typeof(Patches.DynamicMeshProbePatch.ManagerUpdatePatch), null),
+            new(typeof(Patches.DynamicMeshProbePatch.ServerUpdatePatch), null),
             new(typeof(Patches.AnimatorLodPatch.UpdatePatch), ServerPerfConfig.KeyAnimatorLod),
             new(typeof(Patches.AnimatorLodPatch.LateUpdatePatch), ServerPerfConfig.KeyAnimatorLod),
         };

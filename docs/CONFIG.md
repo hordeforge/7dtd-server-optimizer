@@ -170,6 +170,14 @@ Bound dynamic-mesh regeneration to chunks near players (buffer = extra chunk rin
 Per-frame time budget for region loads and the concurrent mesh-sync cap - they
 convert bursts into bounded per-tick work.
 
+**On V3.4.0 b10 this whole group is inert on a stock server.** The engine removed
+every server-side dynamic-mesh call site and starts the subsystem only from the
+console, so the values are written and nothing reads them. The mod reports it
+rather than claiming the lever applied: `es status` prints `updates=0
+inert=no-server-call-site`, and after 1200 UpdateTick frames the log carries
+`mesh budgets are inert`. The values stay applied because a console-started
+subsystem still reads them.
+
 ---
 
 ## Gc - managed-heap collection management

@@ -1,7 +1,7 @@
 # EfficientServer results ledger (minute detail)
 
 **Hub:** [`README.md`](../README.md).  
-**Current pin:** V3.3.0 (b18). Every measurement below was taken on an earlier build (V3.0.1 unless noted) and has not been re-measured on b18.
+**Current pin:** V3.4.0 (b10). Every measurement below was taken on an earlier build (V3.0.1 or V3.1.0 unless noted) and has not been re-measured on V3.4.0.
 V3.1.0 APM: [V310_APM_BASELINE.md](V310_APM_BASELINE.md) moderate 16p + heavy 48p + canonical 64p (004634/005248 mixed) + animator stress 20260803.
 
 Authoritative record of every lever: RE target, mechanism, config knob, IL target,
@@ -13,6 +13,35 @@ A/B session IDs + numbers, and verdict. Companion: graded backlog
 
 All A/B captures: `7dtd-server-apm capture --only all,alloc`, 150 s window, matched load,
 same world/seed, back-to-back restarts. Sessions under `~/.local/share/7dtd-server-apm/`.
+
+## V3.4.0 application check (2026-11-05)
+
+First run on V3.4.0 b10. Stock dedicated, fresh Navezgane world, no client, ES
+1.22.0 Release. The log records
+`versions: mod=1.22.0.0 Assembly-CSharp=0.0.0.0 game=V 3.4.0 (b10)`,
+`init OK. matched methods=22`, and no `MISSING TARGET`. `es status` after 118 s
+reported `dynamicMesh=True(buffer=2 regionMs=2 updates=0
+inert=no-server-call-site)`, `graphUpdatesSkipped=593`, `tickEmaMs=50.0`, and
+only the two known `EnvironmentAudioManager` skip degradations.
+
+The dynamic-mesh budget group is inert on this build: the engine removed every
+server-side call site, so the probes counted zero updates and the liveness check
+logged `mesh budgets are inert` at uptime 87 s. That is the expected V3.4.0
+behavior, not a patch failure.
+
+Not re-run: the 120 s idle APM pair and every loaded-play campaign. The b18 idle
+pair below and the V3.1.0 campaigns stay the last measured numbers, so the
+GC-guard win (full collections 1 -> 0, worst STW 174.1 -> 0.0 ms) is not
+re-measured on V3.4.0, and entity levers remain unmeasured under load.
+Evidence: `.scratch/live-v340/evidence/server-output.log` sha256
+`3328ab22e221b7d15fc571f3fd41c68e1227c5be44e88d6bf8b988d757cc58c2`,
+`es-status.txt` sha256
+`e894967203a5b8e55c1f97b4d3ea3614f6e8dd5b9b95f891147bef323b429273` and
+`install.log` sha256
+`f32d41976a5e358a292f9ff610a1a36134beaa2ac90081cfc43908588107b4be`.
+Command: `./7DaysToDieServer.x86_64 -logfile server-output.log -batchmode
+-nographics -dedicated -configfile=serverconfig.es.xml`, then `es status` over
+telnet 8090.
 
 ## b18 idle pair (2026-11-05)
 
@@ -103,6 +132,7 @@ write-barrier tax.
 | 1.19.0 | Logging collapsed to one `EsLog.Emit`; stride gate folded into `TickClock`; runtime unknown-key scan dropped (typos caught pre-packaging instead); SBOM and `.buildinfo.txt` dropped from the release zip |
 | 1.20.0 | Admin/whitelist and `serverconfig*.xml` backup coverage; `ES_CONFIG_PATH` override; unknown config key named at load again; `es animoff`/`es rigoff` gated behind `Diagnostics.AllowFidelityProbes`; GC megapause diagnostic removed |
 | 1.21.0 | Retarget to 7 Days to Die V3.3.0 b18 with all Harmony targets re-checked; bench config-guard backup named after the owning run pid |
+| 1.22.0 | Retarget to 7 Days to Die V3.4.0 b10; dynamic-mesh budget lever detected as inert (probe counters, `es status`, warning) |
 
 ---
 
@@ -972,7 +1002,7 @@ left - the cost is combat-fidelity-bound.
    player-axis walls (450-500p death-spiral) toward linear. New subsystem; rewires
    `NetEntityDistribution` all-pairs interest + `GetClosestPlayer`; desync risk.
 2. **Off-sim `Chunk.write` encode** - the chunk pipeline is 56-60% of tick, but moving
-   the 605-IL encode (b18; 601 in the build this section was measured on) off the sim
+   the 605-IL encode (V3.4.0 b10 and b18; 601 in the build this section was measured on) off the sim
    thread races world state.
 
 **P4 `InitScan` array reuse left this list on 2026-07-20:** it shipped that day as
