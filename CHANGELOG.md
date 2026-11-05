@@ -14,7 +14,7 @@ A release carries one version number, named twice:
   Downloadable zips are named after it minus the leading `v`
   (`EfficientServer-<version>.zip`; `scripts/package.sh` strips the prefix,
   and a modified tree keeps an explicit `-dirty` suffix instead).
-- The **mod version** (`ModInfo.xml` / assembly version, currently `1.21.0`)
+- The **mod version** (`ModInfo.xml` / assembly version, currently `1.22.0`)
   tracks the feature history of the mod itself and is what the server log
   reports at startup (`versions: mod=...`). `scripts/check_version.py` (run by
   `make test`/CI) keeps it identical across source, dist copy, and
