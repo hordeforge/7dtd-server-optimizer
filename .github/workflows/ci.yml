@@ -33,7 +33,7 @@ jobs:
       # SDK pinned by global.json (rollForward latestPatch); setup-dotnet
       # reads it when dotnet-version is omitted. Cache NuGet packages keyed
       # on the locked dependency graph so restore stops re-downloading.
-      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         with:
           cache: true
           # Every lock file the gates below restore. The mod project's is
@@ -85,7 +85,7 @@ jobs:
         with:
           persist-credentials: false
       # Same pin and cache key as the Linux jobs; global.json supplies the SDK.
-      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         with:
           cache: true
           # Every lock file the gates below restore. The mod project's is
@@ -122,7 +122,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         with:
           cache: true
           # Every lock file the gates below restore. The mod project's is
